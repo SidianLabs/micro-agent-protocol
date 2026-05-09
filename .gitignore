@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Temporary
+.tmp/
+*.tmp
+
+# Editor
+*.sublime-workspace
+*.sublime-project
+
+# lockfiles (optional - some prefer to keep)
+# package-lock.json
+# yarn.lock
