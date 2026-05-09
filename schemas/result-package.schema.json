@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://map-spec.dev/schemas/result-package.schema.json",
+  "title": "MAP Result Package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "status",
+    "structured_output",
+    "followup_required"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "proposed",
+        "awaiting_approval",
+        "denied",
+        "running",
+        "completed",
+        "failed",
+        "revoked"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "structured_output": {
+      "type": "object"
+    },
+    "receipt_ref": {
+      "type": "string"
+    },
+    "negotiated_schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "requested_schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "executed_schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "negotiation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested",
+        "selected"
+      ],
+      "properties": {
+        "requested": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "output_mode",
+            "delivery_mode"
+          ],
+          "properties": {
+            "schema_version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "output_mode": {
+              "type": "string",
+              "enum": [
+                "full",
+                "summary",
+                "structured_only",
+                "receipt_only",
+                "redacted",
+                "debug"
+              ]
+            },
+            "delivery_mode": {
+              "type": "string",
+              "enum": [
+                "sync",
+                "async"
+              ]
+            }
+          }
+        },
+        "selected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "output_mode",
+            "delivery_mode"
+          ],
+          "properties": {
+            "schema_version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "output_mode": {
+              "type": "string",
+              "enum": [
+                "full",
+                "summary",
+                "structured_only",
+                "receipt_only",
+                "redacted",
+                "debug"
+              ]
+            },
+            "delivery_mode": {
+              "type": "string",
+              "enum": [
+                "sync",
+                "async"
+              ]
+            }
+          }
+        },
+        "provider_actions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "schema_translated"
+            ]
+          }
+        }
+      }
+    },
+    "redactions_applied": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "followup_required": {
+      "type": "boolean"
+    },
+    "escalation_reason": {
+      "type": "string"
+    }
+  }
+}

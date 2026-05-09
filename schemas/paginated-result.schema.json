@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://map-spec.dev/schemas/paginated-result.schema.json",
+  "title": "MAP Paginated Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "pagination"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {}
+    },
+    "pagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "limit",
+        "next_cursor"
+      ],
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://map-spec.dev/schemas/approval-request.schema.json",
+  "title": "MAP Approval Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "approval_reference",
+    "capability",
+    "envelope"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approval_reference": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capability": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "negotiation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "delivery_mode": {
+          "type": "string",
+          "enum": [
+            "sync",
+            "async"
+          ]
+        }
+      }
+    },
+    "envelope": {
+      "$ref": "https://map-spec.dev/schemas/task-envelope.schema.json"
+    }
+  }
+}

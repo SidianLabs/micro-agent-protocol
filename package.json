@@ -1,0 +1,40 @@
+{
+  "name": "micro-agent-protocol",
+  "version": "1.0.0-alpha.1",
+  "private": true,
+  "description": "Micro Agent Protocol (MAP) - Open standard for AI assistant to micro-agent delegation",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "conformance"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test --test-concurrency=1 dist/reference/test/*.test.js",
+    "verify:reference": "npm run check && npm run build && npm test",
+    "conformance:reference": "npm run build && node dist/reference/src/conformance.js",
+    "conformance:profiles": "npm run build && node dist/reference/src/conformance-profiles.js",
+    "conformance:trust": "npm run build && node dist/reference/src/conformance-trust.js",
+    "conformance:fixtures": "npm run build && node dist/reference/src/conformance-fixtures.js",
+    "conformance:errors": "npm run build && node dist/reference/src/conformance-errors.js",
+    "conformance:contract": "npm run build && node dist/reference/src/conformance-contract.js",
+    "conformance:api-surface": "npm run build && node dist/reference/src/conformance-api-surface.js",
+    "conformance:all": "npm run conformance:reference && npm run conformance:profiles && npm run conformance:trust && npm run conformance:fixtures && npm run conformance:errors && npm run conformance:contract && npm run conformance:api-surface",
+    "load:reference": "npm run build && node dist/reference/src/load-test.js",
+    "dev:server": "tsx reference/src/server-main.ts",
+    "dev:demo-server": "tsx reference/src/demo-server-main.ts",
+    "demo:payment": "tsx reference/src/demo-payment.ts",
+    "demo:db-read": "tsx reference/src/demo-db-read.ts",
+    "sdk:typescript": "cd packages/typescript && npm run check && npm run build && npm run test",
+    "sdk:python": "cd packages/python && pip install -e .",
+    "sdk:go": "cd packages/go && go build ./...",
+    "conformance:test": "cd conformance && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.14",
+    "ajv": "^8.17.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://map-spec.dev/schemas/dispatch-request.schema.json",
+  "title": "MAP Dispatch Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "capability",
+    "envelope"
+  ],
+  "properties": {
+    "capability": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "negotiation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "delivery_mode": {
+          "type": "string",
+          "enum": [
+            "sync",
+            "async"
+          ]
+        }
+      }
+    },
+    "envelope": {
+      "$ref": "https://map-spec.dev/schemas/task-envelope.schema.json"
+    }
+  }
+}

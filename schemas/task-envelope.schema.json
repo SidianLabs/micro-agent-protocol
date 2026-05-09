@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://map-spec.dev/schemas/task-envelope.schema.json",
+  "title": "MAP Task Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "requester_identity",
+    "target_agent",
+    "intent",
+    "constraints",
+    "risk_class",
+    "delegation_token",
+    "requested_output_mode"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_task_id": {
+      "type": "string"
+    },
+    "requester_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "user",
+            "service",
+            "agent"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "target_agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "intent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "common": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "resource_id": {
+              "type": "string"
+            },
+            "resource_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "environment": {
+              "type": "string",
+              "enum": [
+                "development",
+                "staging",
+                "production"
+              ]
+            },
+            "max_amount": {
+              "type": "number"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "approval_required": {
+              "type": "boolean"
+            },
+            "time_window": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "end": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "redaction_level": {
+              "type": "string",
+              "enum": [
+                "none",
+                "basic",
+                "strict"
+              ]
+            }
+          }
+        },
+        "domain": {
+          "type": "object"
+        }
+      }
+    },
+    "risk_class": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "delegation_token": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_output_mode": {
+      "type": "string",
+      "enum": [
+        "full",
+        "summary",
+        "structured_only",
+        "receipt_only",
+        "redacted",
+        "debug"
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "default": {}
+    }
+  }
+}

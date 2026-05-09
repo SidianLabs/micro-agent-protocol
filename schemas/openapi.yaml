@@ -1,0 +1,1982 @@
+openapi: 3.1.0
+info:
+  title: Micro Agent Protocol (MAP)
+  description: |
+    Protocol for assistant-to-micro-agent delegation with policy enforcement,
+    scoped authority tokens, and verifiable audit receipts.
+
+    MAP enables organizations to deploy policy-aware micro-agents between
+    external AI assistants and sensitive internal systems, so execution stays
+    local, authority stays bounded, and context stays minimal.
+  version: "1.0.0"
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  contact:
+    name: MAP Protocol Authors
+    url: https://github.com/mapprotocol/map
+    email: maintainers@map-protocol.dev
+  x-protocol:
+    domain: micro-agent-protocol
+    specification: https://map-protocol.dev/spec
+    repository: https://github.com/mapprotocol/map
+
+servers:
+  - url: https://api.map-protocol.dev/v1
+    description: Production server
+  - url: https://staging.map-protocol.dev/v1
+    description: Staging server
+  - url: http://localhost:8787
+    description: Local development
+
+tags:
+  - name: Dispatch
+    description: Task dispatch operations
+  - name: Approvals
+    description: Approval workflow operations
+  - name: Tasks
+    description: Task state and retrieval
+  - name: Receipts
+    description: Execution receipt operations
+  - name: Agents
+    description: Agent registry and discovery
+  - name: Health
+    description: Health and readiness checks
+  - name: Admin
+    description: Administrative operations
+
+paths:
+  # ===========================================================================
+  # Dispatch & Approvals
+  # ===========================================================================
+  /dispatch:
+    post:
+      operationId: dispatch
+      summary: Dispatch task to micro-agent
+      description: |
+        Submits a task envelope to the MAP control plane for execution
+        by a target micro-agent. The orchestrator validates the envelope,
+        evaluates policy, and either executes synchronously, enqueues
+        for async execution, or returns an approval-required response.
+      tags: [Dispatch]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/XMapIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchRequest'
+      responses:
+        '200':
+          description: Task executed or accepted for async processing
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /approve:
+    post:
+      operationId: approve
+      summary: Approve pending task
+      description: |
+        Approves a task that was previously returned with status
+        `awaiting_approval`. The task must be in the approval queue
+        and the approval reference must match.
+      tags: [Approvals]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalRequest'
+      responses:
+        '200':
+          description: Task approved and executed
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ===========================================================================
+  # Tasks
+  # ===========================================================================
+  /tasks:
+    get:
+      operationId: listTasks
+      summary: List tasks
+      description: Returns a paginated list of tasks, optionally filtered by tenant, status, or other criteria.
+      tags: [Tasks]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - name: status
+          in: query
+          description: Filter by task status
+          schema:
+            $ref: '#/components/schemas/TaskStatus'
+        - name: capability
+          in: query
+          description: Filter by capability
+          schema:
+            type: string
+        - name: agent_id
+          in: query
+          description: Filter by target agent
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: List of tasks
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          tasks:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/TaskRecord'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /tasks/{task_id}:
+    get:
+      operationId: getTask
+      summary: Get task by ID
+      description: Retrieves a single task by its ID, including the current status and result if available.
+      tags: [Tasks]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Task record
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          task:
+                            $ref: '#/components/schemas/TaskRecord'
+        '304':
+          description: Not modified (ETag match)
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tasks/{task_id}/stream:
+    get:
+      operationId: streamTaskStatus
+      summary: Stream task status via SSE
+      description: Returns a Server-Sent Events stream for long-polling task status updates.
+      tags: [Tasks]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: SSE stream
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SSERecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ===========================================================================
+  # Receipts
+  # ===========================================================================
+  /receipts:
+    get:
+      operationId: listReceipts
+      summary: List execution receipts
+      description: Returns a paginated list of execution receipts, optionally filtered by tenant.
+      tags: [Receipts]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - name: task_id
+          in: query
+          description: Filter by task ID
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: List of receipts
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          receipts:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/ExecutionReceipt'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /receipts/{receipt_id}:
+    get:
+      operationId: getReceipt
+      summary: Get receipt by ID
+      description: Retrieves a single execution receipt by its ID.
+      tags: [Receipts]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Receipt record
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          receipt:
+                            $ref: '#/components/schemas/ExecutionReceipt'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ===========================================================================
+  # Agents
+  # ===========================================================================
+  /agents:
+    get:
+      operationId: listAgents
+      summary: List registered agents
+      description: Returns a list of all registered agent descriptors, optionally filtered by domain or capability.
+      tags: [Agents]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - name: domain
+          in: query
+          description: Filter by agent domain
+          schema:
+            type: string
+            enum: [payments, database, crm, files, operations, custom]
+        - name: capability
+          in: query
+          description: Filter by supported capability
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by registry status
+          schema:
+            type: string
+            enum: [active, deprecated, disabled]
+      responses:
+        '200':
+          description: List of agent descriptors
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          agents:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/AgentDescriptor'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /agents/{agent_id}:
+    get:
+      operationId: getAgent
+      summary: Get agent descriptor
+      description: Retrieves a single agent descriptor by its ID.
+      tags: [Agents]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent descriptor
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          agent:
+                            $ref: '#/components/schemas/AgentDescriptor'
+        '304':
+          description: Not modified (ETag match)
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /.well-known/map-keys:
+    get:
+      operationId: getVerificationKeys
+      summary: Get verification keys
+      description: Returns the public keys used for signature verification in the current deployment.
+      tags: [Agents]
+      security:
+        - SignedRequest: []
+      responses:
+        '200':
+          description: Verification keys
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          keys:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/VerificationKey'
+
+  # ===========================================================================
+  # Health & Status
+  # ===========================================================================
+  /health:
+    get:
+      operationId: health
+      summary: Liveness check
+      description: Returns 200 if the server is running. Used for basic liveness probes.
+      tags: [Health]
+      responses:
+        '200':
+          description: Server is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+
+  /ready:
+    get:
+      operationId: ready
+      summary: Readiness check
+      description: Returns 200 if the server is ready to accept traffic. Returns 503 if still initializing.
+      tags: [Health]
+      responses:
+        '200':
+          description: Server is ready
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          ready:
+                            type: boolean
+                          components:
+                            type: object
+                            properties:
+                              taskStore:
+                                type: string
+                              receiptStore:
+                                type: string
+                              queue:
+                                type: string
+        '503':
+          description: Server is not ready
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /status:
+    get:
+      operationId: status
+      summary: Detailed status
+      description: Returns detailed operational status including store states, queue depth, and system metrics.
+      tags: [Health]
+      security:
+        - SignedRequest: []
+      responses:
+        '200':
+          description: System status
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SystemStatus'
+
+  /metrics:
+    get:
+      operationId: metrics
+      summary: Operational metrics
+      description: Returns Prometheus-compatible operational metrics.
+      tags: [Health]
+      security:
+        - SignedRequest: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Metrics data
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Metrics'
+
+  # ===========================================================================
+  # Audit & Admin
+  # ===========================================================================
+  /audit-events:
+    get:
+      operationId: listAuditEvents
+      summary: List audit events
+      description: Returns a paginated list of audit events for compliance and monitoring.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - name: start_time
+          in: query
+          description: Filter events after this time
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          description: Filter events before this time
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: List of audit events
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          events:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/AuditEvent'
+                          checkpoints:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/AuditCheckpoint'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /audit-events/export:
+    get:
+      operationId: exportAuditLog
+      summary: Export audit log
+      description: Exports the full audit log with cryptographic verification.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - name: format
+          in: query
+          description: Export format
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: Exported audit log
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuditExport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /audit-events/verify:
+    get:
+      operationId: verifyAuditChain
+      summary: Verify audit chain integrity
+      description: Verifies the cryptographic integrity of the audit event chain.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Verification result
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          valid:
+                            type: boolean
+                          last_checkpoint:
+                            $ref: '#/components/schemas/AuditCheckpoint'
+                          events_verified:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /conformance/export:
+    get:
+      operationId: exportConformanceReport
+      summary: Export conformance report
+      description: Exports the conformance test results for this implementation.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      responses:
+        '200':
+          description: Conformance report
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ConformanceReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /trust-bundle/export:
+    get:
+      operationId: exportTrustBundle
+      summary: Export trust bundle
+      description: Exports the trust bundle containing verification keys and metadata.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      responses:
+        '200':
+          description: Trust bundle
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TrustBundle'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/keys:
+    get:
+      operationId: listSigningKeys
+      summary: List signing keys
+      description: Returns information about signing keys in the system.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      parameters:
+        - name: include_runtime
+          in: query
+          description: Include runtime/active keys
+          schema:
+            type: boolean
+            default: true
+        - name: include_revoked
+          in: query
+          description: Include revoked keys
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Signing key information
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          keys:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/SigningKeyInfo'
+                          summary:
+                            type: object
+                          trust:
+                            $ref: '#/components/schemas/TrustMetadata'
+                          key_provider:
+                            type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ===========================================================================
+  # Alerts
+  # ===========================================================================
+  /alerts:
+    get:
+      operationId: listAlerts
+      summary: List active alerts
+      description: Returns a list of active operational alerts.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: List of alerts
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          alerts:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Alert'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+
+  /alerts/{alert_id}/ack:
+    post:
+      operationId: acknowledgeAlert
+      summary: Acknowledge alert
+      description: Acknowledges an alert, indicating it has been seen and is being addressed.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actor:
+                  type: string
+                  description: Who is acknowledging the alert
+      responses:
+        '200':
+          description: Alert acknowledged
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          alert:
+                            $ref: '#/components/schemas/Alert'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /alerts/{alert_id}/suppress:
+    post:
+      operationId: suppressAlert
+      summary: Suppress alert
+      description: Temporarily suppresses an alert for a specified duration.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actor:
+                  type: string
+                duration_seconds:
+                  type: integer
+                  minimum: 1
+                until:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Alert suppressed
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          alert:
+                            $ref: '#/components/schemas/Alert'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ===========================================================================
+  # Dead Letters
+  # ===========================================================================
+  /dead-letters:
+    get:
+      operationId: listDeadLetters
+      summary: List dead letters
+      description: Returns a list of dead letter records for failed async jobs.
+      tags: [Admin]
+      security:
+        - SignedRequest: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: List of dead letters
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          dead_letters:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/DeadLetterRecord'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+
+# ==============================================================================
+# Components
+# ==============================================================================
+components:
+  # ===========================================================================
+  # Security Schemes
+  # ===========================================================================
+  securitySchemes:
+    SignedRequest:
+      type: apiKey
+      in: header
+      name: x-map-request-signature
+      description: |
+        MAP signed request authentication using HMAC-SHA256 or RSA-SHA256.
+        Required headers: x-map-auth-scheme, x-map-key-id, x-map-timestamp,
+        x-map-request-signature.
+
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT bearer token authentication (for future use).
+
+  # ===========================================================================
+  # Parameters
+  # ===========================================================================
+  parameters:
+    TenantId:
+      name: tenant_id
+      in: query
+      description: Tenant identifier for multi-tenant deployments
+      schema:
+        type: string
+
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique task identifier
+
+    ReceiptId:
+      name: receipt_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique receipt identifier
+
+    AlertId:
+      name: alert_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique alert identifier
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Maximum number of items to return
+
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: [string, integer]
+      description: Pagination cursor for next page
+
+    XMapIdempotencyKey:
+      name: x-map-idempotency-key
+      in: header
+      description: Idempotency key for dispatch requests
+      schema:
+        type: string
+
+    IfNoneMatch:
+      name: if-none-match
+      in: header
+      description: ETag for conditional requests
+      schema:
+        type: string
+
+  # ===========================================================================
+  # Headers
+  # ===========================================================================
+  headers:
+    XMapRequestId:
+      description: Request correlation identifier
+      schema:
+        type: string
+
+    ETag:
+      description: Entity tag for caching
+      schema:
+        type: string
+
+  # ===========================================================================
+  # Responses
+  # ===========================================================================
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/ErrorDetail'
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/ErrorDetail'
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/ErrorDetail'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/ErrorDetail'
+
+    Conflict:
+      description: Resource conflict (e.g., idempotency key mismatch)
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/ErrorDetail'
+
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/ErrorDetail'
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiResponse'
+              - type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/ErrorDetail'
+
+  # ===========================================================================
+  # Schemas
+  # ===========================================================================
+  schemas:
+    # ---------------------------------------------------------------------------
+    # Common
+    # ---------------------------------------------------------------------------
+    ApiResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        request_id:
+          type: string
+
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: policy_denied
+        message:
+          type: string
+          description: Human-readable error message
+        retryable:
+          type: boolean
+          description: Whether the request can be retried
+        details:
+          type: object
+          description: Additional error context
+
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+          description: Number of items returned
+        next_cursor:
+          type: [string, integer, null]
+          description: Cursor for next page
+
+    # ---------------------------------------------------------------------------
+    # Core Types
+    # ---------------------------------------------------------------------------
+    RiskLevel:
+      type: string
+      enum: [low, medium, high, critical]
+
+    TaskStatus:
+      type: string
+      enum: [accepted, proposed, awaiting_approval, denied, running, completed, failed, revoked]
+
+    VisibilityMode:
+      type: string
+      enum: [full, summary, structured_only, receipt_only, redacted, debug]
+
+    DeliveryMode:
+      type: string
+      enum: [sync, async]
+
+    ExecutionMode:
+      type: string
+      enum: [read, analyze, propose, commit, monitor, batch]
+
+    RequesterIdentity:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [user, service, agent]
+        id:
+          type: string
+          minLength: 1
+        tenant_id:
+          type: string
+
+    TaskConstraints:
+      type: object
+      properties:
+        common:
+          type: object
+          properties:
+            resource_id:
+              type: string
+            resource_ids:
+              type: array
+              items:
+                type: string
+            environment:
+              type: string
+              enum: [development, staging, production]
+            max_amount:
+              type: number
+            currency:
+              type: string
+            limit:
+              type: integer
+              minimum: 1
+            approval_required:
+              type: boolean
+            time_window:
+              type: object
+              properties:
+                start:
+                  type: string
+                  format: date-time
+                end:
+                  type: string
+                  format: date-time
+            redaction_level:
+              type: string
+              enum: [none, basic, strict]
+        domain:
+          type: object
+          additionalProperties: true
+
+    TaskEnvelope:
+      type: object
+      required: [task_id, requester_identity, target_agent, intent, constraints, risk_class, delegation_token, requested_output_mode]
+      properties:
+        task_id:
+          type: string
+          minLength: 1
+        parent_task_id:
+          type: string
+        requester_identity:
+          $ref: '#/components/schemas/RequesterIdentity'
+        target_agent:
+          type: string
+          minLength: 1
+        intent:
+          type: string
+          minLength: 1
+        constraints:
+          $ref: '#/components/schemas/TaskConstraints'
+        risk_class:
+          $ref: '#/components/schemas/RiskLevel'
+        deadline:
+          type: string
+          format: date-time
+        delegation_token:
+          type: string
+          minLength: 1
+        requested_output_mode:
+          $ref: '#/components/schemas/VisibilityMode'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    DelegationToken:
+      type: object
+      required: [issuer, subject_agent, allowed_actions, resource_scope, constraints, signature]
+      properties:
+        issuer:
+          type: string
+        subject_agent:
+          type: string
+        allowed_actions:
+          type: array
+          items:
+            type: string
+        resource_scope:
+          type: object
+          additionalProperties: true
+        constraints:
+          type: object
+          properties:
+            common:
+              type: object
+            domain:
+              type: object
+            expires_at:
+              type: string
+              format: date-time
+        approval_reference:
+          type: string
+        requester_identity:
+          $ref: '#/components/schemas/RequesterIdentity'
+        signature:
+          type: string
+
+    InvocationNegotiationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        schema_version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        delivery_mode:
+          $ref: '#/components/schemas/DeliveryMode'
+
+    InvocationNegotiationState:
+      type: object
+      required: [output_mode, delivery_mode]
+      additionalProperties: false
+      properties:
+        schema_version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        output_mode:
+          $ref: '#/components/schemas/VisibilityMode'
+        delivery_mode:
+          $ref: '#/components/schemas/DeliveryMode'
+
+    InvocationNegotiation:
+      type: object
+      required: [requested, selected]
+      additionalProperties: false
+      properties:
+        requested:
+          $ref: '#/components/schemas/InvocationNegotiationState'
+        selected:
+          $ref: '#/components/schemas/InvocationNegotiationState'
+        provider_actions:
+          type: array
+          items:
+            type: string
+            enum: [schema_translated]
+
+    ResultPackage:
+      type: object
+      required: [task_id, status, structured_output, followup_required]
+      properties:
+        task_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        summary:
+          type: string
+        structured_output:
+          type: object
+          additionalProperties: true
+        receipt_ref:
+          type: string
+        negotiated_schema_version:
+          type: string
+        requested_schema_version:
+          type: string
+        executed_schema_version:
+          type: string
+        negotiation:
+          $ref: '#/components/schemas/InvocationNegotiation'
+        redactions_applied:
+          type: array
+          items:
+            type: string
+        followup_required:
+          type: boolean
+        escalation_reason:
+          type: string
+
+    ExecutionReceipt:
+      type: object
+      required: [receipt_id, task_id, agent_id, action_taken, resource_touched, policy_checks, timestamp, result_hash, signature]
+      properties:
+        receipt_id:
+          type: string
+        task_id:
+          type: string
+        tenant_id:
+          type: string
+        request_id:
+          type: string
+        agent_id:
+          type: string
+        action_taken:
+          type: string
+        resource_touched:
+          type: string
+        policy_checks:
+          type: array
+          items:
+            type: string
+        approval_used:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        result_hash:
+          type: string
+        requested_schema_version:
+          type: string
+        executed_schema_version:
+          type: string
+        negotiation:
+          $ref: '#/components/schemas/InvocationNegotiation'
+        signature:
+          type: string
+
+    # ---------------------------------------------------------------------------
+    # Requests
+    # ---------------------------------------------------------------------------
+    DispatchRequest:
+      type: object
+      required: [capability, envelope]
+      properties:
+        capability:
+          type: string
+          minLength: 1
+        requested_schema_version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        negotiation:
+          $ref: '#/components/schemas/InvocationNegotiationRequest'
+        envelope:
+          $ref: '#/components/schemas/TaskEnvelope'
+
+    ApprovalRequest:
+      type: object
+      required: [task_id, approval_reference, capability, envelope]
+      properties:
+        task_id:
+          type: string
+        approval_reference:
+          type: string
+        capability:
+          type: string
+        requested_schema_version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        negotiation:
+          $ref: '#/components/schemas/InvocationNegotiationRequest'
+        envelope:
+          $ref: '#/components/schemas/TaskEnvelope'
+
+    DispatchResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        result:
+          $ref: '#/components/schemas/ResultPackage'
+        receipt:
+          $ref: '#/components/schemas/ExecutionReceipt'
+
+    # ---------------------------------------------------------------------------
+    # Agents
+    # ---------------------------------------------------------------------------
+    AgentDescriptor:
+      type: object
+      required: [agent_id, organization, version, domain, capabilities, risk_level, input_schema_ref, output_schema_ref, supported_execution_modes, visibility_modes, registry_status]
+      properties:
+        agent_id:
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+        organization:
+          type: string
+        version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        domain:
+          type: string
+          enum: [payments, database, crm, files, operations, custom]
+        capabilities:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        risk_level:
+          $ref: '#/components/schemas/RiskLevel'
+        input_schema_ref:
+          type: string
+          format: uri
+        output_schema_ref:
+          type: string
+          format: uri
+        supported_execution_modes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionMode'
+        approval_requirements:
+          type: array
+          items:
+            type: string
+        visibility_modes:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisibilityMode'
+        policy_hooks:
+          type: array
+          items:
+            type: string
+        display_name:
+          type: string
+        provider_url:
+          type: string
+          format: uri
+        documentation_url:
+          type: string
+          format: uri
+        auth_schemes:
+          type: array
+          items:
+            type: string
+            enum: [none, bearer, mtls, signed_request]
+        capability_descriptors:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapabilityDescriptor'
+        transport_bindings:
+          type: array
+          items:
+            type: object
+            properties:
+              kind:
+                type: string
+                const: http
+              endpoint:
+                type: string
+                format: uri
+        tags:
+          type: array
+          items:
+            type: string
+        registry_status:
+          type: string
+          enum: [active, deprecated, disabled]
+        description:
+          type: string
+        descriptor_signature:
+          type: string
+        descriptor_key_id:
+          type: string
+        descriptor_signature_alg:
+          type: string
+          enum: [HS256, RS256]
+
+    CapabilityDescriptor:
+      type: object
+      properties:
+        name:
+          type: string
+        execution_mode:
+          $ref: '#/components/schemas/ExecutionMode'
+        request_schema_ref:
+          type: string
+          format: uri
+        response_schema_ref:
+          type: string
+          format: uri
+        constraint_schema_ref:
+          type: string
+          format: uri
+        approval_required_by_default:
+          type: boolean
+        auth_schemes:
+          type: array
+          items:
+            type: string
+        required_auth_scheme:
+          type: string
+        schema_version:
+          type: string
+        supported_schema_versions:
+          type: array
+          items:
+            type: string
+        preferred_schema_version:
+          type: string
+        translation_targets:
+          type: array
+          items:
+            type: object
+            properties:
+              from:
+                type: string
+              to:
+                type: string
+              mode:
+                type: string
+                const: provider_translation
+        compatibility:
+          type: string
+          enum: [backward_compatible, forward_compatible, breaking_change]
+        status:
+          type: string
+          enum: [active, deprecated, disabled]
+
+    # ---------------------------------------------------------------------------
+    # Records
+    # ---------------------------------------------------------------------------
+    TaskRecord:
+      type: object
+      required: [task_id, requester_identity, capability, target_agent, status, updated_at]
+      properties:
+        task_id:
+          type: string
+        requester_identity:
+          $ref: '#/components/schemas/RequesterIdentity'
+        idempotency_key:
+          type: string
+        capability:
+          type: string
+        target_agent:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        result:
+          $ref: '#/components/schemas/ResultPackage'
+        receipt:
+          $ref: '#/components/schemas/ExecutionReceipt'
+        updated_at:
+          type: string
+          format: date-time
+
+    # ---------------------------------------------------------------------------
+    # Admin & Observability
+    # ---------------------------------------------------------------------------
+    SystemStatus:
+      type: object
+      properties:
+        version:
+          type: string
+        uptime_seconds:
+          type: number
+        deployment_profile:
+          type: string
+          enum: [open, verified, regulated]
+        components:
+          type: object
+          properties:
+            task_store:
+              type: string
+              enum: [ok, degraded, error]
+            receipt_store:
+              type: string
+              enum: [ok, degraded, error]
+            queue:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ok, degraded, error]
+                depth:
+                  type: integer
+                inflight:
+                  type: integer
+
+    Metrics:
+      type: object
+      properties:
+        queue:
+          type: object
+          properties:
+            queue_depth:
+              type: integer
+            processing:
+              type: boolean
+            inflight:
+              type: integer
+            max_concurrent:
+              type: integer
+            max_queue_depth:
+              type: integer
+            dead_letter_count:
+              type: integer
+        tasks:
+          type: object
+          properties:
+            total:
+              type: integer
+            by_status:
+              type: object
+              additionalProperties:
+                type: integer
+            by_capability:
+              type: object
+              additionalProperties:
+                type: integer
+            by_agent:
+              type: object
+              additionalProperties:
+                type: integer
+        requests:
+          type: object
+        errors:
+          type: object
+        latencies:
+          type: object
+
+    Alert:
+      type: object
+      properties:
+        alert_id:
+          type: string
+        type:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        acknowledged_at:
+          type: string
+          format: date-time
+        acknowledged_by:
+          type: string
+        suppressed_until:
+          type: string
+          format: date-time
+        suppressed_by:
+          type: string
+
+    DeadLetterRecord:
+      type: object
+      properties:
+        task_id:
+          type: string
+        tenant_id:
+          type: string
+        attempts:
+          type: integer
+        error:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    AuditEvent:
+      type: object
+      properties:
+        event_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        request_id:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+        method:
+          type: string
+        route:
+          type: string
+        tenant_id:
+          type: string
+        target_agent:
+          type: string
+
+    AuditCheckpoint:
+      type: object
+      properties:
+        checkpoint_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_chain_index:
+          type: integer
+        last_event_hash:
+          type: string
+        signature:
+          type: string
+
+    AuditExport:
+      type: object
+      properties:
+        export_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        events_count:
+          type: integer
+        checkpoints_count:
+          type: integer
+        latest_chain_index:
+          type: integer
+        latest_event_hash:
+          type: string
+        signature:
+          type: string
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        checkpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditCheckpoint'
+
+    VerificationKey:
+      type: object
+      properties:
+        kid:
+          type: string
+        alg:
+          type: string
+          enum: [HS256, RS256]
+        use:
+          type: string
+          const: sig
+        status:
+          type: string
+          enum: [active, retiring, revoked]
+        scopes:
+          type: array
+          items:
+            type: string
+        demo_only:
+          type: boolean
+        public_key_pem:
+          type: string
+        jwk:
+          type: object
+
+    SigningKeyInfo:
+      type: object
+      properties:
+        kid:
+          type: string
+        alg:
+          type: string
+          enum: [HS256, RS256]
+        status:
+          type: string
+          enum: [active, retiring, revoked]
+        scopes:
+          type: array
+          items:
+            type: string
+        demo_only:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    TrustMetadata:
+      type: object
+      properties:
+        trust_domain:
+          type: string
+        issuer:
+          type: string
+        profile:
+          type: string
+          enum: [open, verified, regulated]
+
+    TrustBundle:
+      type: object
+      properties:
+        bundle_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        trust_domain:
+          type: string
+        issuer:
+          type: string
+        profile:
+          type: string
+          enum: [open, verified, regulated]
+        keys_hash:
+          type: string
+        signature:
+          type: string
+
+    ConformanceReport:
+      type: object
+      properties:
+        export_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        profile:
+          type: string
+          enum: [open, verified, regulated]
+        total_checks:
+          type: integer
+        passed_checks:
+          type: integer
+        failed_checks:
+          type: integer
+        artifact_hash:
+          type: string
+        signature:
+          type: string
+
+    SSERecord:
+      type: object
+      properties:
+        event:
+          type: string
+          enum: [status, result, error]
+        data:
+          type: object
+        timestamp:
+          type: string
+          format: date-time

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://map-spec.dev/schemas/provider-discovery.schema.json",
+  "title": "MAP Provider Discovery Document",
+  "description": "Bootstrap discovery document for a MAP provider trust domain.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "provider", "trust", "transports", "agents", "documentation"],
+  "properties": {
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "discovery_version"],
+      "properties": {
+        "name": { "type": "string", "const": "MAP" },
+        "version": { "type": "string" },
+        "discovery_version": { "type": "string" }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_id", "display_name"],
+      "properties": {
+        "provider_id": { "type": "string" },
+        "display_name": { "type": "string" },
+        "provider_url": { "type": "string", "format": "uri" }
+      }
+    },
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trust_domain", "issuer", "profile", "key_discovery_url"],
+      "properties": {
+        "trust_domain": { "type": "string" },
+        "issuer": { "type": "string" },
+        "profile": { "type": "string" },
+        "key_discovery_url": { "type": "string" }
+      }
+    },
+    "transports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": { "type": "string", "const": "http" },
+          "path": { "type": "string" }
+        }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "items"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["agent_id", "version", "domain", "capabilities", "registry_status"],
+            "properties": {
+              "agent_id": { "type": "string" },
+              "display_name": { "type": "string" },
+              "version": { "type": "string" },
+              "domain": { "type": "string" },
+              "capabilities": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "registry_status": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "documentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agents_url", "http_transport_url", "registry_discovery_url"],
+      "properties": {
+        "agents_url": { "type": "string" },
+        "http_transport_url": { "type": "string" },
+        "registry_discovery_url": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://map-spec.dev/schemas/agent-descriptor.schema.json",
+  "title": "MAP Agent Descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agent_id",
+    "organization",
+    "version",
+    "domain",
+    "capabilities",
+    "risk_level",
+    "input_schema_ref",
+    "output_schema_ref",
+    "supported_execution_modes",
+    "visibility_modes"
+  ],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "organization": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "input_schema_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "output_schema_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "supported_execution_modes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "read",
+          "analyze",
+          "propose",
+          "commit",
+          "monitor",
+          "batch"
+        ]
+      }
+    },
+    "approval_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "visibility_modes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "full",
+          "summary",
+          "structured_only",
+          "receipt_only",
+          "redacted",
+          "debug"
+        ]
+      }
+    },
+    "policy_hooks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "provider_url": {
+      "type": "string"
+    },
+    "documentation_url": {
+      "type": "string"
+    },
+    "auth_schemes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "none",
+          "bearer",
+          "mtls",
+          "signed_request"
+        ]
+      },
+      "default": []
+    },
+    "capability_descriptors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "execution_mode",
+          "request_schema_ref",
+          "response_schema_ref"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "execution_mode": {
+            "type": "string",
+            "enum": [
+              "read",
+              "analyze",
+              "propose",
+              "commit",
+              "monitor",
+              "batch"
+            ]
+          },
+          "request_schema_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "response_schema_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "constraint_schema_ref": {
+            "type": "string"
+          },
+          "approval_required_by_default": {
+            "type": "boolean"
+          },
+          "auth_schemes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "none",
+                "bearer",
+                "mtls",
+                "signed_request"
+              ]
+            },
+            "default": []
+          },
+          "required_auth_scheme": {
+            "type": "string",
+            "enum": [
+              "bearer",
+              "mtls",
+              "signed_request"
+            ]
+          },
+          "schema_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "supported_schema_versions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            }
+          },
+          "preferred_schema_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "translation_targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to",
+                "mode"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+                },
+                "to": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "provider_translation"
+                  ]
+                }
+              }
+            },
+            "default": []
+          },
+          "compatibility": {
+            "type": "string",
+            "enum": [
+              "backward_compatible",
+              "forward_compatible",
+              "breaking_change"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "deprecated",
+              "disabled"
+            ]
+          }
+        }
+      },
+      "default": []
+    },
+    "transport_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "endpoint"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "http"
+            ]
+          },
+          "endpoint": {
+            "type": "string"
+          }
+        }
+      },
+      "default": []
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "registry_status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "deprecated",
+        "disabled"
+      ],
+      "default": "active"
+    },
+    "description": {
+      "type": "string"
+    },
+    "descriptor_signature": {
+      "type": "string",
+      "minLength": 1
+    },
+    "descriptor_key_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "descriptor_signature_alg": {
+      "type": "string",
+      "enum": [
+        "HS256",
+        "RS256"
+      ]
+    }
+  }
+}
