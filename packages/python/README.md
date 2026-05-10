@@ -3,14 +3,16 @@
 
 Python SDK for Micro Agent Protocol (MAP).
 
-**Status:** Preview release (0.1.0). This package is not yet fully aligned with the current reference MAP HTTP contract. Use the TypeScript SDK as the canonical client surface today.
+**Status:** Preview source package. This package is not yet fully aligned with the current reference MAP HTTP contract. Use the TypeScript SDK as the canonical client surface today.
 
 **⚠️ Note:** This SDK is in preview status. API may change in 0.x releases.
 
 ## Installation
 
+This package is not published to PyPI yet. Use an editable install from the repository source:
+
 ```bash
-pip install mapprotocol==0.1.0
+pip install -e .
 ```
 
 ## Quick Start

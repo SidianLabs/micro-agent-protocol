@@ -2,18 +2,21 @@
 
 Official TypeScript/Node.js SDK for Micro Agent Protocol (MAP).
 
-**Status:** Preview release (0.1.0). API may change in 0.x releases.
+**Status:** Preview source package. API may change in 0.x releases.
 
 ## Installation
 
+This package is not published to npm yet. Use it from the repository source:
+
 ```bash
-npm install @mapprotocol/sdk
+npm install
+npm run build
 ```
 
 ## Quick Start
 
 ```typescript
-import { MapAssistantClient, HMACSigner } from '@mapprotocol/sdk';
+import { MapAssistantClient, HMACSigner } from './src';
 
 const signer = new HMACSigner('your-secret-key', 'key-id');
 

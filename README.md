@@ -167,12 +167,17 @@ MAP Protocol provides official SDKs for multiple languages:
 
 ### TypeScript/JavaScript SDK
 
+The TypeScript SDK is not published to npm yet. Use it from this repository for now:
+
 ```bash
-npm install @mapprotocol/sdk
+git clone https://github.com/BHAWESHBHASKAR/micro-agent-protocol.git
+cd micro-agent-protocol/packages/typescript
+npm install
+npm run build
 ```
 
 ```typescript
-import { MapAssistantClient } from '@mapprotocol/sdk';
+import { MapAssistantClient } from './src';
 
 const client = MapAssistantClient.forBaseUrl('https://api.mapprotocol.ai');
 client.configureSigning('key-id', 'secret');
@@ -187,8 +192,12 @@ The TypeScript SDK is the canonical SDK surface currently aligned with the refer
 
 ### Python SDK
 
+The Python SDK is not published to PyPI yet. Use a local editable install from this repository:
+
 ```bash
-pip install mapprotocol
+git clone https://github.com/BHAWESHBHASKAR/micro-agent-protocol.git
+cd micro-agent-protocol/packages/python
+pip install -e .
 ```
 
 ```python
@@ -203,8 +212,12 @@ The Python SDK is currently a preview surface and is not yet fully aligned with 
 
 ### Go SDK
 
+The Go SDK is not published as a released module yet. Use it from a local checkout for now:
+
 ```bash
-go get github.com/mapprotocol/map/packages/go/mapproto
+git clone https://github.com/BHAWESHBHASKAR/micro-agent-protocol.git
+cd micro-agent-protocol/packages/go
+go test ./...
 ```
 
 ```go
@@ -329,7 +342,7 @@ npm run conformance:all
 
 ## Open Source Release
 
-This is the initial open source release of MAP Protocol, including:
+This repository currently contains the source implementation of MAP Protocol, including:
 
 - **Multi-language SDKs**: TypeScript, Python, and Go
 - **OpenAPI 3.1 Specification**: Full HTTP binding documentation
@@ -339,12 +352,9 @@ This is the initial open source release of MAP Protocol, including:
 ### Quick Start
 
 ```bash
-# Install TypeScript SDK
-npm install @mapprotocol/sdk
-
-# Clone and test
-git clone https://github.com/mapprotocol/map
-cd map
+# Clone and test from source
+git clone https://github.com/BHAWESHBHASKAR/micro-agent-protocol.git
+cd micro-agent-protocol
 npm install
 cd packages/typescript && npm install && npm test
 ```
