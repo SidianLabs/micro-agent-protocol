@@ -88,7 +88,7 @@ function withFixtureEnv<T>(fn: () => T): T {
 
 async function run(): Promise<void> {
   const fixtures = JSON.parse(
-    readFileSync(resolve(process.cwd(), "reference/fixtures/signature-fixtures.v1.json"), "utf8")
+    readFileSync(resolve(process.cwd(), "src/fixtures/signature-fixtures.v1.json"), "utf8")
   ) as SignatureFixtures;
 
   const checks = withFixtureEnv(() => {

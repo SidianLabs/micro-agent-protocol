@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mapprotocol"
+version = "0.1.0"
+description = "Official Python SDK for Micro Agent Protocol (MAP)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "MAP Protocol Team" }
+]
+requires-python = ">=3.9"
+homepage = "https://github.com/mapprotocol/map"
+repository = { url = "https://github.com/mapprotocol/map.git", directory = "packages/python" }
+issues = { url = "https://github.com/mapprotocol/map/issues" }
+keywords = ["map", "micro-agent-protocol", "ai", "agents", "delegation"]
+dependencies = [
+    "httpx>=0.25.0",
+]
+
+[project.metadata.note]
+status = "preview"  # This is a preview release. API may change.
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.6.0",
+    "ruff>=0.1.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.mypy]
+python_version = "3.9"
+strict = true

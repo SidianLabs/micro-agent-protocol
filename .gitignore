@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+*.egg-info/
 
 # IDE
 .idea/
@@ -34,12 +35,6 @@ coverage/
 # Project-specific
 docs/
 examples/
-reference/
-references/
-packages/
-protocol/
-conformance/
-tools/
 .github/
 *.lock
 AGENTS.md
@@ -48,9 +43,8 @@ CLAUDE.md
 CODE_OF_CONDUCT.md
 CONTRIBUTING.md
 GOVERNANCE.md
-LICENSE
-MAINTAINERS.md
 NOTICE
 SECURITY.md
 copyright-header-template.txt
-tsconfig.json
+references/
+conformance/

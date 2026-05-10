@@ -87,7 +87,7 @@ const fixtures = {
 };
 
 writeFileSync(
-  resolve(process.cwd(), "reference/fixtures/signature-fixtures.v1.json"),
+  resolve(process.cwd(), "src/fixtures/signature-fixtures.v1.json"),
   JSON.stringify(fixtures, null, 2),
   "utf8"
 );

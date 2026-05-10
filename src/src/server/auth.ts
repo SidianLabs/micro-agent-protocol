@@ -21,7 +21,7 @@ export function getSignedRequestError(
   req: IncomingMessage,
   rawBody: string,
   revokedKeyIds?: Set<string>
-): { code: "auth_required" | "invalid_auth" | "token_expired" | "token_invalid_signature"; message: string } | null {
+): { code: "auth_required" | "invalid_auth" | "token_expired"; message: string } | null {
   const authScheme = req.headers["x-map-auth-scheme"];
   const keyId = req.headers["x-map-key-id"];
   const timestamp = req.headers["x-map-timestamp"];
@@ -46,7 +46,7 @@ export function getSignedRequestError(
   }
   if (revokedKeyIds?.has(keyId)) {
     return {
-      code: "token_invalid_signature",
+      code: "invalid_auth",
       message: "MAP signed_request key has been revoked."
     };
   }
