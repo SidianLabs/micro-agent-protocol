@@ -1,0 +1,20 @@
+{
+  "name": "map-test-project",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start:server": "tsx ../src/src/server-main.ts",
+    "demo:payment": "tsx ../src/src/demo-payment.ts",
+    "demo:full": "tsx src/full-demo.ts"
+  },
+  "dependencies": {
+    "@mapprotocol/sdk": "file:../packages/typescript"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

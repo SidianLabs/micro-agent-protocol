@@ -402,17 +402,22 @@ export class MapAssistantClient {
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({})) as {
-          code?: string;
-          message?: string;
-          retryable?: boolean;
-          details?: Record<string, unknown>;
+          error?: {
+            code?: string;
+            message?: string;
+            retryable?: boolean;
+            details?: Record<string, unknown>;
+          };
+          request_id?: string;
         };
+        const err = errorBody?.error;
         throw new MapAPIError({
-          code: (errorBody?.code as ErrorCode) ?? 'request_failed',
-          message: errorBody?.message ?? `HTTP ${response.status}`,
-          retryable: errorBody?.retryable ?? response.status >= 500,
+          code: (err?.code as ErrorCode) ?? 'request_failed',
+          message: err?.message ?? `HTTP ${response.status}`,
+          retryable: err?.retryable ?? response.status >= 500,
           status: response.status,
-          details: errorBody?.details,
+          details: err?.details,
+          request_id: errorBody?.request_id,
         });
       }
 
