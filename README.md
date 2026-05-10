@@ -235,54 +235,10 @@ The Go SDK is currently a preview surface and is not yet fully aligned with the 
 - [`packages/typescript`](./packages/typescript/): TypeScript/Node.js SDK
 - [`packages/python`](./packages/python/): Python SDK
 - [`packages/go`](./packages/go/): Go SDK
-
-### Documentation
-
-- [`docs/vision.md`](./docs/vision.md): problem framing, thesis, and product positioning
-- [`docs/architecture.md`](./docs/architecture.md): reference architecture for assistant-to-micro-agent delegation
-- [`docs/target-production-architecture.md`](./docs/target-production-architecture.md): best-practice production architecture blueprint with system diagram and staged implementation plan
-- [`docs/protocol-spec.md`](./docs/protocol-spec.md): draft protocol primitives and lifecycle
-- [`docs/protocol-spec-v1-draft.md`](./docs/protocol-spec-v1-draft.md): normative v1 draft (MUST/SHOULD/MAY), lifecycle, errors, authz, and conformance requirements
-- [`docs/http-transport.md`](./docs/http-transport.md): current HTTP binding and error contract draft
-- [`docs/signing-model.md`](./docs/signing-model.md): current signing direction for tokens and receipts
-- [`docs/trust-rfc.md`](./docs/trust-rfc.md): production trust, key lifecycle, replay resistance, and verification model
-- [`docs/deployment-profiles.md`](./docs/deployment-profiles.md): runtime security profile requirements (`open`, `verified`, `regulated`)
-- [`docs/scale-architecture-rfc.md`](./docs/scale-architecture-rfc.md): large-scale control-plane/runtime architecture and SLO guidance
-- [`docs/mcp-ecosystem-analysis.md`](./docs/mcp-ecosystem-analysis.md): MCP ecosystem lessons translated into MAP implementation priorities
-- [`docs/mcp-to-map-migration.md`](./docs/mcp-to-map-migration.md): migration strategy from direct tool protocols to MAP boundaries
-- [`docs/readiness-matrix.md`](./docs/readiness-matrix.md): v1 readiness scoring and prioritized gap closure plan
-- [`docs/constraint-vocabulary.md`](./docs/constraint-vocabulary.md): shared MAP constraint model for interoperable task scoping
-- [`docs/registry-discovery.md`](./docs/registry-discovery.md): registry semantics and capability/domain discovery model
-- [`docs/registry-trust.md`](./docs/registry-trust.md): signed descriptor trust model for discovery
-- [`docs/key-management.md`](./docs/key-management.md): current key-discovery and rotation draft
-- [`docs/capability-schemas.md`](./docs/capability-schemas.md): per-capability request/response schema registration model
-- [`docs/version-negotiation.md`](./docs/version-negotiation.md): protocol and capability version negotiation model
-- [`docs/security-model.md`](./docs/security-model.md): trust boundaries, threat model, and security principles
-- [`docs/assistant-sdk.md`](./docs/assistant-sdk.md): assistant-facing SDK for discovery/dispatch/approval/status flows
-- [`docs/build-alignment.md`](./docs/build-alignment.md): audit of how the current build matches the original MAP idea
-- [`docs/roadmap.md`](./docs/roadmap.md): phased path from concept to reference implementation
-- [`docs/demo.md`](./docs/demo.md): how to run the minimal MAP server and payment flow
 - [`schemas/`](./schemas): canonical JSON Schema definitions for core MAP protocol objects
 - [`examples/`](./examples): example descriptors, task envelopes, delegation tokens, result packages, and receipts
 - [`reference/`](./reference): minimal TypeScript scaffold for a MAP control plane and micro-agent runtime
 - [`conformance/`](./conformance): Protocol conformance test suite
-
-### Planning Documents (PAD)
-
-- [`docs/pad/PAD-01-Project-Overview.md`](./docs/pad/PAD-01-Project-Overview.md): Project overview and vision
-- [`docs/pad/PAD-02-System-Architecture.md`](./docs/pad/PAD-02-System-Architecture.md): Complete architecture
-- [`docs/pad/PAD-03-OpenAPI-Spec.md`](./docs/pad/PAD-03-OpenAPI-Spec.md): OpenAPI 3.1 specification
-- [`docs/pad/PAD-04-Protocol-Specification.md`](./docs/pad/PAD-04-Protocol-Specification.md): Protocol specification
-- [`docs/pad/PAD-05-TypeScript-Reference-Hardening.md`](./docs/pad/PAD-05-TypeScript-Reference-Hardening.md): SDK hardening
-- [`docs/pad/PAD-06-Python-SDK-Design.md`](./docs/pad/PAD-06-Python-SDK-Design.md): Python SDK design
-- [`docs/pad/PAD-07-Go-SDK-Design.md`](./docs/pad/PAD-07-Go-SDK-Design.md): Go SDK design
-- [`docs/pad/PAD-08-TypeScript-SDK-Restructuring.md`](./docs/pad/PAD-08-TypeScript-SDK-Restructuring.md): TS SDK restructuring
-- [`docs/pad/PAD-09-CICD-Pipeline-Design.md`](./docs/pad/PAD-09-CICD-Pipeline-Design.md): CI/CD pipeline design
-- [`docs/pad/PAD-10-Conformance-Testing.md`](./docs/pad/PAD-10-Conformance-Testing.md): Conformance test suite
-- [`docs/pad/PAD-11-Documentation-System.md`](./docs/pad/PAD-11-Documentation-System.md): Documentation system
-- [`docs/pad/PAD-12-Legal.md`](./docs/pad/PAD-12-Legal.md): Apache 2.0 license and notices
-- [`docs/pad/PAD-13-Governance.md`](./docs/pad/PAD-13-Governance.md): CoC and contributing
-- [`docs/pad/PAD-14-Release-Plan.md`](./docs/pad/PAD-14-Release-Plan.md): Release plan
 
 ## Reference Verification
 
@@ -347,7 +303,6 @@ This repository currently contains the source implementation of MAP Protocol, in
 - **Multi-language SDKs**: TypeScript, Python, and Go
 - **OpenAPI 3.1 Specification**: Full HTTP binding documentation
 - **Conformance Test Suite**: Protocol validation tests
-- **Documentation**: Docusaurus-based documentation system
 
 ### Quick Start
 
