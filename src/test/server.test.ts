@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
+import type { DelegationToken, TaskEnvelope } from "../src/types.js";
+import type { MicroAgent } from "../src/runtime/micro-agent.js";
 import {
   getSignatureKeyId,
   signHttpRequest,
@@ -433,6 +435,62 @@ test("server readiness is not_ready when verified profile uses non-asymmetric si
   );
 });
 
+test("server readiness is not_ready when verified profile active key is runtime-revoked", async () => {
+  const keyPair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const privateKeyPem = keyPair.privateKey.export({ type: "pkcs1", format: "pem" }).toString();
+  const publicKeyPem = keyPair.publicKey.export({ type: "pkcs1", format: "pem" }).toString();
+  const tempDir = mkdtempSync(join(tmpdir(), "map-runtime-controls-"));
+  const runtimeControlStorePath = join(tempDir, "runtime-controls.json");
+  writeFileSync(
+    runtimeControlStorePath,
+    JSON.stringify({
+      disabled_agents: {},
+      disabled_capabilities: {},
+      revoked_keys: {
+        verified_rs256: {
+          revoked_at: new Date().toISOString(),
+          revoked_by: "test"
+        }
+      }
+    }),
+    "utf8"
+  );
+
+  await withEnv(
+    {
+      MAP_SIGNING_KEYS: JSON.stringify([
+        {
+          kid: "verified_rs256",
+          alg: "RS256",
+          private_key_pem: privateKeyPem,
+          public_key_pem: publicKeyPem,
+          status: "active",
+          demo_only: false
+        }
+      ]),
+      MAP_SIGNING_ACTIVE_KID: "verified_rs256"
+    },
+    async () => {
+      try {
+        const dispatch = createDispatcher({
+          deploymentProfile: "verified",
+          enforceSignedRequests: true,
+          runtimeControlStorePath
+        });
+        const response = await dispatch("GET", "/ready");
+        assert.equal(response.statusCode, 503);
+        assert.equal(response.body.status, "not_ready");
+        assert.equal(
+          response.body.checks.deployment_profile.violations.includes("active_signing_key_missing"),
+          true
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
+  );
+});
+
 test("server readiness is ready when verified deployment profile constraints are satisfied", async () => {
   const keyPair = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const privateKeyPem = keyPair.privateKey.export({ type: "pkcs1", format: "pem" }).toString();
@@ -460,6 +518,75 @@ test("server readiness is ready when verified deployment profile constraints are
       assert.equal(response.statusCode, 200);
       assert.equal(response.body.status, "ready");
       assert.equal(response.body.checks.deployment_profile.profile, "verified");
+      assert.equal(response.body.checks.deployment_profile.compliant, true);
+    }
+  );
+});
+
+test("server readiness is not_ready when verified profile has mixed signable algorithms", async () => {
+  const keyPair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const privateKeyPem = keyPair.privateKey.export({ type: "pkcs1", format: "pem" }).toString();
+  const publicKeyPem = keyPair.publicKey.export({ type: "pkcs1", format: "pem" }).toString();
+  await withEnv(
+    {
+      MAP_SIGNING_KEYS: JSON.stringify([
+        {
+          kid: "verified_rs256",
+          alg: "RS256",
+          private_key_pem: privateKeyPem,
+          public_key_pem: publicKeyPem,
+          status: "active",
+          demo_only: false
+        },
+        {
+          kid: "verified_hs256_retiring",
+          secret: "verified_hs_secret",
+          status: "retiring",
+          demo_only: false
+        }
+      ]),
+      MAP_SIGNING_ACTIVE_KID: "verified_rs256"
+    },
+    async () => {
+      const dispatch = createDispatcher({
+        deploymentProfile: "verified",
+        enforceSignedRequests: true
+      });
+      const response = await dispatch("GET", "/ready");
+      assert.equal(response.statusCode, 503);
+      assert.equal(response.body.status, "not_ready");
+      assert.equal(
+        response.body.checks.deployment_profile.violations.includes(
+          "non_asymmetric_signing_keys_present"
+        ),
+        true
+      );
+    }
+  );
+});
+
+test("server readiness keeps open profile compatible with HS256 signing keys", async () => {
+  await withEnv(
+    {
+      MAP_SIGNING_KEYS: JSON.stringify([
+        {
+          kid: "open_hs256",
+          secret: "open_hs_secret",
+          status: "active",
+          demo_only: false
+        }
+      ]),
+      MAP_SIGNING_ACTIVE_KID: "open_hs256"
+    },
+    async () => {
+      const dispatch = createDispatcher({
+        deploymentProfile: "open",
+        enforceSignedRequests: false
+      });
+      const response = await dispatch("GET", "/ready");
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.body.status, "ready");
+      assert.equal(response.body.checks.deployment_profile.profile, "open");
       assert.equal(response.body.checks.deployment_profile.compliant, true);
     }
   );
@@ -1773,8 +1900,8 @@ test("server rejects capability when target agent does not support it", async ()
     }
   });
 
-  assert.equal(response.statusCode, 400);
-  assert.equal(response.body.error.code, "capability_not_supported");
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.body.error.code, "capability_not_found");
 });
 
 test("server rejects unsupported requested schema version", async () => {
@@ -1814,7 +1941,7 @@ test("server rejects unsupported requested schema version", async () => {
 
   const response = await dispatch("POST", "/dispatch", body, { ...headers });
   assert.equal(response.statusCode, 400);
-  assert.equal(response.body.error.code, "unsupported_schema_version");
+  assert.equal(response.body.error.code, "schema_version_unsupported");
 });
 
 test("server returns requested and executed schema versions when provider translates", async () => {
@@ -2051,6 +2178,85 @@ test("server rejects direct /approve without pending approval state", async () =
   assert.equal(response.body.error.code, "task_not_found");
 });
 
+test("server surfaces lifecycle transition invariant failures as invalid_request", async () => {
+  const mismatchedApprovalAgent: MicroAgent = {
+    descriptor: {
+      agent_id: "dbread-lifecycle-mismatch-v1",
+      organization: "map-reference",
+      version: "1.0.0",
+      domain: "database",
+      capabilities: ["db.read.lifecycle_mismatch"],
+      risk_level: "medium",
+      input_schema_ref: "https://map-spec.dev/schemas/task-envelope.schema.json",
+      output_schema_ref: "https://map-spec.dev/schemas/result-package.schema.json",
+      supported_execution_modes: ["read"],
+      visibility_modes: ["summary", "debug"]
+    },
+    async invoke(_envelope: TaskEnvelope, _token: DelegationToken) {
+      return {
+        result: {
+          task_id: "task_mismatch_other",
+          status: "completed",
+          summary: "completed",
+          structured_output: {},
+          followup_required: false
+        },
+        receipt: {
+          receipt_id: "receipt:task_lifecycle_http:completed",
+          task_id: "task_mismatch_other",
+          agent_id: "dbread-lifecycle-mismatch-v1",
+          action_taken: "db.read.lifecycle_mismatch.completed",
+          resource_touched: "database",
+          policy_checks: ["policy_passed"],
+          timestamp: new Date().toISOString(),
+          result_hash: "sha256:task_lifecycle_http:completed",
+          signature: "sig"
+        }
+      };
+    }
+  };
+
+  const dispatch = createDispatcher({ agents: [mismatchedApprovalAgent] });
+  const taskId = "task_lifecycle_http";
+  const envelope = {
+    task_id: taskId,
+    requester_identity: { type: "user", id: "engineer_1" },
+    target_agent: "dbread-lifecycle-mismatch-v1",
+    intent: "Fetch production incident summary",
+    constraints: {
+      common: {
+        environment: "production",
+        redaction_level: "basic"
+      },
+      domain: {
+        dataset: "incident_metrics",
+        service: "payments"
+      }
+    },
+    risk_class: "medium" as const,
+    delegation_token: "placeholder",
+    requested_output_mode: "summary" as const
+  };
+
+  const queued = await dispatch("POST", "/dispatch", {
+    capability: "db.read.lifecycle_mismatch",
+    envelope
+  });
+  assert.equal(queued.statusCode, 202);
+  assert.equal(queued.body.result.status, "awaiting_approval");
+
+  const approved = await dispatch("POST", "/approve", {
+    task_id: taskId,
+    approval_reference: String(queued.body.result.structured_output.approval_reference),
+    capability: "db.read.lifecycle_mismatch",
+    envelope
+  });
+
+  assert.equal(approved.statusCode, 400);
+  assert.equal(approved.body.error.code, "invalid_request");
+  assert.match(String(approved.body.error.message), /Task lifecycle invariant violated/);
+});
+
 test("server returns persisted task state", async () => {
   const dispatch = createDispatcher();
   await dispatch("POST", "/dispatch", {
@@ -2119,6 +2325,71 @@ test("server returns running for async task and later exposes completed state", 
   const current = await dispatch("GET", `/tasks/${taskId}`);
   assert.equal(current.statusCode, 200);
   assert.equal(current.body.task.status, "completed");
+});
+
+test("server does not persist task when async queue is at capacity", async () => {
+  const stalledAsyncAgent: MicroAgent = {
+    descriptor: {
+      agent_id: "dbread-stalled-async-v1",
+      organization: "map-reference",
+      version: "1.0.0",
+      domain: "database",
+      capabilities: ["db.read.slow_async"],
+      risk_level: "medium",
+      input_schema_ref: "https://map-spec.dev/schemas/task-envelope.schema.json",
+      output_schema_ref: "https://map-spec.dev/schemas/result-package.schema.json",
+      supported_execution_modes: ["read"],
+      visibility_modes: ["summary", "debug"]
+    },
+    async invoke(_envelope: TaskEnvelope, _token: DelegationToken) {
+      return new Promise(() => {});
+    }
+  };
+
+  const dispatch = createDispatcher({
+    agents: [stalledAsyncAgent],
+    asyncQueueMaxConcurrent: 1,
+    asyncQueueMaxQueueDepth: 1
+  });
+
+  const buildBody = (taskId: string) => ({
+    capability: "db.read.slow_async",
+    envelope: {
+      task_id: taskId,
+      requester_identity: { type: "user", id: "engineer_1" },
+      target_agent: "dbread-stalled-async-v1",
+      intent: "Saturate async queue",
+      constraints: {
+        common: {
+          environment: "staging",
+          redaction_level: "basic"
+        },
+        domain: {
+          dataset: "incident_metrics",
+          service: "payments"
+        }
+      },
+      risk_class: "medium" as const,
+      delegation_token: "placeholder",
+      requested_output_mode: "summary" as const,
+      metadata: {
+        async: true
+      }
+    }
+  });
+
+  const first = await dispatch("POST", "/dispatch", buildBody("task_async_cap_1"));
+  const second = await dispatch("POST", "/dispatch", buildBody("task_async_cap_2"));
+  const third = await dispatch("POST", "/dispatch", buildBody("task_async_cap_3"));
+
+  assert.equal(first.statusCode, 202);
+  assert.equal(second.statusCode, 202);
+  assert.equal(third.statusCode, 429);
+  assert.equal(third.body.error.code, "rate_limited");
+
+  const lookup = await dispatch("GET", "/tasks/task_async_cap_3");
+  assert.equal(lookup.statusCode, 404);
+  assert.equal(lookup.body.error.code, "task_not_found");
 });
 
 test("server accepts valid signed_request auth when provided", async () => {
@@ -2759,10 +3030,10 @@ test("server rejects x-map-idempotency-key conflict across request identity", as
     headers
   );
 
-  assert.equal(conflict.statusCode, 400);
-  assert.equal(conflict.body.error.code, "conflict");
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.body.error.code, "idempotency_conflict");
   assert.equal(conflict.body.error.retryable, false);
-  assert.equal(conflict.body.error.details.category, "idempotency");
+  assert.equal(conflict.body.error.details.category, "conflict");
 });
 
 test("server rejects task_id conflict for different identity", async () => {
@@ -2813,8 +3084,8 @@ test("server rejects task_id conflict for different identity", async () => {
     }
   });
 
-  assert.equal(conflict.statusCode, 400);
-  assert.equal(conflict.body.error.code, "conflict");
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.body.error.code, "idempotency_conflict");
 });
 
 test("server rejects task_id conflict across tenants for same requester id", async () => {
@@ -2865,8 +3136,8 @@ test("server rejects task_id conflict across tenants for same requester id", asy
     }
   });
 
-  assert.equal(conflict.statusCode, 400);
-  assert.equal(conflict.body.error.code, "conflict");
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.body.error.code, "idempotency_conflict");
 });
 
 test("server persists task state when task store path is configured", async () => {

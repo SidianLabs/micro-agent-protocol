@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# pyproject.toml for MAP Protocol Python SDK
+#
+
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -12,16 +17,15 @@ authors = [
     { name = "MAP Protocol Team" }
 ]
 requires-python = ">=3.9"
-homepage = "https://github.com/mapprotocol/map"
-repository = { url = "https://github.com/mapprotocol/map.git", directory = "packages/python" }
-issues = { url = "https://github.com/mapprotocol/map/issues" }
 keywords = ["map", "micro-agent-protocol", "ai", "agents", "delegation"]
 dependencies = [
     "httpx>=0.25.0",
 ]
 
-[project.metadata.note]
-status = "preview"  # This is a preview release. API may change.
+[project.urls]
+Homepage = "https://github.com/mapprotocol/map"
+Repository = "https://github.com/mapprotocol/map.git"
+Issues = "https://github.com/mapprotocol/map/issues"
 
 [project.optional-dependencies]
 dev = [

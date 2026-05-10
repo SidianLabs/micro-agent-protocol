@@ -186,7 +186,7 @@ async function run(): Promise<void> {
   );
   checks.push({
     name: "error_conflict",
-    ok: conflict.statusCode === 400 && getErrorCode(conflict) === "conflict"
+    ok: conflict.statusCode === 409 && getErrorCode(conflict) === "idempotency_conflict"
   });
 
   const failed = checks.filter((check) => !check.ok);

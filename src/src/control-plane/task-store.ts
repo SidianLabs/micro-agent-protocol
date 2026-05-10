@@ -174,6 +174,19 @@ export class TaskStore {
     return receipts.find((receipt) => receipt.receipt_id === receiptId);
   }
 
+  delete(taskId: string): boolean {
+    const existing = this.tasks.get(taskId);
+    if (!existing) {
+      return false;
+    }
+    this.tasks.delete(taskId);
+    if (existing.idempotency_key) {
+      this.idempotencyIndex.delete(existing.idempotency_key);
+    }
+    this.persist();
+    return true;
+  }
+
   private hydrate(): void {
     if (this.db) {
       try {
@@ -319,6 +332,41 @@ export class TaskStore {
     if (updates.idempotency_key !== undefined && updates.idempotency_key !== existing.idempotency_key) {
       throw new Error(`Idempotency key is immutable for task ${existing.task_id}.`);
     }
+    if (
+      updates.requester_identity !== undefined &&
+      JSON.stringify(updates.requester_identity) !== JSON.stringify(existing.requester_identity)
+    ) {
+      throw new Error(
+        `Task lifecycle invariant violated: requester_identity is immutable for task ${existing.task_id}.`
+      );
+    }
+    if (updates.capability !== undefined && updates.capability !== existing.capability) {
+      throw new Error(
+        `Task lifecycle invariant violated: capability is immutable for task ${existing.task_id}.`
+      );
+    }
+    if (updates.target_agent !== undefined && updates.target_agent !== existing.target_agent) {
+      throw new Error(
+        `Task lifecycle invariant violated: target_agent is immutable for task ${existing.task_id}.`
+      );
+    }
+    if (updates.result !== undefined) {
+      if (updates.result.task_id !== existing.task_id) {
+        throw new Error(
+          `Task lifecycle invariant violated: result.task_id mismatch for task ${existing.task_id}.`
+        );
+      }
+      if (updates.result.status !== nextStatus) {
+        throw new Error(
+          `Task lifecycle invariant violated: result.status must match task status for task ${existing.task_id}.`
+        );
+      }
+    }
+    if (updates.receipt !== undefined && updates.receipt.task_id !== existing.task_id) {
+      throw new Error(
+        `Task lifecycle invariant violated: receipt.task_id mismatch for task ${existing.task_id}.`
+      );
+    }
     if (existing.status === nextStatus) {
       if (!TERMINAL_TASK_STATUSES.has(existing.status)) {
         return;
@@ -347,6 +395,12 @@ export class TaskStore {
     if (!allowed.includes(nextStatus)) {
       throw new Error(
         `Invalid task state transition for task ${existing.task_id}: ${existing.status} -> ${nextStatus}.`
+      );
+    }
+
+    if (updates.result === undefined || updates.receipt === undefined) {
+      throw new Error(
+        `Task lifecycle invariant violated: transitions must include result and receipt for task ${existing.task_id}.`
       );
     }
   }

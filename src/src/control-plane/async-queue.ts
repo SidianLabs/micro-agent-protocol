@@ -95,6 +95,10 @@ export class AsyncTaskQueue {
     return { accepted: true };
   }
 
+  hasCapacity(): boolean {
+    return this.queue.length < this.maxQueueDepth;
+  }
+
   listDeadLetters(): DeadLetterRecord[] {
     return [...this.deadLetters];
   }

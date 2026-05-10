@@ -152,6 +152,84 @@ test("task store rejects terminal result mutation for same completed state", () 
   );
 });
 
+test("task store rejects lifecycle transition when result.status mismatches task status", () => {
+  const taskStore = new TaskStore();
+  seedRunningTask(taskStore, "task_ts_status_mismatch");
+
+  assert.throws(
+    () => {
+      taskStore.update("task_ts_status_mismatch", {
+        status: "completed",
+        result: {
+          task_id: "task_ts_status_mismatch",
+          status: "failed",
+          summary: "bad state",
+          structured_output: {},
+          followup_required: false
+        },
+        receipt: {
+          receipt_id: "receipt:task_ts_status_mismatch:completed",
+          task_id: "task_ts_status_mismatch",
+          agent_id: "dbread-agent-v1",
+          action_taken: "db.read.aggregate.completed",
+          resource_touched: "database",
+          policy_checks: [],
+          timestamp: new Date().toISOString(),
+          result_hash: "sha256:task_ts_status_mismatch:completed",
+          signature: "sig"
+        }
+      });
+    },
+    /result\.status must match task status/
+  );
+});
+
+test("task store rejects lifecycle transition without result and receipt payload", () => {
+  const taskStore = new TaskStore();
+  seedRunningTask(taskStore, "task_ts_missing_payloads");
+
+  assert.throws(
+    () => {
+      taskStore.update("task_ts_missing_payloads", {
+        status: "failed"
+      });
+    },
+    /transitions must include result and receipt/
+  );
+});
+
+test("task store rejects lifecycle transition when receipt.task_id mismatches task id", () => {
+  const taskStore = new TaskStore();
+  seedRunningTask(taskStore, "task_ts_receipt_mismatch");
+
+  assert.throws(
+    () => {
+      taskStore.update("task_ts_receipt_mismatch", {
+        status: "completed",
+        result: {
+          task_id: "task_ts_receipt_mismatch",
+          status: "completed",
+          summary: "done",
+          structured_output: {},
+          followup_required: false
+        },
+        receipt: {
+          receipt_id: "receipt:task_ts_receipt_mismatch:completed",
+          task_id: "task_ts_other",
+          agent_id: "dbread-agent-v1",
+          action_taken: "db.read.aggregate.completed",
+          resource_touched: "database",
+          policy_checks: [],
+          timestamp: new Date().toISOString(),
+          result_hash: "sha256:task_ts_receipt_mismatch:completed",
+          signature: "sig"
+        }
+      });
+    },
+    /receipt\.task_id mismatch/
+  );
+});
+
 test("task store persists records with sqlite db path across restarts", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "map-task-db-"));
   const dbPath = join(tempDir, "tasks.db");

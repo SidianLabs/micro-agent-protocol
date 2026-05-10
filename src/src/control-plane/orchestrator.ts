@@ -174,6 +174,10 @@ export class OrchestratorRuntime {
     });
 
     if (negotiatedEnvelope.metadata?.async === true) {
+      if (!this.asyncQueue.hasCapacity()) {
+        throw new Error("Async queue capacity exceeded.");
+      }
+
       const unsignedReceipt = {
         receipt_id: `receipt:${envelope.task_id}:running`,
         task_id: envelope.task_id,
@@ -225,7 +229,6 @@ export class OrchestratorRuntime {
         result,
         receipt
       });
-      this.receiptStore.append(receipt);
 
       const enqueueResult = this.asyncQueue.enqueue({
         taskId: envelope.task_id,
@@ -297,8 +300,10 @@ export class OrchestratorRuntime {
         }
       });
       if (!enqueueResult.accepted) {
+        this.taskStore.delete(envelope.task_id);
         throw new Error("Async queue capacity exceeded.");
       }
+      this.receiptStore.append(receipt);
 
       return { result, receipt };
     }

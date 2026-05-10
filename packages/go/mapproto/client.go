@@ -15,6 +15,7 @@ import (
 	"time"
 )
 
+// ClientOptions configures the MAP client
 type ClientOptions struct {
 	BaseURL    string
 	Timeout    time.Duration
@@ -23,6 +24,7 @@ type ClientOptions struct {
 	HeaderFunc func(*http.Request)
 }
 
+// Client is the MAP protocol client
 type Client struct {
 	baseURL    *url.URL
 	httpClient *http.Client
@@ -31,8 +33,10 @@ type Client struct {
 	headerFunc func(*http.Request)
 }
 
+// ClientOption is a functional option for configuring the client
 type ClientOption func(*ClientOptions)
 
+// NewClient creates a new MAP client with options
 func NewClient(opts ...ClientOption) (*Client, error) {
 	options := &ClientOptions{
 		BaseURL:   "https://api.mapprotocol.io",
@@ -49,6 +53,10 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
 	}
 
+	if options.Transport == nil {
+		options.Transport = NewHTTPTransport(nil)
+	}
+
 	httpClient := &http.Client{
 		Timeout:   options.Timeout,
 		Transport: options.Transport,
@@ -63,30 +71,35 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	}, nil
 }
 
+// WithBaseURL sets the base URL for the client
 func WithBaseURL(baseURL string) ClientOption {
 	return func(opts *ClientOptions) {
 		opts.BaseURL = baseURL
 	}
 }
 
+// WithSigner sets the signer for the client
 func WithSigner(signer Signer) ClientOption {
 	return func(opts *ClientOptions) {
 		opts.Signer = signer
 	}
 }
 
+// WithTimeout sets the timeout for the client
 func WithTimeout(timeout time.Duration) ClientOption {
 	return func(opts *ClientOptions) {
 		opts.Timeout = timeout
 	}
 }
 
+// WithTransport sets the transport for the client
 func WithTransport(transport Transport) ClientOption {
 	return func(opts *ClientOptions) {
 		opts.Transport = transport
 	}
 }
 
+// WithHeaderFunc sets a custom header function
 func WithHeaderFunc(f func(*http.Request)) ClientOption {
 	return func(opts *ClientOptions) {
 		opts.HeaderFunc = f
@@ -97,12 +110,15 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body inter
 	u := c.baseURL.JoinPath(path)
 
 	var buf io.Reader
+	var bodyBytes []byte
+
 	if body != nil {
-		data, err := json.Marshal(body)
+		var err error
+		bodyBytes, err = json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
-		buf = bytes.NewReader(data)
+		buf = bytes.NewReader(bodyBytes)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), buf)
@@ -114,16 +130,13 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body inter
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "mapproto-go/"+Version)
 
-	if c.signer != nil && body != nil {
-		req.Header.Set("X-Key-ID", c.signer.KeyID())
-		var bodyBytes []byte
-		if buf != nil {
-			bodyBytes, _ = io.ReadAll(req.Body)
-			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-		}
-		signature, err := c.signer.SignRequest(bodyBytes)
+	if c.signer != nil && body != nil && bodyBytes != nil {
+		timestamp := GenerateTimestamp()
+		signature, err := c.signer.Sign(method, path, string(bodyBytes), timestamp)
 		if err == nil {
-			req.Header.Set("X-Signature", signature)
+			req.Header.Set("X-Key-ID", c.signer.GetKeyID())
+			req.Header.Set("X-Timestamp", timestamp)
+			req.Header.Set("X-Request-Signature", signature)
 		}
 	}
 
@@ -138,7 +151,33 @@ func (c *Client) doRequest(ctx context.Context, req *http.Request) (*http.Respon
 	return c.httpClient.Do(req)
 }
 
-func (c *Client) Dispatch(ctx context.Context, req DispatchRequest) (*TaskRecord, error) {
+func (c *Client) parseResponse(resp *http.Response, result interface{}) error {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		apiErr := ParseHTTPError(resp)
+		if apiErr != nil {
+			return apiErr
+		}
+		return fmt.Errorf("request failed with status: %d body: %s", resp.StatusCode, string(body))
+	}
+
+	if len(body) == 0 {
+		return nil
+	}
+
+	if err := json.Unmarshal(body, result); err != nil {
+		return fmt.Errorf("failed to decode response: %w body: %s", err, string(body))
+	}
+
+	return nil
+}
+
+// Dispatch submits a task for execution
+func (c *Client) Dispatch(ctx context.Context, req *DispatchRequest) (*InvokeResult, error) {
 	httpReq, err := c.newRequest(ctx, http.MethodPost, "/v1/tasks/dispatch", req)
 	if err != nil {
 		return nil, err
@@ -150,52 +189,44 @@ func (c *Client) Dispatch(ctx context.Context, req DispatchRequest) (*TaskRecord
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		apiErr := APIError{}
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil {
-			return nil, FromAPIError(apiErr)
-		}
-		return nil, fmt.Errorf("dispatch failed with status: %d", resp.StatusCode)
+	var invokeResult InvokeResult
+	if err := c.parseResponse(resp, &invokeResult); err != nil {
+		return nil, err
 	}
 
-	var task TaskRecord
-	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &task, nil
+	return &invokeResult, nil
 }
 
-func (c *Client) Approve(ctx context.Context, requestID string, approved bool) error {
-	body := map[string]interface{}{
-		"requestId": requestID,
-		"approved":  approved,
-	}
-
-	httpReq, err := c.newRequest(ctx, http.MethodPost, "/v1/tasks/approve", body)
+// Approve approves a task that requires approval
+func (c *Client) Approve(ctx context.Context, req *ApprovalRequest) (*InvokeResult, error) {
+	httpReq, err := c.newRequest(ctx, http.MethodPost, "/v1/tasks/approve", req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	resp, err := c.doRequest(ctx, httpReq)
 	if err != nil {
-		return fmt.Errorf("approval request failed: %w", err)
+		return nil, fmt.Errorf("approval request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		apiErr := APIError{}
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil {
-			return FromAPIError(apiErr)
-		}
-		return fmt.Errorf("approval failed with status: %d", resp.StatusCode)
+	var invokeResult InvokeResult
+	if err := c.parseResponse(resp, &invokeResult); err != nil {
+		return nil, err
 	}
 
-	return nil
+	return &invokeResult, nil
 }
 
-func (c *Client) GetTask(ctx context.Context, taskID string) (*TaskRecord, error) {
-	httpReq, err := c.newRequest(ctx, http.MethodGet, "/v1/tasks/"+taskID, nil)
+// GetTask retrieves a task by ID
+func (c *Client) GetTask(ctx context.Context, taskID string, opts *GetTaskOptions) (*TaskRecord, error) {
+	path := "/v1/tasks/" + taskID
+
+	if opts != nil && opts.TenantID != "" {
+		path = path + "?tenant_id=" + url.QueryEscape(opts.TenantID)
+	}
+
+	httpReq, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -207,46 +238,43 @@ func (c *Client) GetTask(ctx context.Context, taskID string) (*TaskRecord, error
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrNotFound
+		return nil, ErrTaskNotFound
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		apiErr := APIError{}
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil {
-			return nil, FromAPIError(apiErr)
-		}
-		return nil, fmt.Errorf("get task failed with status: %d", resp.StatusCode)
+	var taskRecord TaskRecord
+	if err := c.parseResponse(resp, &taskRecord); err != nil {
+		return nil, err
 	}
 
-	var task TaskRecord
-	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &task, nil
+	return &taskRecord, nil
 }
 
-type ListTasksResponse struct {
-	Tasks      []TaskRecord `json:"tasks"`
-	Page       int          `json:"page"`
-	PageSize   int          `json:"pageSize"`
-	TotalCount int          `json:"totalCount"`
-}
-
-func (c *Client) ListTasks(ctx context.Context, status TaskStatus, page, pageSize int) (*ListTasksResponse, error) {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
-
-	q := c.baseURL.Query()
-	q.Set("status", string(status))
-	q.Set("page", strconv.Itoa(page))
-	q.Set("pageSize", strconv.Itoa(pageSize))
-
+// ListTasks lists tasks with optional filters
+func (c *Client) ListTasks(ctx context.Context, opts *ListTasksOptions) (*PaginatedTasks, error) {
 	u := c.baseURL.JoinPath("/v1/tasks")
+	q := u.Query()
+
+	if opts != nil {
+		if opts.TenantID != "" {
+			q.Set("tenant_id", opts.TenantID)
+		}
+		if opts.Status != "" {
+			q.Set("status", string(opts.Status))
+		}
+		if opts.Capability != "" {
+			q.Set("capability", opts.Capability)
+		}
+		if opts.TargetAgent != "" {
+			q.Set("target_agent", opts.TargetAgent)
+		}
+		if opts.Limit > 0 {
+			q.Set("limit", strconv.Itoa(opts.Limit))
+		}
+		if opts.Cursor != "" {
+			q.Set("cursor", opts.Cursor)
+		}
+	}
+
 	u.RawQuery = q.Encode()
 
 	httpReq, err := c.newRequest(ctx, http.MethodGet, u.String(), nil)
@@ -260,37 +288,37 @@ func (c *Client) ListTasks(ctx context.Context, status TaskStatus, page, pageSiz
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		apiErr := APIError{}
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil {
-			return nil, FromAPIError(apiErr)
-		}
-		return nil, fmt.Errorf("list tasks failed with status: %d", resp.StatusCode)
+	var paginatedTasks PaginatedTasks
+	if err := c.parseResponse(resp, &paginatedTasks); err != nil {
+		return nil, err
 	}
 
-	var result ListTasksResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
+	return &paginatedTasks, nil
 }
 
-func (c *Client) ListAgents(ctx context.Context, tags []string, page, pageSize int) ([]AgentDescriptor, error) {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
-
+// ListAgents lists agents with optional filters
+func (c *Client) ListAgents(ctx context.Context, opts *ListAgentsOptions) (*PaginatedAgents, error) {
 	u := c.baseURL.JoinPath("/v1/agents")
 	q := u.Query()
-	if len(tags) > 0 {
-		q.Set("tags", urlJoin(tags))
+
+	if opts != nil {
+		if opts.Domain != "" {
+			q.Set("domain", opts.Domain)
+		}
+		if opts.Capability != "" {
+			q.Set("capability", opts.Capability)
+		}
+		if opts.Organization != "" {
+			q.Set("organization", opts.Organization)
+		}
+		if opts.Limit > 0 {
+			q.Set("limit", strconv.Itoa(opts.Limit))
+		}
+		if opts.Cursor != "" {
+			q.Set("cursor", opts.Cursor)
+		}
 	}
-	q.Set("page", strconv.Itoa(page))
-	q.Set("pageSize", strconv.Itoa(pageSize))
+
 	u.RawQuery = q.Encode()
 
 	httpReq, err := c.newRequest(ctx, http.MethodGet, u.String(), nil)
@@ -304,29 +332,16 @@ func (c *Client) ListAgents(ctx context.Context, tags []string, page, pageSize i
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		apiErr := APIError{}
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil {
-			return nil, FromAPIError(apiErr)
-		}
-		return nil, fmt.Errorf("list agents failed with status: %d", resp.StatusCode)
+	var paginatedAgents PaginatedAgents
+	if err := c.parseResponse(resp, &paginatedAgents); err != nil {
+		return nil, err
 	}
 
-	var agents []AgentDescriptor
-	if err := json.NewDecoder(resp.Body).Decode(&agents); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return agents, nil
+	return &paginatedAgents, nil
 }
 
-type HealthResponse struct {
-	Status    string `json:"status"`
-	Version   string `json:"version"`
-	Timestamp int64  `json:"timestamp"`
-}
-
-func (c *Client) GetHealth(ctx context.Context) (*HealthResponse, error) {
+// GetHealth retrieves the health status
+func (c *Client) GetHealth(ctx context.Context) (*HealthStatus, error) {
 	httpReq, err := c.newRequest(ctx, http.MethodGet, "/v1/health", nil)
 	if err != nil {
 		return nil, err
@@ -338,18 +353,65 @@ func (c *Client) GetHealth(ctx context.Context) (*HealthResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("health check failed with status: %d", resp.StatusCode)
+	var healthStatus HealthStatus
+	if err := c.parseResponse(resp, &healthStatus); err != nil {
+		return nil, err
 	}
 
-	var health HealthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &health, nil
+	return &healthStatus, nil
 }
 
+// GetReceipt retrieves an execution receipt by ID
+func (c *Client) GetReceipt(ctx context.Context, receiptID string) (*ExecutionReceipt, error) {
+	httpReq, err := c.newRequest(ctx, http.MethodGet, "/v1/receipts/"+receiptID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.doRequest(ctx, httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("get receipt request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
+
+	var executionReceipt ExecutionReceipt
+	if err := c.parseResponse(resp, &executionReceipt); err != nil {
+		return nil, err
+	}
+
+	return &executionReceipt, nil
+}
+
+// GetAgent retrieves an agent by ID
+func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentDescriptor, error) {
+	httpReq, err := c.newRequest(ctx, http.MethodGet, "/v1/agents/"+agentID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.doRequest(ctx, httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("get agent request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrAgentNotFound
+	}
+
+	var agent AgentDescriptor
+	if err := c.parseResponse(resp, &agent); err != nil {
+		return nil, err
+	}
+
+	return &agent, nil
+}
+
+// urlJoin joins URL query parameters
 func urlJoin(items []string) string {
 	if len(items) == 0 {
 		return ""

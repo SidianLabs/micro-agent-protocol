@@ -4,7 +4,8 @@ Tests for MAP Protocol client.
 """
 
 import pytest
-from mapprotocol.client import MapAssistantClient, AsyncMapAssistantClient
+
+from mapprotocol.client import AsyncMapAssistantClient, MapAssistantClient
 from mapprotocol.types import DispatchRequest
 
 
@@ -65,8 +66,8 @@ class TestDispatchIntegration:
     def test_dispatch_request_structure(self, sample_dispatch_request):
         """Test that dispatch request has correct structure."""
         assert isinstance(sample_dispatch_request, DispatchRequest)
-        assert sample_dispatch_request.task is not None
-        assert sample_dispatch_request.task.id == "task-abc-123"
+        assert sample_dispatch_request.envelope is not None
+        assert sample_dispatch_request.capability == "payment"
 
     @pytest.mark.asyncio
     async def test_async_dispatch_not_implemented(self, sample_dispatch_request):

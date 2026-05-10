@@ -67,6 +67,34 @@ export interface ListAgentsOptions {
 }
 
 /**
+ * Batch dispatch request
+ */
+export interface BatchDispatchRequest {
+  requests: DispatchRequest[];
+  parallel?: boolean;
+}
+
+/**
+ * Error in batch dispatch
+ */
+export interface BatchDispatchError {
+  index: number;
+  error: {
+    code: ErrorCode;
+    message: string;
+    status: number;
+  };
+}
+
+/**
+ * Batch dispatch result
+ */
+export interface BatchDispatchResult {
+  results: InvokeResult[];
+  errors: BatchDispatchError[];
+}
+
+/**
  * MapAssistantClient - Main client for MAP Protocol
  */
 export class MapAssistantClient {
@@ -125,6 +153,88 @@ export class MapAssistantClient {
       result: response.result,
       receipt: response.receipt!,
     };
+  }
+
+  /**
+   * Batch dispatch multiple requests
+   */
+  async dispatchBatch(
+    request: BatchDispatchRequest
+  ): Promise<BatchDispatchResult> {
+    const results: InvokeResult[] = [];
+    const errors: BatchDispatchError[] = [];
+
+    if (request.parallel) {
+      // Execute all requests in parallel
+      const responses = await Promise.allSettled(
+        request.requests.map((req, index) =>
+          this.dispatch(req).then(
+            (result) => ({ index, result, error: null }),
+            (error) => ({ index, result: null, error })
+          )
+        )
+      );
+
+      for (let i = 0; i < responses.length; i++) {
+        const response = responses[i];
+        if (response.status === 'fulfilled') {
+          if (response.value.error) {
+            const apiError = response.value.error as MapAPIError;
+            errors.push({
+              index: response.value.index,
+              error: {
+                code: apiError.code ?? 'internal_error',
+                message: apiError.message,
+                status: apiError.status ?? 500,
+              },
+            });
+          } else {
+            results.push(response.value.result!);
+          }
+        } else {
+          const error = response.reason;
+          errors.push({
+            index: i,
+            error: {
+              code: 'internal_error',
+              message: (error as Error).message,
+              status: 500,
+            },
+          });
+        }
+      }
+    } else {
+      // Execute sequentially
+      for (let i = 0; i < request.requests.length; i++) {
+        const req = request.requests[i];
+        try {
+          const result = await this.dispatch(req);
+          results.push(result);
+        } catch (error) {
+          if (error instanceof MapAPIError) {
+            errors.push({
+              index: i,
+              error: {
+                code: error.code ?? 'internal_error',
+                message: error.message,
+                status: error.status ?? 500,
+              },
+            });
+          } else {
+            errors.push({
+              index: i,
+              error: {
+                code: 'internal_error',
+                message: (error as Error).message,
+                status: 500,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    return { results, errors };
   }
 
   /**

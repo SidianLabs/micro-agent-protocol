@@ -12,6 +12,9 @@ export {
   type ListTasksOptions,
   type GetTaskOptions,
   type ListAgentsOptions,
+  type BatchDispatchRequest,
+  type BatchDispatchResult,
+  type BatchDispatchError,
 } from './client.js';
 
 export {
@@ -74,6 +77,35 @@ export {
   type Metric,
   type TraceSpan,
   type ObserverOptions,
+  // OpenTelemetry tracer
+  type Span,
+  type SpanKind,
+  type SpanStatus,
+  type SpanExporter,
+  type TracerOptions,
+  InMemorySpanExporter,
+  CompositeSpanProcessor,
+  // Prometheus metrics
+  PrometheusMetricsCollector,
+  globalMetrics,
+  type MetricType,
+  type MetricValue,
+  type CounterMetric,
+  type GaugeMetric,
+  type HistogramBucket,
+  type HistogramMetric,
+  type SummaryQuantile,
+  type SummaryMetric,
+  type MetricsCollectorOptions,
+  // Health checks
+  HealthCheckAggregator,
+  HealthCheckBuilder,
+  HTTPHealthCheck,
+  WebSocketHealthCheck,
+  TCPHealthCheck,
+  FunctionalHealthCheck,
+  type HealthCheck,
+  type HealthCheckResult,
 } from './observability/index.js';
 
 export {
@@ -84,3 +116,14 @@ export {
   type ReceiptStoreOptions,
   type StorageResult,
 } from './storage/index.js';
+
+// Transport exports
+export {
+  WebSocketTransport,
+  type WebSocketOptions,
+  type TaskStatusUpdate,
+  type BatchDispatchRequest as WsBatchDispatchRequest,
+  type BatchDispatchResult as WsBatchDispatchResult,
+  type BatchDispatchError as WsBatchDispatchError,
+  createBatchDispatchResult,
+} from './transport/index.js';

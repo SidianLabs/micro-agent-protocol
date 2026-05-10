@@ -1,10 +1,49 @@
 /**
  * MAP Protocol - Observability Module
  *
- * Logging, metrics, and tracing support
+ * Logging, metrics, tracing, and health checks
  * Copyright MAP Protocol Authors
  * SPDX-License-Identifier: Apache-2.0
  */
+
+// Re-export from tracer module
+export {
+  OpenTelemetryTracer,
+  type Span,
+  type SpanKind,
+  type SpanStatus,
+  type SpanExporter,
+  type TracerOptions,
+  InMemorySpanExporter,
+  CompositeSpanProcessor,
+} from './tracer.js';
+
+// Re-export from metrics module
+export {
+  PrometheusMetricsCollector,
+  globalMetrics,
+  type MetricType,
+  type MetricValue,
+  type CounterMetric,
+  type GaugeMetric,
+  type HistogramBucket,
+  type HistogramMetric,
+  type SummaryQuantile,
+  type SummaryMetric,
+  type MetricsCollectorOptions,
+} from './metrics.js';
+
+// Re-export from health-check module
+export {
+  HealthCheckAggregator,
+  HealthCheckBuilder,
+  HTTPHealthCheck,
+  WebSocketHealthCheck,
+  TCPHealthCheck,
+  FunctionalHealthCheck,
+  type HealthCheck,
+  type HealthCheckResult,
+} from './health-check.js';
 
 export enum LogLevel {
   DEBUG = 0,
@@ -228,6 +267,9 @@ export class MetricsCollector {
   }
 }
 
+/**
+ * Simple in-memory tracer (legacy, prefer OpenTelemetryTracer from tracer.ts)
+ */
 export class Tracer {
   private spans: Map<string, TraceSpan> = new Map();
 

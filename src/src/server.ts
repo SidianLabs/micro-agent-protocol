@@ -287,19 +287,22 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     const verificationKeys = getEffectiveVerificationKeys();
     const signableKeys = verificationKeys.filter((key) => key.status !== "revoked");
     const activeKid = getActiveSignatureKeyId();
-    const activeKey = activeKid ? verificationKeys.find((key) => key.kid === activeKid) : undefined;
+    const activeSignableKey =
+      activeKid && activeKid.trim().length > 0
+        ? signableKeys.find((key) => key.kid === activeKid)
+        : undefined;
 
     if (deploymentProfile === "verified" || deploymentProfile === "regulated") {
       if (options.enforceSignedRequests !== true) {
         violations.push("signed_requests_not_enforced");
       }
-      if (!activeKey) {
+      if (!activeSignableKey) {
         violations.push("active_signing_key_missing");
       }
       if (signableKeys.some((key) => key.demo_only)) {
         violations.push("demo_signing_keys_present");
       }
-      if (!activeKey || activeKey.alg !== "RS256") {
+      if (!activeSignableKey || activeSignableKey.alg !== "RS256") {
         violations.push("active_key_not_rs256");
       }
       if (signableKeys.some((key) => key.alg !== "RS256")) {
@@ -1327,7 +1330,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
           : message.includes("Target agent is disabled in registry")
             ? "agent_disabled"
           : message.includes("Capability not supported")
-            ? "capability_not_supported"
+            ? "capability_not_found"
             : message.includes("Capability is disabled for target agent")
               ? "capability_disabled"
             : message.includes("Approval task not found")
@@ -1341,7 +1344,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
             : message.includes("Invalid approval reference")
               ? "invalid_request"
               : message.includes("Task id conflict") || message.includes("Idempotency key conflict")
-                ? "conflict"
+                ? "idempotency_conflict"
               : message.includes("Async queue capacity exceeded")
                 ? "rate_limited"
               : message.includes("tenant_id is required")
@@ -1349,9 +1352,13 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
           : message.includes("Task denied")
             ? "policy_denied"
             : message.includes("Unsupported schema version")
-              ? "unsupported_schema_version"
+              ? "schema_version_unsupported"
             : message.includes("Unsupported output mode")
               ? "unsupported_output_mode"
+            : message.includes("Invalid task state transition") ||
+                message.includes("Terminal task state") ||
+                message.includes("Task lifecycle invariant violated")
+              ? "invalid_request"
             : message.includes("Negotiation delivery mode conflicts")
               ? "invalid_request"
             : message.includes("requires approval")
@@ -1376,20 +1383,27 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
           target_agent: routeTargetAgent
         });
       }
-      const statusCode = code === "rate_limited" ? 429 : 400;
+      const statusCode =
+        code === "rate_limited"
+          ? 429
+          : code === "idempotency_conflict"
+            ? 409
+            : code === "capability_not_found"
+              ? 404
+              : 400;
       sendError(res, statusCode, requestId, {
         code,
         message,
         retryable,
         details: {
           category:
-            code === "conflict"
-              ? "idempotency"
+            code === "idempotency_conflict"
+              ? "conflict"
               : code === "rate_limited"
                 ? "throttling"
               : code === "policy_denied" || code === "approval_required"
                 ? "policy"
-                : code === "unsupported_schema_version"
+                : code === "schema_version_unsupported"
                   ? "versioning"
                   : code === "unsupported_output_mode"
                     ? "capability"
