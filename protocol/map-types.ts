@@ -207,6 +207,7 @@ export interface DelegationToken {
 
 export interface TaskEnvelope {
   task_id: string;
+  order_id?: string;
   parent_task_id?: string;
   requester_identity: RequesterIdentity;
   target_agent: string;
@@ -216,6 +217,11 @@ export interface TaskEnvelope {
   deadline?: string;
   delegation_token: string;
   requested_output_mode: VisibilityMode;
+  /** Optional metadata bag. Known keys include:
+   *  - `webhook_url`: URL to POST task result to on terminal state transition (completed, failed, denied, revoked).
+   *  - `async`: Set to `true` for async delivery mode.
+   *  - `request_id`, `capability`, `tenant_id`, `schema_version`, etc.
+   */
   metadata?: Record<string, unknown>;
 }
 
@@ -256,6 +262,7 @@ export interface ResultPackage {
 export interface ExecutionReceipt {
   receipt_id: string;
   task_id: string;
+  order_id?: string;
   tenant_id?: string;
   request_id?: string;
   agent_id: string;
@@ -287,6 +294,7 @@ export interface InvokeResult {
 
 export interface TaskRecord {
   task_id: string;
+  order_id?: string;
   requester_identity: RequesterIdentity;
   idempotency_key?: string;
   capability: string;

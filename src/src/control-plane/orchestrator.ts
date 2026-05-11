@@ -11,7 +11,9 @@ import type {
   InvocationNegotiation,
   InvocationNegotiationRequest,
   InvokeResult,
-  TaskEnvelope
+  ResultPackage,
+  TaskEnvelope,
+  TaskRecord
 } from "../types.js";
 import type { PolicyEngine } from "./policy.js";
 import {
@@ -105,6 +107,7 @@ export class OrchestratorRuntime {
 
     const decision = this.policyEngine.evaluate({ descriptor, envelope: negotiatedEnvelope });
     if (decision.action === "deny") {
+      this.notifyWebhook(envelope, { status: "denied", summary: decision.reason ?? "Task denied by policy." });
       throw new Error(decision.reason ?? "Task denied by policy.");
     }
 
@@ -258,6 +261,7 @@ export class OrchestratorRuntime {
             receipt: normalizedCompleted.receipt
           });
           this.receiptStore.append(normalizedCompleted.receipt);
+          this.notifyWebhook(envelope, { status: normalizedCompleted.result.status, summary: normalizedCompleted.result.summary, structured_output: normalizedCompleted.result.structured_output });
         },
         onDeadLetter: (deadLetter) => {
           const unsignedReceipt = {
@@ -305,6 +309,7 @@ export class OrchestratorRuntime {
           const failedTask = this.taskStore.get(envelope.task_id);
           if (failedTask?.receipt) {
             this.receiptStore.append(failedTask.receipt);
+            this.notifyWebhook(envelope, { status: "failed", summary: deadLetter.error });
           }
         }
       });
@@ -340,6 +345,7 @@ export class OrchestratorRuntime {
     });
     this.receiptStore.append(normalizedInvokeResult.receipt);
 
+    this.notifyWebhook(envelope, { status: normalizedInvokeResult.result.status, summary: normalizedInvokeResult.result.summary, structured_output: normalizedInvokeResult.result.structured_output });
     return normalizedInvokeResult;
   }
 
@@ -438,12 +444,97 @@ export class OrchestratorRuntime {
     });
     this.receiptStore.append(normalizedInvokeResult.receipt);
 
+    this.notifyWebhook(envelope, { status: normalizedInvokeResult.result.status, summary: normalizedInvokeResult.result.summary, structured_output: normalizedInvokeResult.result.structured_output });
     return normalizedInvokeResult;
   }
 
   getTask(taskId: string) {
     return this.taskStore.get(taskId);
   }
+
+  /**
+   * Cancel a task that is in a cancellable state.
+   *
+   * Valid cancellable states: accepted, proposed, awaiting_approval, running.
+   * Terminal states (completed, failed, denied, revoked) cannot be cancelled.
+   *
+   * @param taskId - The task to cancel
+   * @param tenantId - Optional tenant ID for multi-tenant validation
+   * @returns InvokeResult with the updated task record and a signed receipt
+   */
+  cancelTask(taskId: string, tenantId?: string): InvokeResult {
+    const CANCELLABLE_STATES: TaskRecord["status"][] = [
+      "accepted",
+      "proposed",
+      "awaiting_approval",
+      "running"
+    ];
+
+    const existingTask = tenantId
+      ? this.taskStore.getByTenant(taskId, tenantId)
+      : this.taskStore.get(taskId);
+
+    if (!existingTask) {
+      throw new Error("Task not found: " + taskId);
+    }
+
+    if (!CANCELLABLE_STATES.includes(existingTask.status)) {
+      throw new Error(
+        "Task cannot be cancelled in its current state: " + existingTask.status
+      );
+    }
+
+    const result: ResultPackage = {
+      task_id: taskId,
+      status: "revoked",
+      summary: "Task was cancelled by the requester.",
+      structured_output: {
+        target_agent: existingTask.target_agent,
+        capability: existingTask.capability,
+        previous_status: existingTask.status
+      },
+      negotiated_schema_version: existingTask.result?.negotiated_schema_version,
+      requested_schema_version: existingTask.result?.requested_schema_version,
+      executed_schema_version: existingTask.result?.executed_schema_version,
+      redactions_applied: ["internal_reasoning"],
+      followup_required: false,
+      escalation_reason: undefined
+    };
+
+    const unsignedReceipt: Omit<ExecutionReceipt, "signature"> = {
+      receipt_id: "receipt:" + taskId + ":cancel",
+      task_id: taskId,
+      tenant_id: this.resolveTenantId(existingTask.requester_identity.tenant_id),
+      request_id: existingTask.receipt?.request_id,
+      agent_id: existingTask.target_agent,
+      action_taken: existingTask.capability + ".cancelled",
+      resource_touched: existingTask.target_agent,
+      policy_checks: ["cancellation_requested"],
+      approval_used: undefined,
+      timestamp: new Date().toISOString(),
+      result_hash: "sha256:" + taskId + ":cancel",
+      requested_schema_version: result.requested_schema_version,
+      executed_schema_version: result.executed_schema_version,
+      negotiation: existingTask.result?.negotiation
+    };
+
+    const receipt: ExecutionReceipt = {
+      ...unsignedReceipt,
+      signature: signReceipt(unsignedReceipt)
+    };
+
+    validateResultPackage(result);
+    validateExecutionReceipt(receipt);
+
+    this.taskStore.update(taskId, {
+      status: result.status,
+      result,
+      receipt
+    });
+
+    return { result, receipt };
+  }
+
 
   private issueToken(args: {
     capability: string;
@@ -697,5 +788,27 @@ export class OrchestratorRuntime {
   private resolveIdempotencyKey(envelope: TaskEnvelope): string | undefined {
     const value = envelope.metadata?.idempotency_key;
     return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+  }
+
+  private notifyWebhook(envelope: TaskEnvelope, taskResult?: { status: string; summary?: string; structured_output?: Record<string, unknown> }): void {
+    const webhookUrl = envelope.metadata?.webhook_url;
+    if (typeof webhookUrl !== "string" || webhookUrl.trim().length === 0) return;
+
+    const payload = {
+      task_id: envelope.task_id,
+      order_id: envelope.order_id,
+      status: taskResult?.status ?? "unknown",
+      summary: taskResult?.summary,
+      structured_output: taskResult?.structured_output,
+      timestamp: new Date().toISOString(),
+    };
+
+    fetch(webhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify(payload),
+    }).catch((err) => {
+      console.error(`MAP webhook delivery failed for task ${envelope.task_id}:`, err);
+    });
   }
 }

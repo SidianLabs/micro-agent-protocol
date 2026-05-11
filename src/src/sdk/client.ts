@@ -213,10 +213,22 @@ export class MapAssistantClient {
     );
   }
 
-  async dispatch(input: DispatchRequest, options?: { idempotencyKey?: string }) {
+  async dispatch(input: DispatchRequest, options?: { idempotencyKey?: string; webhookUrl?: string }) {
     const headers: Record<string, string> = {};
     if (options?.idempotencyKey) {
       headers["x-map-idempotency-key"] = options.idempotencyKey;
+    }
+    if (options?.webhookUrl) {
+      input = {
+        ...input,
+        envelope: {
+          ...input.envelope,
+          metadata: {
+            ...(input.envelope.metadata ?? {}),
+            webhook_url: options.webhookUrl
+          }
+        }
+      };
     }
     return this.request<{ result: ResultPackage; receipt?: ExecutionReceipt }>(
       "POST",
@@ -231,6 +243,16 @@ export class MapAssistantClient {
       "POST",
       "/approve",
       input
+    );
+  }
+
+  async cancelTask(taskId: string, options?: { tenant_id?: string }) {
+    const query = toQuery({
+      tenant_id: options?.tenant_id
+    });
+    return this.request<{ result: unknown; receipt?: unknown }>(
+      "POST",
+      `/tasks/${encodeURIComponent(taskId)}/cancel${query}`
     );
   }
 

@@ -257,6 +257,25 @@ export class MapAssistantClient {
   }
 
   /**
+   * Cancel a task by ID
+   */
+  async cancelTask(taskId: string, options?: { tenant_id?: string }): Promise<InvokeResult> {
+    const query = this.buildQuery({ tenant_id: options?.tenant_id });
+    const response = await this.request<
+      { result: ResultPackage; receipt?: ExecutionReceipt }
+    >('POST', `/tasks/${encodeURIComponent(taskId)}/cancel${query}`);
+
+    if (!response.result) {
+      throw new MapError('No result in cancel response');
+    }
+
+    return {
+      result: response.result,
+      receipt: response.receipt!,
+    };
+  }
+
+  /**
    * Get a task by ID
    */
   async getTask(taskId: string, options?: GetTaskOptions): Promise<TaskRecord> {

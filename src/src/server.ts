@@ -1,3 +1,4 @@
+import { createServer as createHttpsServer } from "node:https";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { randomUUID } from "node:crypto";
@@ -23,7 +24,7 @@ import {
   validateApprovalRequest,
   validateDispatchRequest
 } from "./validation/schema-validator.js";
-import { getRequiredAuthScheme, getSignedRequestError } from "./server/auth.js";
+import { getRequiredAuthScheme, getSignedRequestError, getBearerTokenError } from "./server/auth.js";
 import {
   readJsonBody as parseJsonBody,
   sendError as sendErrorResponse,
@@ -47,6 +48,7 @@ export interface MapHttpServerOptions {
   deploymentProfile?: "open" | "verified" | "regulated";
   port?: number;
   enforceSignedRequests?: boolean;
+  enforceBearerAuth?: boolean;
   taskStorePath?: string;
   taskStoreDbPath?: string;
   receiptStorePath?: string;
@@ -80,6 +82,9 @@ export interface MapHttpServerOptions {
   runtimeControlStorePath?: string;
   agents?: MicroAgent[];
   includeExampleAgents?: boolean;
+  certPath?: string;
+  keyPath?: string;
+  mtls?: { requestCert: boolean; rejectUnauthorized: boolean; caPath?: string };
 }
 
 interface PersistedMetricsState {
@@ -1201,6 +1206,41 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         return;
       }
 
+      // MCP-like resource discovery: GET /agents/{agent_id}/resources
+      if (
+        req.method === "GET" &&
+        req.url &&
+        req.url.match(/^\/agents\/[^/]+\/resources(\?.*)?$/)
+      ) {
+        const pathParts = new URL(req.url, "http://localhost").pathname.split("/");
+        const agentId = decodeURIComponent(pathParts[2]);
+        const agent = app.registry.get(agentId);
+        if (!agent) {
+          sendError(res, 404, requestId, {
+            code: "agent_not_found",
+            message: `Agent not found: ${agentId}`,
+            retryable: false,
+          });
+          return;
+        }
+        sendJson(res, 200, {
+          agent_id: agent.agent_id,
+          resources: [
+            {
+              name: "input_schema",
+              uri: agent.input_schema_ref,
+              mime_type: "application/schema+json",
+            },
+            {
+              name: "output_schema",
+              uri: agent.output_schema_ref,
+              mime_type: "application/schema+json",
+            },
+          ],
+        }, requestId);
+        return;
+      }
+
       const readRouteHandled = await handleReadRoutes({
         req,
         res,
@@ -1272,6 +1312,54 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       });
       if (adminRouteHandled) return;
 
+      // Handle task cancellation
+      if (req.method === "POST" && req.url?.startsWith("/tasks/") && req.url?.endsWith("/cancel")) {
+        const taskId = req.url.slice("/tasks/".length, req.url.length - "/cancel".length);
+        if (!taskId || taskId.includes("/")) {
+          sendError(res, 400, requestId, {
+            code: "invalid_request",
+            message: "Invalid task ID in cancel path.",
+            retryable: false
+          });
+          return;
+        }
+
+        const tenantId = typeof req.headers["x-map-tenant-id"] === "string"
+          ? req.headers["x-map-tenant-id"]
+          : undefined;
+
+        try {
+          const result = app.orchestrator.cancelTask(taskId, tenantId);
+          recordAuditEvent({
+            timestamp: new Date().toISOString(),
+            request_id: requestId,
+            code: "task_cancelled",
+            message: `Task ${taskId} was cancelled.`,
+            method: req.method,
+            route: `/tasks/${taskId}/cancel`,
+            tenant_id: tenantId,
+            target_agent: result.result.structured_output?.target_agent as string | undefined
+          });
+          sendJson(res, 200, result, requestId);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Unknown error cancelling task.";
+          if (message.includes("Task not found")) {
+            sendError(res, 404, requestId, {
+              code: "task_not_found",
+              message,
+              retryable: false
+            });
+            return;
+          }
+          sendError(res, 409, requestId, {
+            code: "invalid_request",
+            message,
+            retryable: false
+          });
+        }
+        return;
+      }
+
       const mutationRouteResult = await handleMutationRoutes({
         req,
         res,
@@ -1288,6 +1376,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         validateDispatchRequest,
         validateApprovalRequest,
         getEffectiveRevokedKeyIds,
+        getBearerTokenError,
         checkMutationRateLimit,
         recordAuditEvent,
         recordCapabilityLatency,
@@ -1373,5 +1462,25 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
 
 export function createMapServer(options: MapHttpServerOptions = {}): Server {
   const handler = createMapHandler(options);
+  if (options.certPath && options.keyPath) {
+    const cert = readFileSync(options.certPath);
+    const key = readFileSync(options.keyPath);
+    // For mTLS, set requestCert: true and rejectUnauthorized: true in the https options
+    const httpsOptions: {
+      cert: Buffer;
+      key: Buffer;
+      requestCert?: boolean;
+      rejectUnauthorized?: boolean;
+      ca?: Buffer;
+    } = { cert, key };
+    if (options.mtls) {
+      httpsOptions.requestCert = options.mtls.requestCert;
+      httpsOptions.rejectUnauthorized = options.mtls.rejectUnauthorized;
+      if (options.mtls.caPath) {
+        httpsOptions.ca = readFileSync(options.mtls.caPath);
+      }
+    }
+    return createHttpsServer(httpsOptions, handler) as unknown as Server;
+  }
   return createServer(handler);
 }

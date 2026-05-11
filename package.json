@@ -29,6 +29,7 @@
     "sdk:typescript": "cd packages/typescript && npm run check && npm run build && npm run test",
     "sdk:python": "cd packages/python && pip install -e .",
     "sdk:go": "cd packages/go && go build ./...",
+    "protocols:clone": "cd references/protocols && git clone https://github.com/modelcontextprotocol/specification.git mcp || true && git clone https://github.com/google/A2A.git a2a || true",
     "conformance:test": "cd conformance && npm test"
   },
   "devDependencies": {

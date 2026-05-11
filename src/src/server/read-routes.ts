@@ -217,59 +217,32 @@ export async function handleReadRoutes(ctx: RouteContext): Promise<boolean> {
   const origin = /^https?:\/\//.test(hostHeader)
     ? hostHeader
     : `http://${hostHeader}`;
-
   if (
     req.method === "GET" &&
     (requestUrlString === "/.well-known/map" ||
       requestUrlString === "/.well-known/map.json")
   ) {
-    const descriptors = ctx.app.registry.list();
-    const trust = getTrustMetadata(ctx.deploymentProfile);
-    const providerUrl =
-      process.env.MAP_PROVIDER_URL &&
-      process.env.MAP_PROVIDER_URL.trim().length > 0
-        ? process.env.MAP_PROVIDER_URL.trim()
-        : origin;
+    const host = req.headers.host ?? "localhost";
+    const baseUrl = `http://${host}`;
+    const agents = ctx.app.registry.list();
     const body = {
       protocol: {
         name: "MAP",
-        version: "0.1.0",
-        discovery_version: "v1",
+        discovery_version: "v1"
       },
       provider: {
-        provider_id: process.env.MAP_PROVIDER_ID?.trim() || trust.issuer,
-        display_name: process.env.MAP_PROVIDER_NAME?.trim() || trust.issuer,
-        provider_url: providerUrl,
+        provider_id: host,
+        display_name: `MAP Provider (${ctx.deploymentProfile})`
       },
       trust: {
-        trust_domain: trust.trust_domain,
-        issuer: trust.issuer,
-        profile: trust.profile,
-        key_discovery_url: `${origin}/.well-known/map-keys`,
-      },
-      transports: [
-        {
-          kind: "http",
-          path: "/dispatch",
-        },
-      ],
-      agents: {
-        count: descriptors.length,
-        items: descriptors.map((descriptor) => ({
-          agent_id: descriptor.agent_id,
-          display_name: descriptor.display_name ?? descriptor.agent_id,
-          version: descriptor.version,
-          domain: descriptor.domain,
-          capabilities: descriptor.capabilities,
-          registry_status: descriptor.registry_status,
-        })),
+        key_discovery_url: `${baseUrl}/.well-known/map-keys`
       },
       documentation: {
-        agents_url: `${origin}/agents`,
-        http_transport_url: `${origin}/status`,
-        registry_discovery_url: `${origin}/agents`,
+        agents_url: `${baseUrl}/agents`
       },
-      pagination: null,
+      agents: {
+        items: agents
+      }
     };
     return sendEtagJson(ctx, body, {
       "cache-control": "public, max-age=300, must-revalidate",
@@ -870,14 +843,18 @@ export async function handleReadRoutes(ctx: RouteContext): Promise<boolean> {
       const allTasks = tenantId
         ? ctx.app.taskStore.listByTenant(tenantId)
         : ctx.app.taskStore.list();
+      const orderId = requestUrl.searchParams.get("order_id");
+      const filteredTasks = orderId
+        ? allTasks.filter((task) => task.order_id === orderId)
+        : allTasks;
       const startIndex = cursor
-        ? Math.max(0, allTasks.findIndex((task) => task.task_id === cursor) + 1)
+        ? Math.max(0, filteredTasks.findIndex((task) => task.task_id === cursor) + 1)
         : 0;
-      const tasks = allTasks.slice(startIndex, startIndex + limit);
+      const tasks = filteredTasks.slice(startIndex, startIndex + limit);
       const nextCursorIndex = startIndex + limit;
       const nextCursor =
-        nextCursorIndex < allTasks.length
-          ? (allTasks[nextCursorIndex - 1]?.task_id ?? null)
+        nextCursorIndex < filteredTasks.length
+          ? (filteredTasks[nextCursorIndex - 1]?.task_id ?? null)
           : null;
       return sendEtagJson(
         ctx,

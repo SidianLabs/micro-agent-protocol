@@ -213,6 +213,7 @@ export interface DelegationToken {
 export interface TaskEnvelope {
   task_id: string;
   parent_task_id?: string;
+  order_id?: string;
   requester_identity: RequesterIdentity;
   target_agent: string;
   intent: string;
@@ -261,6 +262,7 @@ export interface ResultPackage {
 export interface ExecutionReceipt {
   receipt_id: string;
   task_id: string;
+  order_id?: string;
   tenant_id?: string;
   request_id?: string;
   agent_id: string;
@@ -292,6 +294,7 @@ export interface InvokeResult {
 
 export interface TaskRecord {
   task_id: string;
+  order_id?: string;
   requester_identity: RequesterIdentity;
   idempotency_key?: string;
   capability: string;

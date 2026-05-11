@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getRequiredAuthScheme, getSignedRequestError } from "./auth.js";
+import { getRequiredAuthScheme, getSignedRequestError, getBearerTokenError } from "./auth.js";
 import { extractTargetAgent, extractTenantId, wantsSignedRequestAuth } from "./utils.js";
 
 interface MutationRouteContext {
@@ -10,6 +10,7 @@ interface MutationRouteContext {
   routeTenantId?: string;
   options: {
     enforceSignedRequests?: boolean;
+    enforceBearerAuth?: boolean;
   };
   app: {
     orchestrator: {
@@ -49,6 +50,7 @@ interface MutationRouteContext {
     };
   };
   getEffectiveRevokedKeyIds(): Set<string>;
+  getBearerTokenError(req: IncomingMessage): { code: string; message: string } | null;
   checkMutationRateLimit(tenantId?: string): {
     allowed: boolean;
     scope?: "global" | "tenant";
@@ -185,7 +187,31 @@ export async function handleMutationRoutes(
       : getRequiredAuthScheme(ctx.app as never, payload.envelope.target_agent, payload.capability);
     const requiresSignedRequest =
       requiredAuthScheme === "signed_request" || wantsSignedRequestAuth(req);
-    if (requiresSignedRequest) {
+
+    // If enforceBearerAuth is true and signed_request is not present, fall back to bearer token
+    if (ctx.options.enforceBearerAuth && !wantsSignedRequestAuth(req) && requiredAuthScheme !== "signed_request") {
+      const bearerError = ctx.getBearerTokenError(req);
+      if (bearerError) {
+        ctx.recordAuditEvent({
+          timestamp: new Date().toISOString(),
+          request_id: requestId,
+          code: bearerError.code,
+          message: bearerError.message,
+          method: req.method,
+          route: "/dispatch",
+          tenant_id: routeTenantId,
+          target_agent: routeTargetAgent
+        });
+        ctx.sendError(
+          res,
+          bearerError.code === "auth_required" ? 401 : 403,
+          requestId,
+          { ...bearerError, retryable: false },
+          routeTargetAgent
+        );
+        return { handled: true, routeTargetAgent, routeTenantId };
+      }
+    } else if (requiresSignedRequest) {
       const authError = getSignedRequestError(req, body.raw, ctx.getEffectiveRevokedKeyIds());
       if (authError) {
         ctx.recordAuditEvent({
@@ -312,7 +338,31 @@ export async function handleMutationRoutes(
       : getRequiredAuthScheme(ctx.app as never, payload.envelope.target_agent, payload.capability);
     const requiresSignedRequest =
       requiredAuthScheme === "signed_request" || wantsSignedRequestAuth(req);
-    if (requiresSignedRequest) {
+
+    // If enforceBearerAuth is true and signed_request is not present, fall back to bearer token
+    if (ctx.options.enforceBearerAuth && !wantsSignedRequestAuth(req) && requiredAuthScheme !== "signed_request") {
+      const bearerError = ctx.getBearerTokenError(req);
+      if (bearerError) {
+        ctx.recordAuditEvent({
+          timestamp: new Date().toISOString(),
+          request_id: requestId,
+          code: bearerError.code,
+          message: bearerError.message,
+          method: req.method,
+          route: "/approve",
+          tenant_id: routeTenantId,
+          target_agent: routeTargetAgent
+        });
+        ctx.sendError(
+          res,
+          bearerError.code === "auth_required" ? 401 : 403,
+          requestId,
+          { ...bearerError, retryable: false },
+          routeTargetAgent
+        );
+        return { handled: true, routeTargetAgent, routeTenantId };
+      }
+    } else if (requiresSignedRequest) {
       const authError = getSignedRequestError(req, body.raw, ctx.getEffectiveRevokedKeyIds());
       if (authError) {
         ctx.recordAuditEvent({

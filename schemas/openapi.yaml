@@ -22,9 +22,9 @@ info:
     repository: https://github.com/mapprotocol/map
 
 servers:
-  - url: https://api.map-protocol.dev/v1
+  - url: https://api.map-protocol.dev
     description: Production server
-  - url: https://staging.map-protocol.dev/v1
+  - url: https://staging.map-protocol.dev
     description: Staging server
   - url: http://localhost:8787
     description: Local development
@@ -170,6 +170,11 @@ paths:
           description: Filter by target agent
           schema:
             type: string
+        - name: order_id
+          in: query
+          description: Filter by order identifier (groups related tasks)
+          schema:
+            type: string
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
@@ -266,6 +271,43 @@ paths:
                 $ref: '#/components/schemas/SSERecord'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /tasks/{task_id}/cancel:
+    post:
+      operationId: cancelTask
+      summary: Cancel a task
+      description: Cancels a task that is in a cancellable state (accepted, proposed, awaiting_approval, or running). Transitions the task to revoked status and returns a signed receipt.
+      tags: [Tasks]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Task cancelled successfully
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          result:
+                            $ref: '#/components/schemas/ResultPackage'
+                          receipt:
+                            $ref: '#/components/schemas/ExecutionReceipt'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   # ===========================================================================
   # Receipts
@@ -447,6 +489,47 @@ paths:
               $ref: '#/components/headers/ETag'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /.well-known/map:
+    get:
+      operationId: getWellKnownMap
+      summary: Agent discovery endpoint
+      description: Returns the MAP agent discovery document with protocol version, deployment profile, and endpoint URLs. No authentication required.
+      tags: [Agents]
+      responses:
+        '200':
+          description: Discovery document
+          headers:
+            XMapRequestId:
+              $ref: '#/components/headers/XMapRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          protocol:
+                            type: string
+                          version:
+                            type: string
+                          deployment_profile:
+                            type: string
+                            enum: [open, verified, regulated]
+                          active_key_id:
+                            type: string
+                            nullable: true
+                          agents_url:
+                            type: string
+                          keys_url:
+                            type: string
+                          health_url:
+                            type: string
+                          documentation_url:
+                            type: string
 
   /.well-known/map-keys:
     get:
