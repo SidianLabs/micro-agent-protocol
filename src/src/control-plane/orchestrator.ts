@@ -173,6 +173,15 @@ export class OrchestratorRuntime {
       approvalReference: decision.approval_reference
     });
 
+    // Check delegation token expiration
+    const tokenExpiresAt = token.constraints?.expires_at;
+    if (tokenExpiresAt) {
+      const expiresAt = new Date(tokenExpiresAt);
+      if (Number.isNaN(expiresAt.getTime()) || expiresAt < new Date()) {
+        throw new Error('Delegation token has expired.');
+      }
+    }
+
     if (negotiatedEnvelope.metadata?.async === true) {
       if (!this.asyncQueue.hasCapacity()) {
         throw new Error("Async queue capacity exceeded.");
@@ -400,6 +409,15 @@ export class OrchestratorRuntime {
       envelope: negotiatedEnvelope,
       approvalReference
     });
+
+    // Check delegation token expiration
+    const tokenExpiresAt = token.constraints?.expires_at;
+    if (tokenExpiresAt) {
+      const expiresAt = new Date(tokenExpiresAt);
+      if (Number.isNaN(expiresAt.getTime()) || expiresAt < new Date()) {
+        throw new Error('Delegation token has expired.');
+      }
+    }
 
     const invokeResult = await runtime.invoke(
       {

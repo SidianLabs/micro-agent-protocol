@@ -179,7 +179,7 @@ interface RouteContext {
   getAdminTokenError(
     req: IncomingMessage,
     rawBody: string,
-  ): { statusCode: number; code: string; message: string } | null;
+  ): Promise<{ statusCode: number; code: string; message: string } | null>;
   getRuntimeRevocationMetadata(
     keyId: string,
   ): { revoked_at: string; revoked_by: string; reason?: string } | null;

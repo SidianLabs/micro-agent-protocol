@@ -17,10 +17,12 @@ import {
   getSigningKeyConfigsFromProvider
 } from "./key-provider.js";
 
-const DEFAULT_SECRET = "map-dev-secret";
 const DEFAULT_KID = "map-dev-key-1";
 const DEFAULT_ALG = "HS256";
 const DEFAULT_REQUEST_MAX_AGE_MS = 5 * 60 * 1000;
+const nonceCache = new Map<string, number>();
+const NONCE_MAX_AGE_MS = 5 * 60 * 1000;
+
 const DEFAULT_SCOPES = [
   "descriptor",
   "delegation_token",
@@ -31,6 +33,14 @@ const DEFAULT_SCOPES = [
   "conformance_export",
   "trust_bundle"
 ];
+
+function getDeploymentProfile(): "open" | "verified" | "regulated" {
+  const profile = process.env.MAP_DEPLOYMENT_PROFILE;
+  if (profile === "verified" || profile === "regulated") {
+    return profile;
+  }
+  return "open";
+}
 
 type SignatureScope =
   | "descriptor"
@@ -92,6 +102,31 @@ function getRevokedKidsFromEnv(): Set<string> {
 }
 
 function getDefaultSigningKey(): SigningKey {
+  const secret = process.env.MAP_SIGNING_SECRET;
+  if (secret) {
+    return {
+      kid: DEFAULT_KID,
+      alg: "HS256",
+      status: "active",
+      scopes: DEFAULT_SCOPES,
+      demo_only: true,
+      material: {
+        type: "hmac",
+        secret
+      }
+    };
+  }
+
+  const profile = getDeploymentProfile();
+  if (profile !== "open") {
+    throw new Error(
+      "MAP_SIGNING_SECRET must be configured for verified/regulated profiles."
+    );
+  }
+
+  console.warn(
+    "WARNING: Using default demo signing secret. Not suitable for production."
+  );
   return {
     kid: DEFAULT_KID,
     alg: "HS256",
@@ -100,7 +135,7 @@ function getDefaultSigningKey(): SigningKey {
     demo_only: true,
     material: {
       type: "hmac",
-      secret: process.env.MAP_SIGNING_SECRET ?? DEFAULT_SECRET
+      secret: "map-dev-secret"
     }
   };
 }
@@ -202,6 +237,29 @@ function getRequestMaxAgeMs(): number {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_REQUEST_MAX_AGE_MS;
 }
 
+
+export function generateNonce(): string {
+  return crypto.randomUUID();
+}
+
+export function verifyNonce(nonce: string, maxAgeMs?: number): boolean {
+  const effectiveMaxAge = maxAgeMs ?? NONCE_MAX_AGE_MS;
+  const now = Date.now();
+
+  // Prune old entries
+  for (const [key, timestamp] of nonceCache.entries()) {
+    if (now - timestamp > effectiveMaxAge) {
+      nonceCache.delete(key);
+    }
+  }
+
+  if (nonceCache.has(nonce)) {
+    return false; // replay detected
+  }
+
+  nonceCache.set(nonce, now);
+  return true;
+}
 function base64url(input: string): string {
   return Buffer.from(input, "utf8").toString("base64url");
 }
@@ -308,14 +366,18 @@ function verifyCompactSignature(
       .update(signingInput)
       .digest("base64url");
 
-    if (providedSignature.length !== expectedSignature.length) {
+    try {
+      return timingSafeEqual(
+        Buffer.from(providedSignature, "base64url"),
+        Buffer.from(expectedSignature, "base64url")
+      );
+    } catch {
+      // timingSafeEqual throws on length mismatch.
+      // Perform a dummy constant-time comparison to avoid leaking length.
+      const dummy = Buffer.from(expectedSignature, "base64url");
+      try { timingSafeEqual(dummy, dummy); } catch { /* never throws for equal-length */ }
       return false;
     }
-
-    return timingSafeEqual(
-      Buffer.from(providedSignature, "utf8"),
-      Buffer.from(expectedSignature, "utf8")
-    );
   }
 
   try {
@@ -484,11 +546,13 @@ function signedRequestPayload(input: SignedRequestPayload): Record<string, unkno
 
 export function signHttpRequest(input: SignedRequestPayload): MapSignedRequestHeaders {
   const signature = createCompactSignature(signedRequestPayload(input), input.key_id, "http_request");
+  const nonce = generateNonce();
   return {
     "x-map-auth-scheme": "signed_request",
     "x-map-key-id": input.key_id,
     "x-map-timestamp": input.timestamp,
-    "x-map-request-signature": signature
+    "x-map-request-signature": signature,
+    "x-map-nonce": nonce
   };
 }
 
@@ -540,7 +604,7 @@ export function getSigningProviderStatus(): { provider: string; configured: bool
   return getKeyProviderInfo();
 }
 
-export function verifyHttpRequestSignature(input: SignedRequestPayload & { signature: string }): boolean {
+export function verifyHttpRequestSignature(input: SignedRequestPayload & { signature: string; nonce?: string }): boolean {
   const timestampMs = Date.parse(input.timestamp);
   if (Number.isNaN(timestampMs)) {
     return false;
@@ -548,6 +612,10 @@ export function verifyHttpRequestSignature(input: SignedRequestPayload & { signa
 
   const ageMs = Math.abs(Date.now() - timestampMs);
   if (ageMs > getRequestMaxAgeMs()) {
+    return false;
+  }
+
+  if (input.nonce && !verifyNonce(input.nonce)) {
     return false;
   }
 

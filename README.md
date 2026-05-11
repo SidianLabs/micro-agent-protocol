@@ -304,6 +304,17 @@ This repository currently contains the source implementation of MAP Protocol, in
 - **OpenAPI 3.1 Specification**: Full HTTP binding documentation
 - **Conformance Test Suite**: Protocol validation tests
 
+## Security Notice
+
+⚠️ **This is alpha software. Do not use in production without proper security hardening.**
+
+- The reference server uses plain HTTP. In production, always deploy behind a TLS-terminating reverse proxy (nginx, Caddy, etc.) or enable HTTPS directly.
+- For mTLS authentication between assistants and MAP micro-agents, configure your reverse proxy to require client certificates.
+- Never use the default demo signing key (`map-dev-key-1`) in production. Always set `MAP_SIGNING_SECRET` or configure a proper key provider.
+- Admin endpoints should be restricted to internal networks only.
+- See [SECURITY.md](./SECURITY.md) for the full security policy.
+- To enable HTTPS directly on the reference server, set `port: 443` and provide `certPath` and `keyPath` in the server options.
+
 ### Quick Start
 
 ```bash

@@ -26,7 +26,13 @@ class EnvSigningKeyProvider implements SigningKeyProvider {
     }
     try {
       const parsed = JSON.parse(raw) as SigningKeyConfigRecord[];
-      return Array.isArray(parsed) ? parsed : [];
+      const result = Array.isArray(parsed) ? parsed : [];
+      if (result.length > 0) {
+        console.warn(
+          "WARNING: Signing keys loaded from MAP_SIGNING_KEYS environment variable. Environment variables are visible to child processes and may appear in logs/debug output. Use MAP_KMS_KEYSET_PATH with a file for production deployments."
+        );
+      }
+      return result;
     } catch {
       return [];
     }
@@ -43,7 +49,13 @@ class JsonKeysetProvider implements SigningKeyProvider {
     }
     try {
       const parsed = JSON.parse(raw) as SigningKeyConfigRecord[];
-      return Array.isArray(parsed) ? parsed : [];
+      const result = Array.isArray(parsed) ? parsed : [];
+      if (result.length > 0) {
+        console.warn(
+          "WARNING: Signing keys loaded from MAP_KMS_KEYSET_JSON environment variable. Consider using MAP_KMS_KEYSET_PATH for file-based key storage in production."
+        );
+      }
+      return result;
     } catch {
       return [];
     }

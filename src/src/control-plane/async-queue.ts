@@ -289,11 +289,11 @@ export class AsyncTaskQueue {
       return;
     }
 
-    mkdirSync(dirname(this.deadLetterStorePath), { recursive: true });
+    mkdirSync(dirname(this.deadLetterStorePath), { recursive: true, mode: 0o700 });
     writeFileSync(
       this.deadLetterStorePath,
       JSON.stringify({ dead_letters: this.deadLetters }, null, 2),
-      "utf8"
+      { encoding: "utf8", mode: 0o600 }
     );
   }
 

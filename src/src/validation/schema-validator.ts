@@ -18,8 +18,9 @@ import type {
 
 const ajv = new Ajv({
   allErrors: true,
-  strict: false,
+  strict: true,
   validateSchema: false,
+  removeAdditional: 'all',
   logger: false
 });
 ajv.addFormat("date-time", {

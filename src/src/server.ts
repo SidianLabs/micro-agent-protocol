@@ -70,6 +70,7 @@ export interface MapHttpServerOptions {
   rateLimitWindowMs?: number;
   rateLimitMaxRequests?: number;
   rateLimitMaxRequestsPerTenant?: number;
+  rateLimitStatePath?: string;
   auditStorePath?: string;
   auditMaxEvents?: number;
   auditCheckpointInterval?: number;
@@ -146,6 +147,11 @@ interface DeploymentProfileEvaluation {
   violations: string[];
 }
 
+interface PersistedRateLimitState {
+  global: number[];
+  tenants: Record<string, number[]>;
+}
+
 export function createMapHandler(options: MapHttpServerOptions = {}) {
   const deploymentProfile = options.deploymentProfile ?? "open";
   const app = createReferenceApp({
@@ -185,6 +191,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   const signingUnknownKeyCriticalRatio = clampRatio(options.signingUnknownKeyCriticalRatio ?? 0);
   const globalRateLimitEvents: number[] = [];
   const tenantRateLimitEvents = new Map<string, number[]>();
+  const rateLimitStatePath = options.rateLimitStatePath;
   const auditEvents: AuditEvent[] = [];
   const auditCheckpoints: AuditCheckpoint[] = [];
   const alertState = new Map<string, AlertRecord>();
@@ -195,6 +202,10 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     Map<string, { disabled_at: string; disabled_by: string; reason?: string }>
   >();
 
+  function hashToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
+  }
+
   function hydrateRuntimeControls(): void {
     if (!runtimeControlStorePath || !existsSync(runtimeControlStorePath)) {
       return;
@@ -203,9 +214,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       const raw = readFileSync(runtimeControlStorePath, "utf8");
       const parsed = JSON.parse(raw) as Partial<RuntimeControlState>;
       for (const [agentId, value] of Object.entries(parsed.disabled_agents ?? {})) {
-        if (!agentId || !value) {
-          continue;
-        }
+        if (!agentId || !value) continue;
         disabledAgents.set(agentId, {
           disabled_at: value.disabled_at,
           disabled_by: value.disabled_by,
@@ -213,28 +222,20 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         });
       }
       for (const [agentId, capabilityMap] of Object.entries(parsed.disabled_capabilities ?? {})) {
-        if (!agentId || !capabilityMap || typeof capabilityMap !== "object") {
-          continue;
-        }
+        if (!agentId || !capabilityMap || typeof capabilityMap !== "object") continue;
         const nested = new Map<string, { disabled_at: string; disabled_by: string; reason?: string }>();
         for (const [capability, value] of Object.entries(capabilityMap)) {
-          if (!capability || !value) {
-            continue;
-          }
+          if (!capability || !value) continue;
           nested.set(capability, {
             disabled_at: value.disabled_at,
             disabled_by: value.disabled_by,
             reason: value.reason
           });
         }
-        if (nested.size > 0) {
-          disabledCapabilities.set(agentId, nested);
-        }
+        if (nested.size > 0) disabledCapabilities.set(agentId, nested);
       }
       for (const [kid, value] of Object.entries(parsed.revoked_keys ?? {})) {
-        if (!kid || !value) {
-          continue;
-        }
+        if (!kid || !value) continue;
         revokedSigningKeys.set(kid, {
           revoked_at: value.revoked_at,
           revoked_by: value.revoked_by,
@@ -247,9 +248,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   }
 
   function persistRuntimeControls(): void {
-    if (!runtimeControlStorePath) {
-      return;
-    }
+    if (!runtimeControlStorePath) return;
     const disabledCapabilitiesObj = Object.fromEntries(
       Array.from(disabledCapabilities.entries()).map(([agentId, capabilities]) => [
         agentId,
@@ -261,11 +260,64 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       disabled_capabilities: disabledCapabilitiesObj,
       revoked_keys: Object.fromEntries(revokedSigningKeys.entries())
     };
-    mkdirSync(dirname(runtimeControlStorePath), { recursive: true });
-    writeFileSync(runtimeControlStorePath, JSON.stringify(payload, null, 2), "utf8");
+    mkdirSync(dirname(runtimeControlStorePath), { recursive: true, mode: 0o700 });
+    writeFileSync(runtimeControlStorePath, JSON.stringify(payload, null, 2), { encoding: "utf8", mode: 0o600 });
+  }
+
+  function hydrateRateLimitState(): void {
+    if (!rateLimitStatePath || !existsSync(rateLimitStatePath)) return;
+    try {
+      const raw = readFileSync(rateLimitStatePath, "utf8");
+      const parsed = JSON.parse(raw) as Partial<PersistedRateLimitState>;
+      const now = Date.now();
+      if (Array.isArray(parsed.global)) {
+        for (const ts of parsed.global) {
+          if (typeof ts === "number" && now - ts <= rateLimitWindowMs) {
+            globalRateLimitEvents.push(ts);
+          }
+        }
+      }
+      if (parsed.tenants && typeof parsed.tenants === "object") {
+        for (const [tenantId, events] of Object.entries(parsed.tenants)) {
+          if (Array.isArray(events)) {
+            const pruned: number[] = [];
+            for (const ts of events) {
+              if (typeof ts === "number" && now - ts <= rateLimitWindowMs) {
+                pruned.push(ts);
+              }
+            }
+            if (pruned.length > 0) tenantRateLimitEvents.set(tenantId, pruned);
+          }
+        }
+      }
+    } catch {
+      // Ignore malformed rate limit state file.
+    }
+  }
+
+  function persistRateLimitState(): void {
+    if (!rateLimitStatePath) return;
+    const now = Date.now();
+    while (globalRateLimitEvents.length > 0 && now - globalRateLimitEvents[0] > rateLimitWindowMs) {
+      globalRateLimitEvents.shift();
+    }
+    const tenants: Record<string, number[]> = {};
+    for (const [tenantId, events] of tenantRateLimitEvents.entries()) {
+      while (events.length > 0 && now - events[0] > rateLimitWindowMs) {
+        events.shift();
+      }
+      if (events.length > 0) tenants[tenantId] = events;
+    }
+    const serialized: PersistedRateLimitState = { global: globalRateLimitEvents, tenants };
+    mkdirSync(dirname(rateLimitStatePath), { recursive: true, mode: 0o700 });
+    writeFileSync(rateLimitStatePath, JSON.stringify(serialized, null, 2), { encoding: "utf8", mode: 0o600 });
   }
 
   function getEffectiveRevokedKeyIds(): Set<string> {
+    const fromEnv = process.env.MAP_SIGNING_REVOKED_KIDS;
+    if (fromEnv && fromEnv.trim().length > 0) {
+      return new Set(fromEnv.split(",").map(v => v.trim()).filter(v => v.length > 0));
+    }
     return new Set<string>(revokedSigningKeys.keys());
   }
 
@@ -309,7 +361,6 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         violations.push("non_asymmetric_signing_keys_present");
       }
     }
-
     if (deploymentProfile === "regulated") {
       if (options.requireTenant !== true) {
         violations.push("tenant_required_not_enforced");
@@ -345,9 +396,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   }
 
   function hydrateAlertState(): void {
-    if (!alertStorePath || !existsSync(alertStorePath)) {
-      return;
-    }
+    if (!alertStorePath || !existsSync(alertStorePath)) return;
     try {
       const raw = readFileSync(alertStorePath, "utf8");
       const parsed = JSON.parse(raw) as { alerts?: AlertRecord[] };
@@ -363,21 +412,17 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   }
 
   function persistAlertState(): void {
-    if (!alertStorePath) {
-      return;
-    }
-    mkdirSync(dirname(alertStorePath), { recursive: true });
+    if (!alertStorePath) return;
+    mkdirSync(dirname(alertStorePath), { recursive: true, mode: 0o700 });
     writeFileSync(
       alertStorePath,
       JSON.stringify({ alerts: [...alertState.values()] }, null, 2),
-      "utf8"
+      { encoding: "utf8", mode: 0o600 }
     );
   }
 
   function hydrateAuditEvents(): void {
-    if (!auditStorePath || !existsSync(auditStorePath)) {
-      return;
-    }
+    if (!auditStorePath || !existsSync(auditStorePath)) return;
     try {
       const raw = readFileSync(auditStorePath, "utf8");
       const parsed = JSON.parse(raw) as { events?: AuditEvent[]; checkpoints?: AuditCheckpoint[] };
@@ -391,14 +436,12 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   }
 
   function persistAuditEvents(): void {
-    if (!auditStorePath) {
-      return;
-    }
-    mkdirSync(dirname(auditStorePath), { recursive: true });
+    if (!auditStorePath) return;
+    mkdirSync(dirname(auditStorePath), { recursive: true, mode: 0o700 });
     writeFileSync(
       auditStorePath,
       JSON.stringify({ events: auditEvents, checkpoints: auditCheckpoints }, null, 2),
-      "utf8"
+      { encoding: "utf8", mode: 0o600 }
     );
   }
 
@@ -430,10 +473,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   }
 
   function createAuditCheckpoint(lastEvent: AuditEvent): void {
-    if (lastEvent.chain_index % auditCheckpointInterval !== 0) {
-      return;
-    }
-
+    if (lastEvent.chain_index % auditCheckpointInterval !== 0) return;
     const checkpoint: AuditCheckpoint = {
       checkpoint_id: `audit-checkpoint:${lastEvent.chain_index}`,
       created_at: new Date().toISOString(),
@@ -458,28 +498,19 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   function verifyAuditIntegrity(): {
     ok: boolean;
     errors: string[];
-    summary: {
-      events_checked: number;
-      checkpoints_checked: number;
-      latest_chain_index: number;
-    };
+    summary: { events_checked: number; checkpoints_checked: number; latest_chain_index: number };
   } {
     const errors: string[] = [];
-
     for (let index = 0; index < auditEvents.length; index += 1) {
       const current = auditEvents[index];
       const expectedIndex = index + 1;
       if (current.chain_index !== expectedIndex) {
-        errors.push(
-          `event_chain_index_mismatch_at_${index}: expected ${expectedIndex}, got ${current.chain_index}`
-        );
+        errors.push(`event_chain_index_mismatch_at_${index}: expected ${expectedIndex}, got ${current.chain_index}`);
       }
-
       const expectedPrev = index === 0 ? "GENESIS" : auditEvents[index - 1].event_hash;
       if (current.prev_event_hash !== expectedPrev) {
         errors.push(`event_prev_hash_mismatch_at_${index}`);
       }
-
       const expectedHash = hashAuditEventBase({
         timestamp: current.timestamp,
         request_id: current.request_id,
@@ -496,7 +527,6 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         errors.push(`event_hash_mismatch_at_${index}`);
       }
     }
-
     for (let index = 0; index < auditCheckpoints.length; index += 1) {
       const checkpoint = auditCheckpoints[index];
       const checkpointKid = getSignatureKeyId(checkpoint.signature);
@@ -512,11 +542,9 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         },
         checkpoint.signature
       );
-
       if (!signatureOk) {
         errors.push(`checkpoint_signature_invalid_at_${index}`);
       }
-
       const targetEvent = auditEvents.find(
         (event) => event.chain_index === checkpoint.last_chain_index
       );
@@ -526,7 +554,6 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         errors.push(`checkpoint_event_hash_mismatch_at_${index}`);
       }
     }
-
     return {
       ok: errors.length === 0,
       errors,
@@ -598,14 +625,8 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     unknown_key_usage_ratio: number;
     retiring_key_usage_ratio: number;
     total_signatures_analyzed: number;
-    thresholds: {
-      unknown_key_critical_ratio: number;
-      retiring_key_critical_ratio: number;
-    };
-    threshold_breaches: {
-      unknown_key_ratio_exceeded: boolean;
-      retiring_key_ratio_exceeded: boolean;
-    };
+    thresholds: { unknown_key_critical_ratio: number; retiring_key_critical_ratio: number };
+    threshold_breaches: { unknown_key_ratio_exceeded: boolean; retiring_key_ratio_exceeded: boolean };
     severity: "ok" | "warning" | "critical";
     recommended_action: string;
   } {
@@ -626,16 +647,13 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       ([keyId, count]) => retiringKeyIds.has(keyId) && Number(count) > 0
     );
     const totalSignaturesAnalyzed = allUsageEntries.reduce(
-      (acc, [, count]) => acc + Number(count),
-      0
+      (acc, [, count]) => acc + Number(count), 0
     );
     const unknownKeyUsageCount = allUsageEntries.reduce(
-      (acc, [keyId, count]) => acc + (keyId === "unknown" ? Number(count) : 0),
-      0
+      (acc, [keyId, count]) => acc + (keyId === "unknown" ? Number(count) : 0), 0
     );
     const retiringKeyUsageCount = allUsageEntries.reduce(
-      (acc, [keyId, count]) => acc + (retiringKeyIds.has(keyId) ? Number(count) : 0),
-      0
+      (acc, [keyId, count]) => acc + (retiringKeyIds.has(keyId) ? Number(count) : 0), 0
     );
     const unknownKeyUsageRatio =
       totalSignaturesAnalyzed > 0 ? unknownKeyUsageCount / totalSignaturesAnalyzed : 0;
@@ -646,11 +664,13 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     const retiringKeyRatioExceeded =
       retiringKeyUsageDetected && retiringKeyUsageRatio > signingRetiringKeyCriticalRatio;
 
-    const severity: "ok" | "warning" | "critical" = unknownKeyRatioExceeded || retiringKeyRatioExceeded
-      ? "critical"
-      : retiringKeyUsageDetected
-        ? "warning"
-        : "ok";
+    const severity: "ok" | "warning" | "critical" =
+      unknownKeyRatioExceeded || retiringKeyRatioExceeded
+        ? "critical"
+        : retiringKeyUsageDetected
+          ? "warning"
+          : "ok";
+
     const recommendedAction =
       severity === "critical"
         ? "Investigate unknown signing key usage immediately and rotate active keys if compromise is suspected."
@@ -785,10 +805,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         (tenantId && existing.tenant_id === tenantId) ||
         (!tenantId && typeof existing.tenant_id !== "string");
       if (isSameScope && !activeIds.has(id)) {
-        alertState.set(id, {
-          ...existing,
-          last_seen: nowIso
-        });
+        alertState.set(id, { ...existing, last_seen: nowIso });
       }
     }
 
@@ -796,12 +813,8 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
 
     return [...alertState.values()]
       .filter((alert) => {
-        if (!activeIds.has(alert.id)) {
-          return false;
-        }
-        if (!alert.suppressed_until) {
-          return true;
-        }
+        if (!activeIds.has(alert.id)) return false;
+        if (!alert.suppressed_until) return true;
         const suppressedUntilMs = Date.parse(alert.suppressed_until);
         return Number.isNaN(suppressedUntilMs) || suppressedUntilMs <= Date.now();
       })
@@ -817,14 +830,12 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       chain_index: chainIndex,
       prev_event_hash: prevEventHash
     });
-
     const chainedEvent: AuditEvent = {
       ...event,
       chain_index: chainIndex,
       prev_event_hash: prevEventHash,
       event_hash: eventHash
     };
-
     auditEvents.push(chainedEvent);
     if (auditEvents.length > auditMaxEvents) {
       auditEvents.splice(0, auditEvents.length - auditMaxEvents);
@@ -836,6 +847,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   hydrateAuditEvents();
   hydrateAlertState();
   hydrateRuntimeControls();
+  hydrateRateLimitState();
 
   function hydrateMetricsState(): PersistedMetricsState {
     if (!metricsStorePath || !existsSync(metricsStorePath)) {
@@ -850,35 +862,22 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         capability_latency_samples: {}
       };
     }
-
     try {
       const raw = readFileSync(metricsStorePath, "utf8");
       const parsed = JSON.parse(raw) as Partial<PersistedMetricsState>;
       return {
-        requests_total:
-          typeof parsed.requests_total === "number" ? parsed.requests_total : 0,
-        requests_succeeded:
-          typeof parsed.requests_succeeded === "number" ? parsed.requests_succeeded : 0,
-        requests_failed:
-          typeof parsed.requests_failed === "number" ? parsed.requests_failed : 0,
+        requests_total: typeof parsed.requests_total === "number" ? parsed.requests_total : 0,
+        requests_succeeded: typeof parsed.requests_succeeded === "number" ? parsed.requests_succeeded : 0,
+        requests_failed: typeof parsed.requests_failed === "number" ? parsed.requests_failed : 0,
         request_events: Array.isArray(parsed.request_events) ? parsed.request_events : [],
-        errors_by_code:
-          parsed.errors_by_code && typeof parsed.errors_by_code === "object"
-            ? parsed.errors_by_code
-            : {},
-        errors_by_agent:
-          parsed.errors_by_agent && typeof parsed.errors_by_agent === "object"
-            ? parsed.errors_by_agent
-            : {},
+        errors_by_code: parsed.errors_by_code && typeof parsed.errors_by_code === "object" ? parsed.errors_by_code : {},
+        errors_by_agent: parsed.errors_by_agent && typeof parsed.errors_by_agent === "object" ? parsed.errors_by_agent : {},
         errors_by_agent_by_code:
           parsed.errors_by_agent_by_code && typeof parsed.errors_by_agent_by_code === "object"
-            ? parsed.errors_by_agent_by_code
-            : {},
+            ? parsed.errors_by_agent_by_code : {},
         capability_latency_samples:
-          parsed.capability_latency_samples &&
-          typeof parsed.capability_latency_samples === "object"
-            ? parsed.capability_latency_samples
-            : {}
+          parsed.capability_latency_samples && typeof parsed.capability_latency_samples === "object"
+            ? parsed.capability_latency_samples : {}
       };
     } catch {
       return {
@@ -915,10 +914,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   );
 
   function persistMetricsState(): void {
-    if (!metricsStorePath) {
-      return;
-    }
-
+    if (!metricsStorePath) return;
     const serialized: PersistedMetricsState = {
       requests_total: requestsTotal,
       requests_succeeded: requestsSucceeded,
@@ -934,9 +930,8 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       ),
       capability_latency_samples: Object.fromEntries(capabilityLatencySamples.entries())
     };
-
-    mkdirSync(dirname(metricsStorePath), { recursive: true });
-    writeFileSync(metricsStorePath, JSON.stringify(serialized, null, 2), "utf8");
+    mkdirSync(dirname(metricsStorePath), { recursive: true, mode: 0o700 });
+    writeFileSync(metricsStorePath, JSON.stringify(serialized, null, 2), { encoding: "utf8", mode: 0o600 });
   }
 
   function pruneRequestEvents(now: number): void {
@@ -976,7 +971,6 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     const windowFailed = requestEvents.reduce((acc, event) => acc + (event.ok ? 0 : 1), 0);
     const windowSuccess = windowTotal - windowFailed;
     const failureRateWindow = windowTotal > 0 ? windowFailed / windowTotal : 0;
-
     return {
       total: requestsTotal,
       succeeded: requestsSucceeded,
@@ -991,9 +985,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
 
   function recordCapabilityLatency(capability: string, durationMs: number): void {
     const key = capability.trim();
-    if (!key) {
-      return;
-    }
+    if (!key) return;
     const existing = capabilityLatencySamples.get(key) ?? [];
     existing.push(Math.max(0, durationMs));
     if (existing.length > maxLatencySamplesPerCapability) {
@@ -1004,9 +996,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   }
 
   function percentile(sorted: number[], p: number): number {
-    if (sorted.length === 0) {
-      return 0;
-    }
+    if (sorted.length === 0) return 0;
     const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
     return sorted[index];
   }
@@ -1015,13 +1005,9 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     string,
     { count: number; avg_ms: number; p50_ms: number; p95_ms: number }
   > {
-    const result: Record<string, { count: number; avg_ms: number; p50_ms: number; p95_ms: number }> =
-      {};
-
+    const result: Record<string, { count: number; avg_ms: number; p50_ms: number; p95_ms: number }> = {};
     for (const [capability, samples] of capabilityLatencySamples.entries()) {
-      if (samples.length === 0) {
-        continue;
-      }
+      if (samples.length === 0) continue;
       const sorted = [...samples].sort((a, b) => a - b);
       const sum = sorted.reduce((acc, value) => acc + value, 0);
       result[capability] = {
@@ -1031,7 +1017,6 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         p95_ms: percentile(sorted, 0.95)
       };
     }
-
     return result;
   }
 
@@ -1054,7 +1039,6 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     const deadLetterCountThreshold = options.healthMaxDeadLetters;
     const oldestDeadLetterAgeThreshold = options.healthMaxOldestDeadLetterAgeMs;
     const failureRateThreshold = options.metricsFailureRateThreshold;
-
     const thresholds: {
       dead_letter_count?: number;
       oldest_dead_letter_age_ms?: number;
@@ -1101,12 +1085,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     res: ServerResponse,
     statusCode: number,
     requestId: string,
-    error: {
-      code: string;
-      message: string;
-      retryable: boolean;
-      details?: Record<string, unknown>;
-    },
+    error: { code: string; message: string; retryable: boolean; details?: Record<string, unknown> },
     targetAgent?: string
   ): void {
     sendErrorResponse(res, statusCode, requestId, error, recordRequest, targetAgent);
@@ -1116,22 +1095,24 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     allowed: boolean;
     retryAfterMs: number;
   } {
-    if (typeof limit !== "number") {
-      return { allowed: true, retryAfterMs: 0 };
-    }
+    if (typeof limit !== "number") return { allowed: true, retryAfterMs: 0 };
 
     const now = Date.now();
+    let mutated = false;
     while (events.length > 0 && now - events[0] > rateLimitWindowMs) {
       events.shift();
+      mutated = true;
     }
 
     if (events.length >= limit) {
       const oldest = events[0] ?? now;
       const retryAfterMs = Math.max(1, rateLimitWindowMs - (now - oldest));
+      if (mutated) persistRateLimitState();
       return { allowed: false, retryAfterMs };
     }
 
     events.push(now);
+    persistRateLimitState();
     return { allowed: true, retryAfterMs: 0 };
   }
 
@@ -1161,12 +1142,16 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     return parseJsonBody(req);
   }
 
-  function getAdminTokenError(
+  async function getAdminTokenError(
     req: IncomingMessage,
     rawBody: string
-  ): { statusCode: number; code: string; message: string } | null {
+  ): Promise<{ statusCode: number; code: string; message: string } | null> {
     const configuredToken = process.env.MAP_ADMIN_TOKEN;
-    if (!configuredToken || configuredToken.trim().length === 0) {
+    const configuredHash = configuredToken && configuredToken.trim().length > 0
+      ? hashToken(configuredToken)
+      : null;
+
+    if (!configuredHash) {
       return {
         statusCode: 403,
         code: "invalid_auth",
@@ -1175,7 +1160,9 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     }
 
     const providedToken = req.headers["x-map-admin-token"];
-    if (typeof providedToken !== "string" || providedToken !== configuredToken) {
+    if (typeof providedToken !== "string" || hashToken(providedToken) !== configuredHash) {
+      // Artificial delay to slow brute-force attacks (50-100ms)
+      await new Promise(r => setTimeout(r, 50 + Math.random() * 50));
       return {
         statusCode: 403,
         code: "invalid_auth",
@@ -1263,9 +1250,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         getAdminTokenError,
         getRuntimeRevocationMetadata
       });
-      if (readRouteHandled) {
-        return;
-      }
+      if (readRouteHandled) return;
 
       const adminRouteHandled = await handleAdminRoutes({
         req,
@@ -1285,9 +1270,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         persistRuntimeControls,
         recordAuditEvent
       });
-      if (adminRouteHandled) {
-        return;
-      }
+      if (adminRouteHandled) return;
 
       const mutationRouteResult = await handleMutationRoutes({
         req,
@@ -1313,9 +1296,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       });
       routeTargetAgent = mutationRouteResult.routeTargetAgent;
       routeTenantId = mutationRouteResult.routeTenantId;
-      if (mutationRouteResult.handled) {
-        return;
-      }
+      if (mutationRouteResult.handled) return;
 
       sendError(res, 404, requestId, {
         code: "not_found",
@@ -1323,60 +1304,43 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         retryable: false
       }, routeTargetAgent);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown server error.";
+      const originalMessage = error instanceof Error ? error.message : "Unknown server error.";
       const code =
-        message.includes("No micro-agent found")
-          ? "agent_not_found"
-          : message.includes("Target agent is disabled in registry")
-            ? "agent_disabled"
-          : message.includes("Capability not supported")
-            ? "capability_not_found"
-            : message.includes("Capability is disabled for target agent")
-              ? "capability_disabled"
-            : message.includes("Approval task not found")
-              ? "task_not_found"
-            : message.includes("Task not found")
-              ? "task_not_found"
-            : message.includes("Receipt not found")
-              ? "receipt_not_found"
-            : message.includes("not awaiting approval")
-              ? "approval_required"
-            : message.includes("Invalid approval reference")
-              ? "invalid_request"
-              : message.includes("Task id conflict") || message.includes("Idempotency key conflict")
-                ? "idempotency_conflict"
-              : message.includes("Async queue capacity exceeded")
-                ? "rate_limited"
-              : message.includes("tenant_id is required")
-                ? "policy_denied"
-          : message.includes("Task denied")
-            ? "policy_denied"
-            : message.includes("Unsupported schema version")
-              ? "schema_version_unsupported"
-            : message.includes("Unsupported output mode")
-              ? "unsupported_output_mode"
-            : message.includes("Invalid task state transition") ||
-                message.includes("Terminal task state") ||
-                message.includes("Task lifecycle invariant violated")
-              ? "invalid_request"
-            : message.includes("Negotiation delivery mode conflicts")
-              ? "invalid_request"
-            : message.includes("requires approval")
-              ? "approval_required"
-              : message.includes("replay detected")
-                ? "invalid_auth"
-              : message.includes("Approval request")
-                ? "invalid_request"
-            : message.includes("Invalid MAP")
-              ? "invalid_request"
-              : "request_failed";
+        originalMessage.includes("No micro-agent found") ? "agent_not_found"
+        : originalMessage.includes("Target agent is disabled in registry") ? "agent_disabled"
+        : originalMessage.includes("Capability not supported") ? "capability_not_found"
+        : originalMessage.includes("Capability is disabled for target agent") ? "capability_disabled"
+        : originalMessage.includes("Approval task not found") ? "task_not_found"
+        : originalMessage.includes("Task not found") ? "task_not_found"
+        : originalMessage.includes("Receipt not found") ? "receipt_not_found"
+        : originalMessage.includes("not awaiting approval") ? "approval_required"
+        : originalMessage.includes("Invalid approval reference") ? "invalid_request"
+        : originalMessage.includes("Task id conflict") || originalMessage.includes("Idempotency key conflict") ? "idempotency_conflict"
+        : originalMessage.includes("Async queue capacity exceeded") ? "rate_limited"
+        : originalMessage.includes("tenant_id is required") ? "policy_denied"
+        : originalMessage.includes("Task denied") ? "policy_denied"
+        : originalMessage.includes("Unsupported schema version") ? "schema_version_unsupported"
+        : originalMessage.includes("Unsupported output mode") ? "unsupported_output_mode"
+        : originalMessage.includes("Invalid task state transition") ||
+          originalMessage.includes("Terminal task state") ||
+          originalMessage.includes("Task lifecycle invariant violated") ? "invalid_request"
+        : originalMessage.includes("Negotiation delivery mode conflicts") ? "invalid_request"
+        : originalMessage.includes("requires approval") ? "approval_required"
+        : originalMessage.includes("replay detected") ? "invalid_auth"
+        : originalMessage.includes("Approval request") ? "invalid_request"
+        : originalMessage.includes("Invalid MAP") ? "invalid_request"
+        : originalMessage.includes("Delegation token has expired") ? "token_expired"
+        : "request_failed";
+
+      console.error("MAP internal error:", originalMessage, { requestId, code });
+
       const retryable = code === "request_failed" || code === "rate_limited";
       if (code === "policy_denied" || code === "invalid_auth") {
         recordAuditEvent({
           timestamp: new Date().toISOString(),
           request_id: requestId,
           code,
-          message,
+          message: originalMessage,
           method: req.method ?? "UNKNOWN",
           route: normalizePath(req.url ?? "/"),
           tenant_id: routeTenantId,
@@ -1384,30 +1348,23 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         });
       }
       const statusCode =
-        code === "rate_limited"
-          ? 429
-          : code === "idempotency_conflict"
-            ? 409
-            : code === "capability_not_found"
-              ? 404
-              : 400;
+        code === "rate_limited" ? 429
+        : code === "idempotency_conflict" ? 409
+        : code === "capability_not_found" ? 404
+        : 400;
+
       sendError(res, statusCode, requestId, {
         code,
-        message,
+        message: "The requested operation could not be completed.",
         retryable,
         details: {
           category:
-            code === "idempotency_conflict"
-              ? "conflict"
-              : code === "rate_limited"
-                ? "throttling"
-              : code === "policy_denied" || code === "approval_required"
-                ? "policy"
-                : code === "schema_version_unsupported"
-                  ? "versioning"
-                  : code === "unsupported_output_mode"
-                    ? "capability"
-                    : "runtime"
+            code === "idempotency_conflict" ? "conflict"
+            : code === "rate_limited" ? "throttling"
+            : code === "policy_denied" || code === "approval_required" ? "policy"
+            : code === "schema_version_unsupported" ? "versioning"
+            : code === "unsupported_output_mode" ? "capability"
+            : "runtime"
         }
       }, routeTargetAgent);
     }

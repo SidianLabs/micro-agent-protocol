@@ -25,7 +25,7 @@ interface RouteContext {
   getAdminTokenError(
     req: IncomingMessage,
     rawBody: string
-  ): { statusCode: number; code: string; message: string } | null;
+  ): Promise<{ statusCode: number; code: string; message: string } | null>;
   snapshotRuntimeControls(): {
     disabled_agents: Record<string, unknown>;
     disabled_capabilities: Record<string, Record<string, unknown>>;
@@ -53,7 +53,7 @@ interface RouteContext {
 
 async function requireAdmin(ctx: RouteContext): Promise<{ parsed: unknown; pathname: string } | null> {
   const body = await ctx.readJsonBody(ctx.req);
-  const adminError = ctx.getAdminTokenError(ctx.req, body.raw);
+  const adminError = await ctx.getAdminTokenError(ctx.req, body.raw);
   if (adminError) {
     ctx.sendError(ctx.res, adminError.statusCode, ctx.requestId, {
       code: adminError.code,
@@ -72,7 +72,7 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
   const { req, res, requestId } = ctx;
 
   if (req.method === "GET" && req.url?.startsWith("/admin/runtime-controls")) {
-    const adminError = ctx.getAdminTokenError(req, "");
+    const adminError = await ctx.getAdminTokenError(req, "");
     if (adminError) {
       ctx.sendError(res, adminError.statusCode, requestId, {
         code: adminError.code,

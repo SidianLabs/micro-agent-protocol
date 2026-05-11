@@ -122,6 +122,7 @@ export interface MapSignedRequestHeaders {
   "x-map-key-id": string;
   "x-map-timestamp": string;
   "x-map-request-signature": string;
+  "x-map-nonce": string;
 }
 
 export interface MapErrorResponse {

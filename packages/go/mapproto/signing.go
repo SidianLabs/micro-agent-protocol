@@ -12,11 +12,94 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"strings"
 	"time"
 )
+
+// SigningHeader is the JWS compact serialization header.
+// It is JSON-marshaled and base64url-encoded as the first segment.
+type SigningHeader struct {
+	Alg string `json:"alg"`
+	Kid string `json:"kid"`
+	Typ string `json:"typ"`
+}
+
+// SigningPayload is the JWS compact serialization payload.
+// Fields MUST be declared in alphabetical order (body, key_id, method, path, timestamp)
+// because Go's encoding/json marshals struct fields in declaration order,
+// and the reference implementation requires canonicalized key ordering.
+type SigningPayload struct {
+	Body      string `json:"body"`
+	KeyID     string `json:"key_id"`
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	Timestamp string `json:"timestamp"`
+}
+
+// SigningKey holds the key material needed to produce a compact signature.
+// Exactly one of Secret (for HMAC/HS256) or PrivateKey (for RSA/RS256) must be set.
+type SigningKey struct {
+	Kid        string          // key identifier
+	Alg        string          // "HS256" or "RS256"
+	Secret     []byte          // HMAC symmetric secret
+	PrivateKey *rsa.PrivateKey // RSA private key
+}
+
+// createCompactSignature produces a JWS compact serialization string:
+//
+//	base64url(header).base64url(payload).base64url(signature)
+//
+// The signature is HMAC-SHA256 or RSA-SHA256 over the first two segments.
+func createCompactSignature(payload SigningPayload, signingKey SigningKey) (string, error) {
+	header := SigningHeader{
+		Alg: signingKey.Alg,
+		Kid: signingKey.Kid,
+		Typ: "MAPSIG",
+	}
+
+	headerJSON, err := json.Marshal(header)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal signing header: %w", err)
+	}
+
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal signing payload: %w", err)
+	}
+
+	encodedHeader := base64.RawURLEncoding.EncodeToString(headerJSON)
+	encodedPayload := base64.RawURLEncoding.EncodeToString(payloadJSON)
+	signingInput := encodedHeader + "." + encodedPayload
+
+	var signatureBytes []byte
+
+	switch signingKey.Alg {
+	case "HS256":
+		h := hmac.New(sha256.New, signingKey.Secret)
+		h.Write([]byte(signingInput))
+		signatureBytes = h.Sum(nil)
+
+	case "RS256":
+		if signingKey.PrivateKey == nil {
+			return "", fmt.Errorf("RS256 signing key has no private key")
+		}
+		hashed := sha256.Sum256([]byte(signingInput))
+		sig, err := rsa.SignPKCS1v15(rand.Reader, signingKey.PrivateKey, crypto.SHA256, hashed[:])
+		if err != nil {
+			return "", fmt.Errorf("RSA signing failed: %w", err)
+		}
+		signatureBytes = sig
+
+	default:
+		return "", fmt.Errorf("unsupported signing algorithm: %s", signingKey.Alg)
+	}
+
+	encodedSignature := base64.RawURLEncoding.EncodeToString(signatureBytes)
+	return signingInput + "." + encodedSignature, nil
+}
 
 // Signer defines the interface for signing requests
 type Signer interface {
@@ -50,22 +133,21 @@ func (s *HMACSigner) GetKeyID() string {
 	return s.keyID
 }
 
-// Sign creates an HMAC signature for the request
+// Sign creates a JWS compact serialization signature for the request.
 func (s *HMACSigner) Sign(method, path, body, timestamp string) (string, error) {
-	// Format: "MAP\0{method}\0{path}\0{timestamp}\0{body_hash}"
-	bodyHash := sha256.Sum256([]byte(body))
-	message := fmt.Sprintf("MAP\x00%s\x00%s\x00%s\x00%s",
-		strings.ToUpper(method),
-		path,
-		timestamp,
-		hex.EncodeToString(bodyHash[:]),
-	)
-
-	h := hmac.New(sha256.New, s.secret)
-	h.Write([]byte(message))
-	signature := h.Sum(nil)
-
-	return base64.StdEncoding.EncodeToString(signature), nil
+	payload := SigningPayload{
+		Body:      body,
+		KeyID:     s.keyID,
+		Method:    strings.ToUpper(method),
+		Path:      path,
+		Timestamp: timestamp,
+	}
+	signingKey := SigningKey{
+		Kid:    s.keyID,
+		Alg:    "HS256",
+		Secret: s.secret,
+	}
+	return createCompactSignature(payload, signingKey)
 }
 
 // RSASigner implements RSA-based signing
@@ -124,24 +206,21 @@ func (s *RSASigner) GetKeyID() string {
 	return s.keyID
 }
 
-// Sign creates an RSA signature for the request
+// Sign creates a JWS compact serialization signature for the request.
 func (s *RSASigner) Sign(method, path, body, timestamp string) (string, error) {
-	// Format: "MAP\0{method}\0{path}\0{timestamp}\0{body_hash}"
-	bodyHash := sha256.Sum256([]byte(body))
-	message := fmt.Sprintf("MAP\x00%s\x00%s\x00%s\x00%s",
-		strings.ToUpper(method),
-		path,
-		timestamp,
-		hex.EncodeToString(bodyHash[:]),
-	)
-
-	hashed := sha256.Sum256([]byte(message))
-	signature, err := rsa.SignPKCS1v15(rand.Reader, s.privateKey, crypto.SHA256, hashed[:])
-	if err != nil {
-		return "", fmt.Errorf("failed to sign: %w", err)
+	payload := SigningPayload{
+		Body:      body,
+		KeyID:     s.keyID,
+		Method:    strings.ToUpper(method),
+		Path:      path,
+		Timestamp: timestamp,
 	}
-
-	return base64.StdEncoding.EncodeToString(signature), nil
+	signingKey := SigningKey{
+		Kid:        s.keyID,
+		Alg:        "RS256",
+		PrivateKey: s.privateKey,
+	}
+	return createCompactSignature(payload, signingKey)
 }
 
 // SignerFunc is a function that implements Signer
@@ -176,6 +255,16 @@ func GenerateTimestamp() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
+// GenerateNonce generates a cryptographically random nonce as a hex string.
+func GenerateNonce() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback: this should never happen on modern systems
+		return hex.EncodeToString([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
+	}
+	return hex.EncodeToString(b)
+}
+
 // SignRequest signs a request and returns the headers
 func SignRequest(signer Signer, method, path, body string) (*MapSignedRequestHeaders, error) {
 	timestamp := GenerateTimestamp()
@@ -189,5 +278,6 @@ func SignRequest(signer Signer, method, path, body string) (*MapSignedRequestHea
 		XMapKeyID:            signer.GetKeyID(),
 		XMapTimestamp:        timestamp,
 		XMapRequestSignature: signature,
+		XMapNonce:            GenerateNonce(),
 	}, nil
 }
