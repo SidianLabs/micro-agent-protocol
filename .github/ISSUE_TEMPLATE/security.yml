@@ -5,8 +5,8 @@ notice: |
   **STOP**: If this is a security vulnerability in YOUR code (not MAP Protocol itself),
   please report it directly to the maintainers of that project.
 
-  For MAP Protocol vulnerabilities, please email security@map-protocol.dev
-  instead of using this form, or use GitHub's private vulnerability reporting.
+  For MAP Protocol vulnerabilities, please use GitHub's private vulnerability reporting
+  at https://github.com/SidianLabs/micro-agent-protocol/security/advisories.
 
   See our full [Security Policy](./SECURITY.md).
 body:
@@ -21,7 +21,8 @@ body:
         **Please do NOT** include any sensitive data (actual keys, passwords, tokens)
         in this report. Use placeholder values instead.
 
-        For critical vulnerabilities, email us directly at security@map-protocol.dev.
+        For critical vulnerabilities, use GitHub Security Advisory at
+        https://github.com/SidianLabs/micro-agent-protocol/security/advisories.
 
   - type: textarea
     id: description

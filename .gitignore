@@ -34,6 +34,7 @@ coverage/
 
 # Project-specific
 *.lock
+package-lock.json
 AGENTS.md
 ANTITRUST.md
 CLAUDE.md
@@ -48,3 +49,8 @@ references/
 # Runtime data
 .map/
 test-project/package-lock.json
+
+# Optional directories (not pushed)
+docs/
+examples/
+test-project/
