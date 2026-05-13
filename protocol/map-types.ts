@@ -60,7 +60,8 @@ export type ErrorCode =
   | "resource_not_found"
   | "unauthorized"
   | "forbidden"
-  | "extension_support_required";
+  | "extension_support_required"
+  | "invalid_state_transition";
 
 export interface RequesterIdentity {
   type: "user" | "service" | "agent";
@@ -409,6 +410,34 @@ export interface SchemaValidationError extends MapErrorResponse {
     validation_errors: ValidationErrorDetail[];
     schema_ref: string;
   };
+}
+
+export interface MapVerificationKey {
+  kid: string;
+  alg: "HS256" | "RS256";
+  use: "sig";
+  status: "active" | "retiring" | "revoked";
+  scopes: string[];
+  demo_only: boolean;
+  kty?: "oct" | "RSA";
+  public_key_pem?: string;
+  jwk?: Record<string, unknown>;
+}
+
+export interface TrustAnchor {
+  trust_domain: string; // e.g., "payments.bank.com"
+  issuer: string; // e.g., "Bank Corp CA"
+  public_keys: MapVerificationKey[]; // Trusted keys for this domain
+  valid_from: string; // ISO timestamp
+  valid_until?: string; // Optional expiry
+}
+
+export interface TrustPolicy {
+  allowed_domains: string[]; // Whitelist of trust domains
+  allowed_algorithms: ("HS256" | "RS256" | "ES256")[];
+  require_signed_descriptors: boolean;
+  require_signed_receipts: boolean;
+  min_key_length?: number;
 }
 
 export function createErrorResponse(

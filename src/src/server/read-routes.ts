@@ -74,6 +74,11 @@ interface RouteContext {
     receiptStore: {
       list(tenantId?: string): any[];
       get(receiptId: string, tenantId?: string): any;
+      verifyReceiptIntegrity(): {
+        valid: boolean;
+        total: number;
+        errors: string[];
+      };
     };
     asyncQueue: {
       getStats(): any;
@@ -892,6 +897,10 @@ export async function handleReadRoutes(ctx: RouteContext): Promise<boolean> {
 
   if (req.method === "GET" && requestUrlString.startsWith("/receipts")) {
     const requestUrl = new URL(requestUrlString, "http://localhost");
+    if (requestUrl.pathname === "/receipts/verify") {
+      const result = ctx.app.receiptStore.verifyReceiptIntegrity();
+      return sendEtagJson(ctx, result, { "cache-control": "no-cache" });
+    }
     if (requestUrl.pathname === "/receipts") {
       const tenantId = requestUrl.searchParams.get("tenant_id");
       const cursor = requestUrl.searchParams.get("cursor");

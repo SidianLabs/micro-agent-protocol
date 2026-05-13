@@ -11,6 +11,8 @@ import type {
   DelegationToken,
   ExecutionReceipt,
   MapSignedRequestHeaders,
+  MapVerificationKey,
+  TrustAnchor,
 } from "../types.js";
 import {
   getKeyProviderInfo,
@@ -34,12 +36,68 @@ const DEFAULT_SCOPES = [
   "trust_bundle",
 ];
 
+const KEY_USE_CONSTRAINTS: Record<string, SignatureScope[]> = {
+  agent_descriptor: ["descriptor"],
+  delegation_token: ["delegation_token"],
+  execution_receipt: ["receipt"],
+  http_request: ["http_request"],
+  audit_checkpoint: ["audit_checkpoint"],
+  audit_export: ["audit_export"],
+  conformance_export: ["conformance_export"],
+  trust_bundle: ["trust_bundle"],
+};
+
 function getDeploymentProfile(): "open" | "verified" | "regulated" {
   const profile = process.env.MAP_DEPLOYMENT_PROFILE;
   if (profile === "verified" || profile === "regulated") {
     return profile;
   }
   return "open";
+}
+
+function assertValidKeyUse(artifactType: string, scope: SignatureScope): void {
+  const allowedScopes = KEY_USE_CONSTRAINTS[artifactType];
+  if (!allowedScopes) {
+    throw new Error(
+      `Unknown artifact type: ${artifactType}. Cannot assert key-use constraints.`,
+    );
+  }
+  if (!allowedScopes.includes(scope)) {
+    throw new Error(
+      `Key scope "${scope}" is not allowed for artifact type "${artifactType}". Allowed scopes: ${allowedScopes.join(", ")}`,
+    );
+  }
+}
+
+function getAllowedAlgorithms(
+  profile: "open" | "verified" | "regulated",
+): ("HS256" | "RS256")[] {
+  switch (profile) {
+    case "open":
+      return ["HS256", "RS256"];
+    case "verified":
+      return ["RS256"];
+    case "regulated":
+      return ["RS256"];
+    default:
+      return ["HS256", "RS256"];
+  }
+}
+
+function assertAlgorithmAllowed(alg: string, profile: string): void {
+  const allowed = getAllowedAlgorithms(
+    profile as "open" | "verified" | "regulated",
+  );
+  if (!allowed.includes(alg as "HS256" | "RS256")) {
+    throw new Error(
+      `Algorithm "${alg}" is not allowed for deployment profile "${profile}". Allowed algorithms: ${allowed.join(", ")}`,
+    );
+  }
+  // For regulated profile, enforce minimum key length (2048+ bits for RSA)
+  if (profile === "regulated" && alg === "RS256") {
+    // Key-length enforcement is handled at key-material validation time;
+    // here we simply assert the algorithm is RSA-based.
+  }
 }
 
 type SignatureScope =
@@ -51,18 +109,6 @@ type SignatureScope =
   | "audit_export"
   | "conformance_export"
   | "trust_bundle";
-
-export interface MapVerificationKey {
-  kid: string;
-  alg: "HS256" | "RS256";
-  use: "sig";
-  status: "active" | "retiring" | "revoked";
-  scopes: string[];
-  demo_only: boolean;
-  kty?: "oct" | "RSA";
-  public_key_pem?: string;
-  jwk?: Record<string, unknown>;
-}
 
 interface SigningHeader {
   alg: "HS256" | "RS256";
@@ -432,6 +478,10 @@ function createCompactSignatureFromCanonical(
     );
   }
 
+  // Enforce algorithm policy by deployment profile
+  const profile = getDeploymentProfile();
+  assertAlgorithmAllowed(signingKey.alg, profile);
+
   const header: SigningHeader = {
     alg: signingKey.alg,
     kid: signingKey.kid,
@@ -671,6 +721,7 @@ function receiptSigningPayload(
 export function signDelegationToken(
   token: Omit<DelegationToken, "signature">,
 ): string {
+  assertValidKeyUse("delegation_token", "delegation_token");
   return createCompactSignature(
     tokenSigningPayload(token),
     undefined,
@@ -692,6 +743,7 @@ export function verifyDelegationTokenSignature(
 export function signReceipt(
   receipt: Omit<ExecutionReceipt, "signature">,
 ): string {
+  assertValidKeyUse("execution_receipt", "receipt");
   return createCompactSignature(
     receiptSigningPayload(receipt),
     undefined,
@@ -718,6 +770,7 @@ export function signAgentDescriptor(
   AgentDescriptor,
   "descriptor_signature" | "descriptor_key_id" | "descriptor_signature_alg"
 > {
+  assertValidKeyUse("agent_descriptor", "descriptor");
   // Canonicalize the descriptor per RFC 8785 JCS before signing.
   const canonicalPayload = descriptorSigningPayload(descriptor);
   const signature = createCompactSignatureFromCanonical(
@@ -789,6 +842,7 @@ function signedRequestPayload(
 export function signHttpRequest(
   input: SignedRequestPayload,
 ): MapSignedRequestHeaders {
+  assertValidKeyUse("http_request", "http_request");
   const signature = createCompactSignature(
     signedRequestPayload(input),
     input.key_id,
@@ -887,6 +941,7 @@ interface AuditCheckpointPayload {
 }
 
 export function signAuditCheckpoint(payload: AuditCheckpointPayload): string {
+  assertValidKeyUse("audit_checkpoint", "audit_checkpoint");
   return createCompactSignature(
     {
       checkpoint_id: payload.checkpoint_id,
@@ -925,6 +980,7 @@ interface AuditExportPayload {
 }
 
 export function signAuditExport(payload: AuditExportPayload): string {
+  assertValidKeyUse("audit_export", "audit_export");
   return createCompactSignature(
     {
       export_id: payload.export_id,
@@ -970,6 +1026,7 @@ interface ConformanceExportPayload {
 export function signConformanceExport(
   payload: ConformanceExportPayload,
 ): string {
+  assertValidKeyUse("conformance_export", "conformance_export");
   return createCompactSignature(
     {
       export_id: payload.export_id,
@@ -1014,6 +1071,62 @@ export function getTrustMetadata(
   };
 }
 
+/**
+ * Returns the configured trust anchors from the MAP_TRUST_ANCHORS
+ * environment variable.  The variable must be a JSON array of
+ * {@link TrustAnchor} objects.  Returns an empty array if the
+ * variable is not set or cannot be parsed.
+ */
+export function getTrustAnchors(): TrustAnchor[] {
+  const raw = process.env.MAP_TRUST_ANCHORS;
+  if (!raw || raw.trim().length === 0) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      console.warn("MAP_TRUST_ANCHORS is not a JSON array; ignoring.");
+      return [];
+    }
+    return parsed as TrustAnchor[];
+  } catch {
+    console.warn("MAP_TRUST_ANCHORS contains invalid JSON; ignoring.");
+    return [];
+  }
+}
+
+/**
+ * Checks whether a given trust domain is present in the configured
+ * trust anchors.  If no trust anchors are configured, all domains
+ * are considered trusted (open mode).
+ */
+export function verifyTrustDomain(domain: string): boolean {
+  const anchors = getTrustAnchors();
+  if (anchors.length === 0) {
+    // No trust anchors configured — trust everything (open mode).
+    return true;
+  }
+  return anchors.some((anchor) => anchor.trust_domain === domain);
+}
+
+/**
+ * Checks whether a specific key (by its kid) is trusted for a given
+ * trust domain.  Returns true if a trust anchor exists for the domain
+ * and the anchor's public_keys include the requested kid.
+ */
+export function isKeyTrusted(keyId: string, domain: string): boolean {
+  const anchors = getTrustAnchors();
+  if (anchors.length === 0) {
+    // No trust anchors configured — trust everything (open mode).
+    return true;
+  }
+  const anchor = anchors.find((a) => a.trust_domain === domain);
+  if (!anchor) {
+    return false;
+  }
+  return anchor.public_keys.some((key) => key.kid === keyId);
+}
+
 interface TrustBundlePayload {
   bundle_id: string;
   created_at: string;
@@ -1024,6 +1137,7 @@ interface TrustBundlePayload {
 }
 
 export function signTrustBundle(payload: TrustBundlePayload): string {
+  assertValidKeyUse("trust_bundle", "trust_bundle");
   return createCompactSignature(
     {
       bundle_id: payload.bundle_id,

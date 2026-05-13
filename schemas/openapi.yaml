@@ -365,6 +365,42 @@ paths:
         "429":
           $ref: "#/components/responses/RateLimited"
 
+  /receipts/verify:
+    get:
+      operationId: verifyReceipts
+      summary: Verify receipt integrity
+      description: Verifies the integrity of all execution receipts by checking signatures and chronological ordering. Returns a validation result.
+      tags: [Receipts]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Verification result
+          headers:
+            XMapRequestId:
+              $ref: "#/components/headers/XMapRequestId"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          valid:
+                            type: boolean
+                          total:
+                            type: integer
+                          errors:
+                            type: array
+                            items:
+                              type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /receipts/{receipt_id}:
     get:
       operationId: getReceipt

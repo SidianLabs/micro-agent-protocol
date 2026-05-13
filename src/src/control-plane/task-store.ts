@@ -8,6 +8,10 @@ interface TaskStoreOptions {
   dbPath?: string;
 }
 
+/**
+ * Terminal states are IMMUTABLE. Any attempt to transition from a terminal
+ * state MUST be rejected.
+ */
 const TERMINAL_TASK_STATUSES = new Set<TaskRecord["status"]>([
   "completed",
   "failed",
@@ -15,26 +19,52 @@ const TERMINAL_TASK_STATUSES = new Set<TaskRecord["status"]>([
   "revoked",
 ]);
 
-const ALLOWED_TRANSITIONS: Record<
-  TaskRecord["status"],
-  TaskRecord["status"][]
-> = {
-  accepted: [
-    "running",
-    "awaiting_approval",
-    "completed",
-    "failed",
-    "denied",
-    "revoked",
-  ],
-  proposed: ["accepted", "awaiting_approval", "denied", "revoked"],
-  awaiting_approval: ["running", "completed", "failed", "denied", "revoked"],
-  denied: [],
-  running: ["completed", "failed", "revoked"],
-  completed: [],
-  failed: [],
-  revoked: [],
-};
+/**
+ * Formal task state transition table.
+ *
+ *   accepted          → [proposed, denied, revoked]
+ *   proposed          → [awaiting_approval, running, denied, revoked]
+ *   awaiting_approval → [running, denied, revoked]
+ *   running           → [completed, failed, revoked]
+ *   completed         → [] (terminal — immutable)
+ *   failed            → [] (terminal — immutable)
+ *   denied            → [] (terminal — immutable)
+ *   revoked           → [] (terminal — immutable)
+ */
+const TASK_TRANSITIONS = new Map<TaskRecord["status"], TaskRecord["status"][]>([
+  ["accepted", ["proposed", "denied", "revoked"]],
+  ["proposed", ["awaiting_approval", "running", "denied", "revoked"]],
+  ["awaiting_approval", ["running", "denied", "revoked"]],
+  ["running", ["completed", "failed", "revoked"]],
+  ["completed", []],
+  ["failed", []],
+  ["denied", []],
+  ["revoked", []],
+]);
+
+function assertValidTransition(
+  currentStatus: TaskRecord["status"],
+  newStatus: TaskRecord["status"],
+): void {
+  if (currentStatus === newStatus) {
+    return;
+  }
+  if (isTerminal(currentStatus)) {
+    throw new Error(
+      `Terminal states are IMMUTABLE. Cannot transition from ${currentStatus} to ${newStatus}.`,
+    );
+  }
+  const allowed = TASK_TRANSITIONS.get(currentStatus);
+  if (!allowed || !allowed.includes(newStatus)) {
+    throw new Error(
+      `Invalid state transition: ${currentStatus} → ${newStatus}.`,
+    );
+  }
+}
+
+function isTerminal(status: TaskRecord["status"]): boolean {
+  return TERMINAL_TASK_STATUSES.has(status);
+}
 
 export class TaskStore {
   private readonly tasks = new Map<string, TaskRecord>();
@@ -98,6 +128,13 @@ export class TaskStore {
           `Idempotency key already exists: ${params.idempotency_key}`,
         );
       }
+    }
+
+    // Reject creation of tasks in terminal state
+    if (isTerminal(params.result.status)) {
+      throw new Error(
+        `Cannot create task in terminal state: ${params.result.status}`,
+      );
     }
 
     const record: TaskRecord = {
@@ -432,7 +469,7 @@ export class TaskStore {
       );
     }
     if (existing.status === nextStatus) {
-      if (!TERMINAL_TASK_STATUSES.has(existing.status)) {
+      if (!isTerminal(existing.status)) {
         return;
       }
       const resultChanged =
@@ -449,18 +486,8 @@ export class TaskStore {
       return;
     }
 
-    if (TERMINAL_TASK_STATUSES.has(existing.status)) {
-      throw new Error(
-        `Terminal task state transition is not allowed for task ${existing.task_id}: ${existing.status} -> ${nextStatus}.`,
-      );
-    }
-
-    const allowed = ALLOWED_TRANSITIONS[existing.status];
-    if (!allowed.includes(nextStatus)) {
-      throw new Error(
-        `Invalid task state transition for task ${existing.task_id}: ${existing.status} -> ${nextStatus}.`,
-      );
-    }
+    // Atomic guard: enforce formal transition table
+    assertValidTransition(existing.status, nextStatus);
 
     if (updates.result === undefined || updates.receipt === undefined) {
       throw new Error(

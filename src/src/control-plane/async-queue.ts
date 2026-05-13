@@ -9,6 +9,14 @@ export interface DeadLetterRecord {
   timestamp: string;
 }
 
+export interface QuarantinedJob {
+  jobId: string;
+  taskId: string;
+  tenantId?: string;
+  reason: string;
+  quarantinedAt: string;
+}
+
 interface QueueJob {
   taskId: string;
   tenantId?: string;
@@ -42,8 +50,16 @@ export interface AsyncQueueStats {
 }
 
 export class AsyncTaskQueue {
+  /**
+   * Worker lease prevents duplicate processing. If a worker crashes,
+   * the lease expires and another worker picks up the job.
+   */
+  private static readonly LEASE_TIMEOUT_MS = 30_000;
+
   private readonly queue: QueueJob[] = [];
   private readonly deadLetters: DeadLetterRecord[] = [];
+  private readonly leasedJobs = new Map<string, number>();
+  private readonly quarantinedJobs: QuarantinedJob[] = [];
   private readonly maxAttempts: number;
   private readonly retryDelayMs: number;
   private readonly maxRetryDelayMs: number;
@@ -61,8 +77,13 @@ export class AsyncTaskQueue {
   constructor(options: AsyncTaskQueueOptions = {}) {
     this.maxAttempts = Math.max(1, options.maxAttempts ?? 3);
     this.retryDelayMs = Math.max(1, options.retryDelayMs ?? 50);
-    this.maxRetryDelayMs = Math.max(this.retryDelayMs, options.maxRetryDelayMs ?? 5_000);
-    this.retryJitterRatio = this.clampJitterRatio(options.retryJitterRatio ?? 0.2);
+    this.maxRetryDelayMs = Math.max(
+      this.retryDelayMs,
+      options.maxRetryDelayMs ?? 5_000,
+    );
+    this.retryJitterRatio = this.clampJitterRatio(
+      options.retryJitterRatio ?? 0.2,
+    );
     this.maxConcurrent = Math.max(1, options.maxConcurrent ?? 4);
     this.maxConcurrentPerTenant =
       typeof options.maxConcurrentPerTenant === "number"
@@ -89,7 +110,7 @@ export class AsyncTaskQueue {
       tenantId: params.tenantId,
       attempt: 1,
       run: params.run,
-      onDeadLetter: params.onDeadLetter
+      onDeadLetter: params.onDeadLetter,
     });
     this.kickoff();
     return { accepted: true };
@@ -105,6 +126,27 @@ export class AsyncTaskQueue {
 
   listDeadLettersByTenant(tenantId: string): DeadLetterRecord[] {
     return this.deadLetters.filter((record) => record.tenant_id === tenantId);
+  }
+
+  quarantineJob(taskId: string, reason: string, tenantId?: string): void {
+    const record: QuarantinedJob = {
+      jobId: `${taskId}-${Date.now()}`,
+      taskId,
+      tenantId,
+      reason,
+      quarantinedAt: new Date().toISOString(),
+    };
+    this.quarantinedJobs.push(record);
+  }
+
+  listQuarantinedJobs(): QuarantinedJob[] {
+    return [...this.quarantinedJobs];
+  }
+
+  listQuarantinedJobsByTenant(tenantId: string): QuarantinedJob[] {
+    return this.quarantinedJobs.filter(
+      (record) => record.tenantId === tenantId,
+    );
   }
 
   getStats(): AsyncQueueStats {
@@ -123,7 +165,7 @@ export class AsyncTaskQueue {
       max_concurrent_per_tenant: this.maxConcurrentPerTenant ?? null,
       max_queue_depth: this.maxQueueDepth,
       dead_letter_count: this.deadLetters.length,
-      oldest_dead_letter_age_ms: oldestAgeMs
+      oldest_dead_letter_age_ms: oldestAgeMs,
     };
   }
 
@@ -136,6 +178,9 @@ export class AsyncTaskQueue {
   }
 
   private maybeRunJobs(): void {
+    // Check for expired leases and clean up
+    this.reapExpiredLeases();
+
     while (this.inflight < this.maxConcurrent) {
       const index = this.findRunnableJobIndex();
       if (index < 0) {
@@ -153,20 +198,48 @@ export class AsyncTaskQueue {
     }
   }
 
+  /**
+   * Reaps expired leases. If a worker crashes, the lease expires
+   * and another worker can pick up the job.
+   */
+  private reapExpiredLeases(): void {
+    const now = Date.now();
+    const expired: string[] = [];
+    for (const [taskId, leasedAt] of this.leasedJobs.entries()) {
+      if (now - leasedAt > AsyncTaskQueue.LEASE_TIMEOUT_MS) {
+        expired.push(taskId);
+      }
+    }
+    for (const taskId of expired) {
+      this.leasedJobs.delete(taskId);
+      this.inflight = Math.max(0, this.inflight - 1);
+    }
+    if (expired.length > 0 && this.queue.length === 0 && this.inflight === 0) {
+      this.processing = false;
+    }
+  }
+
   private startJob(job: QueueJob): void {
     this.inflight += 1;
     const tenantKey = this.resolveTenantKey(job.tenantId);
-    this.inflightByTenant.set(tenantKey, (this.inflightByTenant.get(tenantKey) ?? 0) + 1);
+    this.inflightByTenant.set(
+      tenantKey,
+      (this.inflightByTenant.get(tenantKey) ?? 0) + 1,
+    );
+
+    // Track lease to prevent duplicate processing after worker crashes
+    this.leasedJobs.set(job.taskId, Date.now());
 
     void (async () => {
       try {
         await job.run();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Async queue job failed.";
+        const message =
+          error instanceof Error ? error.message : "Async queue job failed.";
         if (job.attempt < this.maxAttempts) {
           this.requeue({
             ...job,
-            attempt: job.attempt + 1
+            attempt: job.attempt + 1,
           });
         } else {
           const record: DeadLetterRecord = {
@@ -174,26 +247,35 @@ export class AsyncTaskQueue {
             tenant_id: job.tenantId,
             attempts: job.attempt,
             error: message,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           };
           this.deadLetters.push(record);
           this.trimDeadLetters();
           this.persistDeadLetters();
+          // Poison-message quarantine: isolate jobs that exceed max attempts
+          this.quarantineJob(
+            job.taskId,
+            `Exceeded max attempts (${job.attempt}/${this.maxAttempts}): ${message}`,
+            job.tenantId,
+          );
           job.onDeadLetter(record);
         }
       } finally {
-        this.finishJob(tenantKey);
+        this.finishJob(tenantKey, job.taskId);
       }
     })();
   }
 
-  private finishJob(tenantKey: string): void {
+  private finishJob(tenantKey: string, taskId?: string): void {
     this.inflight = Math.max(0, this.inflight - 1);
     const current = this.inflightByTenant.get(tenantKey) ?? 0;
     if (current <= 1) {
       this.inflightByTenant.delete(tenantKey);
     } else {
       this.inflightByTenant.set(tenantKey, current - 1);
+    }
+    if (taskId) {
+      this.leasedJobs.delete(taskId);
     }
     this.maybeRunJobs();
   }
@@ -217,7 +299,10 @@ export class AsyncTaskQueue {
   }
 
   private requeue(job: QueueJob): void {
-    const baseDelay = Math.min(this.maxRetryDelayMs, this.retryDelayMs * 2 ** (job.attempt - 1));
+    const baseDelay = Math.min(
+      this.maxRetryDelayMs,
+      this.retryDelayMs * 2 ** (job.attempt - 1),
+    );
     const jitterMultiplier = 1 + this.jitterDelta();
     const retryDelay = Math.max(1, Math.round(baseDelay * jitterMultiplier));
     setTimeout(() => {
@@ -227,7 +312,7 @@ export class AsyncTaskQueue {
           tenant_id: job.tenantId,
           attempts: job.attempt,
           error: "Queue capacity reached while retrying job.",
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
         this.deadLetters.push(record);
         this.trimDeadLetters();
@@ -276,7 +361,9 @@ export class AsyncTaskQueue {
     try {
       const raw = readFileSync(this.deadLetterStorePath, "utf8");
       const parsed = JSON.parse(raw) as { dead_letters?: DeadLetterRecord[] };
-      const records = Array.isArray(parsed.dead_letters) ? parsed.dead_letters : [];
+      const records = Array.isArray(parsed.dead_letters)
+        ? parsed.dead_letters
+        : [];
       this.deadLetters.push(...records);
       this.trimDeadLetters();
     } catch {
@@ -289,11 +376,14 @@ export class AsyncTaskQueue {
       return;
     }
 
-    mkdirSync(dirname(this.deadLetterStorePath), { recursive: true, mode: 0o700 });
+    mkdirSync(dirname(this.deadLetterStorePath), {
+      recursive: true,
+      mode: 0o700,
+    });
     writeFileSync(
       this.deadLetterStorePath,
       JSON.stringify({ dead_letters: this.deadLetters }, null, 2),
-      { encoding: "utf8", mode: 0o600 }
+      { encoding: "utf8", mode: 0o600 },
     );
   }
 

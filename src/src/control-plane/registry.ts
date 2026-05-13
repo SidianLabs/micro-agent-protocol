@@ -1,7 +1,9 @@
 import type { AgentDescriptor, CapabilityDescriptor } from "../types.js";
 import {
   signAgentDescriptor,
-  verifyAgentDescriptorSignature
+  verifyAgentDescriptorSignature,
+  verifyTrustDomain,
+  getTrustAnchors,
 } from "../security/signing.js";
 import { validateAgentDescriptor } from "../validation/schema-validator.js";
 
@@ -9,6 +11,17 @@ export class AgentRegistry {
   private readonly agents = new Map<string, AgentDescriptor>();
 
   register(descriptor: AgentDescriptor): void {
+    // Validate trust domain if trust anchors are configured
+    const trustAnchors = getTrustAnchors();
+    if (trustAnchors.length > 0 && descriptor.domain) {
+      if (!verifyTrustDomain(descriptor.domain)) {
+        throw new Error(
+          `Trust domain "${descriptor.domain}" is not trusted. ` +
+            `Agent "${descriptor.agent_id}" cannot be registered.`,
+        );
+      }
+    }
+
     const signedDescriptor =
       descriptor.descriptor_signature &&
       descriptor.descriptor_key_id &&
@@ -16,12 +29,14 @@ export class AgentRegistry {
         ? descriptor
         : {
             ...descriptor,
-            ...signAgentDescriptor(descriptor)
+            ...signAgentDescriptor(descriptor),
           };
 
     const validated = validateAgentDescriptor(signedDescriptor);
     if (!verifyAgentDescriptorSignature(validated)) {
-      throw new Error(`Invalid MAP agent descriptor signature for ${validated.agent_id}.`);
+      throw new Error(
+        `Invalid MAP agent descriptor signature for ${validated.agent_id}.`,
+      );
     }
 
     this.agents.set(validated.agent_id, validated);
@@ -40,12 +55,17 @@ export class AgentRegistry {
   }
 
   findByCapability(capability: string): AgentDescriptor[] {
-    return this.list().filter((agent) => agent.capabilities.includes(capability));
+    return this.list().filter((agent) =>
+      agent.capabilities.includes(capability),
+    );
   }
 
-  getCapabilityDescriptor(agentId: string, capability: string): CapabilityDescriptor | undefined {
+  getCapabilityDescriptor(
+    agentId: string,
+    capability: string,
+  ): CapabilityDescriptor | undefined {
     return this.get(agentId)?.capability_descriptors?.find(
-      (descriptor) => descriptor.name === capability
+      (descriptor) => descriptor.name === capability,
     );
   }
 }
