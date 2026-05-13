@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/map-core.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/map-core.schema.json",
   "title": "MAP Protocol Core Types",
   "description": "Core type definitions shared across all MAP schemas",
   "type": "object",
@@ -360,7 +360,7 @@
         "negotiated_schema_version": { "$ref": "#/definitions/semantic_version" },
         "requested_schema_version": { "$ref": "#/definitions/semantic_version" },
         "executed_schema_version": { "$ref": "#/definitions/semantic_version" },
-        "negotiation": { "$ref": "https://map-spec.dev/schemas/invocation-negotiation.schema.json" },
+        "negotiation": { "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json" },
         "redactions_applied": {
           "type": "array",
           "items": { "type": "string" },
@@ -401,7 +401,7 @@
         "result_hash": { "type": "string", "minLength": 1 },
         "requested_schema_version": { "$ref": "#/definitions/semantic_version" },
         "executed_schema_version": { "$ref": "#/definitions/semantic_version" },
-        "negotiation": { "$ref": "https://map-spec.dev/schemas/invocation-negotiation.schema.json" },
+        "negotiation": { "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json" },
         "signature": { "type": "string", "minLength": 1 }
       }
     },

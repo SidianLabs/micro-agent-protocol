@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for suggesting a feature! Please fill out this form.
 
-        For **protocol changes**, please open a [Discussion](https://github.com/mapprotocol/map/discussions)
+        For **protocol changes**, please open a [Discussion](https://github.com/SidianLabs/micro-agent-protocol/discussions)
         first to gauge community interest before filing an issue.
 
         For **SDK-specific features**, please select the appropriate SDK component below.
@@ -52,9 +52,9 @@ body:
       options:
         - Protocol Specification
         - Reference Implementation
-        - TypeScript SDK (@mapprotocol/sdk)
+        - TypeScript SDK (@sidianlabs/map-sdk)
         - Python SDK (@mapprotocol/python)
-        - Go SDK (github.com/mapprotocol/go)
+        - Go SDK (github.com/SidianLabs/micro-agent-protocol)
         - Documentation
         - OpenAPI Schema
         - Conformance Tests

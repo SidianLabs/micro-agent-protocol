@@ -33,4 +33,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Retry logic needs more testing
 - Full protocol spec alignment in progress (~80%)
 
-[0.1.0]: https://github.com/mapprotocol/map/releases/tag/sdk/typescript/v0.1.0
+[0.1.0]: https://github.com/SidianLabs/micro-agent-protocol/releases/tag/sdk/typescript/v0.1.0

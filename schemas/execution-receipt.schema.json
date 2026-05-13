@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/execution-receipt.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/execution-receipt.schema.json",
   "title": "MAP Execution Receipt",
   "type": "object",
   "additionalProperties": false,

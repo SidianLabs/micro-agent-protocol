@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/agent-descriptor.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/agent-descriptor.schema.json",
   "title": "MAP Agent Descriptor",
   "type": "object",
   "additionalProperties": false,

@@ -27,7 +27,7 @@ func TestClientOptions(t *testing.T) {
 	signer := &testSigner{keyID: "test-key"}
 
 	client, err := NewClient(
-		WithBaseURL("https://test.mapprotocol.io"),
+		WithBaseURL("http://localhost:8787"),
 		WithTimeout(10*time.Second),
 		WithSigner(signer),
 	)

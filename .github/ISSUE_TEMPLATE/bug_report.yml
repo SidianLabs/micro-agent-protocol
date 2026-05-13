@@ -9,7 +9,7 @@ body:
 
         **Important**: This is for bugs in the MAP Protocol itself (specification,
         reference implementation, or official SDKs). For implementation help with
-        your own code, please use [GitHub Discussions](https://github.com/mapprotocol/map/discussions).
+        your own code, please use [GitHub Discussions](https://github.com/SidianLabs/micro-agent-protocol/discussions).
 
   - type: textarea
     id: description
@@ -29,9 +29,9 @@ body:
       options:
         - Protocol Specification
         - Reference Implementation
-        - TypeScript SDK (@mapprotocol/sdk)
+        - TypeScript SDK (@sidianlabs/map-sdk)
         - Python SDK (@mapprotocol/python)
-        - Go SDK (github.com/mapprotocol/go)
+        - Go SDK (github.com/SidianLabs/micro-agent-protocol)
         - Documentation
         - OpenAPI Schema
         - Other

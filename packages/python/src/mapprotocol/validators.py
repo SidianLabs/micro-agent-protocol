@@ -30,7 +30,7 @@ def _load_schema(schema_name: str) -> Dict[str, Any]:
     schema_map = {
         "task-envelope": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://map-spec.dev/schemas/task-envelope.schema.json",
+            "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json",
             "title": "MAP Task Envelope",
             "type": "object",
             "additionalProperties": False,
@@ -123,7 +123,7 @@ def _load_schema(schema_name: str) -> Dict[str, Any]:
         },
         "dispatch-request": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://map-spec.dev/schemas/dispatch-request.schema.json",
+            "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/dispatch-request.schema.json",
             "title": "MAP Dispatch Request",
             "type": "object",
             "additionalProperties": False,
@@ -144,7 +144,7 @@ def _load_schema(schema_name: str) -> Dict[str, Any]:
         },
         "approval-request": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://map-spec.dev/schemas/approval-request.schema.json",
+            "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/approval-request.schema.json",
             "title": "MAP Approval Request",
             "type": "object",
             "additionalProperties": False,
@@ -167,7 +167,7 @@ def _load_schema(schema_name: str) -> Dict[str, Any]:
         },
         "agent-descriptor": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://map-spec.dev/schemas/agent-descriptor.schema.json",
+            "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/agent-descriptor.schema.json",
             "title": "MAP Agent Descriptor",
             "type": "object",
             "additionalProperties": False,
@@ -234,7 +234,7 @@ def _load_schema(schema_name: str) -> Dict[str, Any]:
         },
         "execution-receipt": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://map-spec.dev/schemas/execution-receipt.schema.json",
+            "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/execution-receipt.schema.json",
             "title": "MAP Execution Receipt",
             "type": "object",
             "additionalProperties": False,
@@ -268,7 +268,7 @@ def _load_schema(schema_name: str) -> Dict[str, Any]:
         },
         "result-package": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://map-spec.dev/schemas/result-package.schema.json",
+            "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/result-package.schema.json",
             "title": "MAP Result Package",
             "type": "object",
             "additionalProperties": False,

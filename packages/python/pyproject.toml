@@ -14,7 +14,7 @@ description = "Official Python SDK for Micro Agent Protocol (MAP)"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "MAP Protocol Team" }
+    { name = "Sidian Labs" }
 ]
 requires-python = ">=3.9"
 keywords = ["map", "micro-agent-protocol", "ai", "agents", "delegation"]
@@ -23,9 +23,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mapprotocol/map"
-Repository = "https://github.com/mapprotocol/map.git"
-Issues = "https://github.com/mapprotocol/map/issues"
+Homepage = "https://github.com/SidianLabs/micro-agent-protocol"
+Repository = "https://github.com/SidianLabs/micro-agent-protocol.git"
+Issues = "https://github.com/SidianLabs/micro-agent-protocol/issues"
 
 [project.optional-dependencies]
 dev = [

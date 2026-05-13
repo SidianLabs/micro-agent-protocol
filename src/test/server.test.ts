@@ -2468,9 +2468,9 @@ test("server surfaces lifecycle transition invariant failures as invalid_request
       capabilities: ["db.read.lifecycle_mismatch"],
       risk_level: "medium",
       input_schema_ref:
-        "https://map-spec.dev/schemas/task-envelope.schema.json",
+        "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json",
       output_schema_ref:
-        "https://map-spec.dev/schemas/result-package.schema.json",
+        "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/result-package.schema.json",
       supported_execution_modes: ["read"],
       visibility_modes: ["summary", "debug"],
     },
@@ -2620,9 +2620,9 @@ test("server does not persist task when async queue is at capacity", async () =>
       capabilities: ["db.read.slow_async"],
       risk_level: "medium",
       input_schema_ref:
-        "https://map-spec.dev/schemas/task-envelope.schema.json",
+        "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json",
       output_schema_ref:
-        "https://map-spec.dev/schemas/result-package.schema.json",
+        "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/result-package.schema.json",
       supported_execution_modes: ["read"],
       visibility_modes: ["summary", "debug"],
     },

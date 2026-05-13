@@ -9,7 +9,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/mapprotocol/go/mapproto"
+	"github.com/SidianLabs/micro-agent-protocol/mapproto"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 	)
 
 	client, err := mapproto.NewClient(
-		mapproto.WithBaseURL("https://api.mapprotocol.io"),
+		mapproto.WithBaseURL("http://localhost:8787"),
 		mapproto.WithTimeout(30*time.Second),
 		mapproto.WithSigner(signer),
 	)

@@ -1,6 +1,8 @@
-# Micro Agent Protocol (MAP)
+# Micro Agent Protocol (MAP) — by Sidian Labs © 2026
 
 Micro Agent Protocol (MAP) is a framework and protocol standard for deploying small, company-owned micro-agents between external AI assistants and sensitive systems.
+
+**Primary Maintainer**: Bhawesh Bhaskar (bhawesh@sidian.dev)
 
 MAP is designed for a world where users interact with a general assistant such as ChatGPT, Claude, Copilot, or an enterprise orchestration layer, but the real execution authority remains with the organization that owns the underlying system.
 
@@ -170,7 +172,7 @@ MAP Protocol provides official SDKs for multiple languages:
 The TypeScript SDK is not published to npm yet. Use it from this repository for now:
 
 ```bash
-git clone https://github.com/BHAWESHBHASKAR/micro-agent-protocol.git
+git clone https://github.com/SidianLabs/micro-agent-protocol.git
 cd micro-agent-protocol/packages/typescript
 npm install
 npm run build
@@ -179,7 +181,7 @@ npm run build
 ```typescript
 import { MapAssistantClient } from './src';
 
-const client = MapAssistantClient.forBaseUrl('https://api.mapprotocol.ai');
+const client = MapAssistantClient.forBaseUrl('http://localhost:8787');
 client.configureSigning('key-id', 'secret');
 
 const result = await client.dispatch({
@@ -195,7 +197,7 @@ The TypeScript SDK is the canonical SDK surface currently aligned with the refer
 The Python SDK is not published to PyPI yet. Use a local editable install from this repository:
 
 ```bash
-git clone https://github.com/BHAWESHBHASKAR/micro-agent-protocol.git
+git clone https://github.com/SidianLabs/micro-agent-protocol.git
 cd micro-agent-protocol/packages/python
 pip install -e .
 ```
@@ -203,7 +205,7 @@ pip install -e .
 ```python
 from mapprotocol import Client
 
-client = Client(base_url="https://api.mapprotocol.ai")
+client = Client(base_url="http://localhost:8787")
 client.configure_signing(key_id="key-id", secret="secret")
 result = client.dispatch({ ... })
 ```
@@ -215,13 +217,13 @@ The Python SDK is currently a preview surface and is not yet fully aligned with 
 The Go SDK is not published as a released module yet. Use it from a local checkout for now:
 
 ```bash
-git clone https://github.com/BHAWESHBHASKAR/micro-agent-protocol.git
+git clone https://github.com/SidianLabs/micro-agent-protocol.git
 cd micro-agent-protocol/packages/go
 go test ./...
 ```
 
 ```go
-client := mapproto.NewClient("https://api.mapprotocol.ai")
+client := mapproto.NewClient("http://localhost:8787")
 client.ConfigureSigning("key-id", "secret")
 result, err := client.Dispatch(req)
 ```
@@ -318,8 +320,7 @@ This repository currently contains the source implementation of MAP Protocol, in
 ### Quick Start
 
 ```bash
-# Clone and test from source
-git clone https://github.com/BHAWESHBHASKAR/micro-agent-protocol.git
+git clone https://github.com/SidianLabs/micro-agent-protocol.git
 cd micro-agent-protocol
 npm install
 cd packages/typescript && npm install && npm test
@@ -332,3 +333,7 @@ MAP Protocol is licensed under Apache 2.0. See [LICENSE](./LICENSE) for details.
 ## Working Definition
 
 Micro Agent Protocol is a framework and protocol standard that lets organizations deploy small, policy-controlled micro-agents between external AI assistants and sensitive systems, so execution stays local, authority stays bounded, and context stays minimal.
+
+---
+
+© 2026 Sidian Labs.

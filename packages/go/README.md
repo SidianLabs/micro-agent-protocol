@@ -25,7 +25,7 @@ import (
     "log"
     "time"
 
-    "github.com/mapprotocol/go/mapproto"
+    "github.com/SidianLabs/micro-agent-protocol/mapproto"
 )
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
     )
 
     client, err := mapproto.NewClient(
-        mapproto.WithBaseURL("https://api.mapprotocol.io"),
+        mapproto.WithBaseURL("http://localhost:8787"),
         mapproto.WithTimeout(30*time.Second),
         mapproto.WithSigner(signer),
     )
@@ -57,8 +57,8 @@ func main() {
 ## Client Options
 
 ```go
-// Base URL (defaults to https://api.mapprotocol.io)
-mapproto.WithBaseURL("https://api.mapprotocol.io")
+// Base URL (defaults to http://localhost:8787)
+mapproto.WithBaseURL("http://localhost:8787")
 
 // Request timeout
 mapproto.WithTimeout(30 * time.Second)

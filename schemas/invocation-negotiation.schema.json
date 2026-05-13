@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/invocation-negotiation.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json",
   "title": "MAP Invocation Negotiation",
   "type": "object",
   "additionalProperties": false,

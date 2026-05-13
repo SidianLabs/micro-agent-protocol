@@ -5,7 +5,7 @@
 
 export const agentDescriptorSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/agent-descriptor.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/agent-descriptor.schema.json",
   "title": "MAP Agent Descriptor",
   "type": "object",
   "additionalProperties": false,
@@ -317,7 +317,7 @@ export const agentDescriptorSchema = {
 
 export const approvalRequestSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/approval-request.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/approval-request.schema.json",
   "title": "MAP Approval Request",
   "type": "object",
   "additionalProperties": false,
@@ -362,14 +362,14 @@ export const approvalRequestSchema = {
       }
     },
     "envelope": {
-      "$ref": "https://map-spec.dev/schemas/task-envelope.schema.json"
+      "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json"
     }
   }
 } as const;
 
 export const delegationTokenSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/delegation-token.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/delegation-token.schema.json",
   "title": "MAP Delegation Token",
   "type": "object",
   "additionalProperties": false,
@@ -501,7 +501,7 @@ export const delegationTokenSchema = {
 
 export const dispatchRequestSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/dispatch-request.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/dispatch-request.schema.json",
   "title": "MAP Dispatch Request",
   "type": "object",
   "additionalProperties": false,
@@ -536,14 +536,14 @@ export const dispatchRequestSchema = {
       }
     },
     "envelope": {
-      "$ref": "https://map-spec.dev/schemas/task-envelope.schema.json"
+      "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json"
     }
   }
 } as const;
 
 export const errorResponseSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/error-response.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/error-response.schema.json",
   "title": "MAP Error Response",
   "type": "object",
   "additionalProperties": false,
@@ -698,7 +698,7 @@ export const errorResponseSchema = {
 
 export const executionReceiptSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/execution-receipt.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/execution-receipt.schema.json",
   "title": "MAP Execution Receipt",
   "type": "object",
   "additionalProperties": false,
@@ -859,7 +859,7 @@ export const executionReceiptSchema = {
 
 export const invocationNegotiationSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/invocation-negotiation.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json",
   "title": "MAP Invocation Negotiation",
   "type": "object",
   "additionalProperties": false,
@@ -947,7 +947,7 @@ export const invocationNegotiationSchema = {
 
 export const mapCoreSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/map-core.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/map-core.schema.json",
   "title": "MAP Protocol Core Types",
   "description": "Core type definitions shared across all MAP schemas",
   "type": "object",
@@ -1575,7 +1575,7 @@ export const mapCoreSchema = {
           "$ref": "#/definitions/semantic_version"
         },
         "negotiation": {
-          "$ref": "https://map-spec.dev/schemas/invocation-negotiation.schema.json"
+          "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json"
         },
         "redactions_applied": {
           "type": "array",
@@ -1657,7 +1657,7 @@ export const mapCoreSchema = {
           "$ref": "#/definitions/semantic_version"
         },
         "negotiation": {
-          "$ref": "https://map-spec.dev/schemas/invocation-negotiation.schema.json"
+          "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json"
         },
         "signature": {
           "type": "string",
@@ -1744,7 +1744,7 @@ export const mapCoreSchema = {
 
 export const paginatedResultSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/paginated-result.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/paginated-result.schema.json",
   "title": "MAP Paginated Result",
   "type": "object",
   "additionalProperties": false,
@@ -1787,7 +1787,7 @@ export const paginatedResultSchema = {
 
 export const providerDiscoverySchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/provider-discovery.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/provider-discovery.schema.json",
   "title": "MAP Provider Discovery Document",
   "description": "Bootstrap discovery document for a MAP provider trust domain.",
   "type": "object",
@@ -1962,7 +1962,7 @@ export const providerDiscoverySchema = {
 
 export const resultPackageSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/result-package.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/result-package.schema.json",
   "title": "MAP Result Package",
   "type": "object",
   "additionalProperties": false,
@@ -2112,7 +2112,7 @@ export const resultPackageSchema = {
 
 export const taskEnvelopeSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/task-envelope.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json",
   "title": "MAP Task Envelope",
   "type": "object",
   "additionalProperties": false,

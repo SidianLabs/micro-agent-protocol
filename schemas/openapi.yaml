@@ -13,18 +13,18 @@ info:
     name: Apache-2.0
     identifier: Apache-2.0
   contact:
-    name: MAP Protocol Authors
-    url: https://github.com/mapprotocol/map
+    name: Sidian Labs
+    url: https://github.com/SidianLabs/micro-agent-protocol
     email: https://github.com/BHAWESHBHASKAR/micro-agent-protocol/issues
   x-protocol:
     domain: micro-agent-protocol
-    specification: https://map-protocol.dev/spec
-    repository: https://github.com/mapprotocol/map
+    specification: https://github.com/SidianLabs/micro-agent-protocol
+    repository: https://github.com/SidianLabs/micro-agent-protocol
 
 servers:
-  - url: https://api.map-protocol.dev
+  - url: http://localhost:8787
     description: Production server
-  - url: https://staging.map-protocol.dev
+  - url: http://localhost:8787
     description: Staging server
   - url: http://localhost:8787
     description: Local development

@@ -151,7 +151,7 @@ jobs:
     needs: [prepare]
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@mapprotocol/sdk
+      url: https://www.npmjs.com/package/@sidianlabs/map-sdk
     if: needs.prepare.outputs.release_type == 'typescript' || needs.prepare.outputs.is_full == 'true'
 
     steps:
@@ -202,7 +202,7 @@ jobs:
     needs: [prepare]
     environment:
       name: pypi
-      url: https://pypi.org/project/mapprotocol
+      url: https://pypi.org/project/sidianlabs-map
     if: needs.prepare.outputs.release_type == 'python' || needs.prepare.outputs.is_full == 'true'
 
     steps:
@@ -274,7 +274,7 @@ jobs:
       - name: Go Proxy Publish
         run: |
           echo "Go module published to proxy"
-          echo "Module: github.com/mapprotocol/go"
+          echo "Module: github.com/SidianLabs/micro-agent-protocol"
           echo "Version: ${{ github.ref_name }}"
 
   # ===========================================================================
@@ -311,24 +311,24 @@ jobs:
 
           ### TypeScript
           \`\`\`bash
-          npm install @mapprotocol/sdk@$VERSION
+          npm install @sidianlabs/map-sdk@$VERSION
           \`\`\`
 
           ### Python
           \`\`\`bash
-          pip install mapprotocol==$VERSION
+          pip install sidianlabs-map==$VERSION
           \`\`\`
 
           ### Go
           \`\`\`bash
-          go get github.com/mapprotocol/go@v$VERSION
+          go get github.com/SidianLabs/micro-agent-protocol@v$VERSION
           \`\`\`
 
           ## Docker
 
           \`\`\`bash
-          docker pull mapprotocol/reference:$VERSION
-          docker pull mapprotocol/reference:latest
+          docker pull sidianlabs/map-reference:$VERSION
+          docker pull sidianlabs/map-reference:latest
           \`\`\`
 
           ## What's Changed
@@ -379,9 +379,9 @@ jobs:
           echo "Released at: $(date)"
           echo ""
           echo "Published to:"
-          echo "  - npm: @mapprotocol/sdk@${{ github.ref_name }}"
-          echo "  - PyPI: mapprotocol==${{ github.ref_name }}"
-          echo "  - Go: github.com/mapprotocol/go@v${{ github.ref_name }}"
+          echo "  - npm: @sidianlabs/map-sdk@${{ github.ref_name }}"
+          echo "  - PyPI: sidianlabs-map==${{ github.ref_name }}"
+          echo "  - Go: github.com/SidianLabs/micro-agent-protocol@v${{ github.ref_name }}"
           echo ""
           echo "GitHub Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
           echo "=============================================="

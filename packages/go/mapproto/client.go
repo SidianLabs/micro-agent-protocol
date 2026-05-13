@@ -39,7 +39,7 @@ type ClientOption func(*ClientOptions)
 // NewClient creates a new MAP client with options
 func NewClient(opts ...ClientOption) (*Client, error) {
 	options := &ClientOptions{
-		BaseURL:   "https://api.mapprotocol.io",
+		BaseURL:   "http://localhost:8787",
 		Timeout:   30 * time.Second,
 		Transport: NewHTTPTransport(nil),
 	}

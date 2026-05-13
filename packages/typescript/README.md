@@ -16,12 +16,12 @@ npm run build
 ## Quick Start
 
 ```typescript
-import { MapAssistantClient, HMACSigner } from '@mapprotocol/sdk';
+import { MapAssistantClient, HMACSigner } from '@sidianlabs/map-sdk';
 
 const signer = new HMACSigner('your-secret-key', 'key-id');
 
 const client = new MapAssistantClient({
-  baseUrl: 'https://api.mapprotocol.ai',
+  baseUrl: 'http://localhost:8787',
   signer,
   timeout: 30_000,
 });
@@ -54,7 +54,7 @@ console.log('Result:', result);
 
 ```typescript
 const client = new MapAssistantClient({
-  baseUrl: 'https://api.mapprotocol.ai',  // Required
+  baseUrl: 'http://localhost:8787',  // Required
   timeout: 30_000,                          // Default 30s
   retryAttempts: 3,                         // Default 3
   retryDelayMs: 1000,                        // Default 1s
@@ -69,7 +69,7 @@ const client = new MapAssistantClient({
 ### HMAC Signer
 
 ```typescript
-import { HMACSigner } from '@mapprotocol/sdk';
+import { HMACSigner } from '@sidianlabs/map-sdk';
 
 const signer = new HMACSigner('secret-key', 'key-id');
 ```
@@ -77,7 +77,7 @@ const signer = new HMACSigner('secret-key', 'key-id');
 ### RSA Signer
 
 ```typescript
-import { RSASigner } from '@mapprotocol/sdk';
+import { RSASigner } from '@sidianlabs/map-sdk';
 
 const signer = new RSASigner(privateKeyPEM, 'key-id');
 ```
@@ -85,7 +85,7 @@ const signer = new RSASigner(privateKeyPEM, 'key-id');
 ### HTTP Signer (for signed HTTP requests)
 
 ```typescript
-import { HTTPSigner } from '@mapprotocol/sdk';
+import { HTTPSigner } from '@sidianlabs/map-sdk';
 
 const signer = new HTTPSigner('key-id', 'secret');
 client.configureSigning('key-id', 'secret');
@@ -96,10 +96,10 @@ client.configureSigning('key-id', 'secret');
 For real-time dispatch and task status streaming:
 
 ```typescript
-import { WebSocketTransport } from '@mapprotocol/sdk';
+import { WebSocketTransport } from '@sidianlabs/map-sdk';
 
 // Create transport
-const transport = new WebSocketTransport('wss://api.mapprotocol.ai/ws', {
+const transport = new WebSocketTransport('ws://localhost:8787', {
   timeout: 30000,
   reconnect: true,
   reconnectIntervalMs: 1000,
@@ -174,7 +174,7 @@ import {
   MapRetryableError,
   ErrorCode,
   ERROR_CODE_RETRYABLE_MAP,
-} from '@mapprotocol/sdk';
+} from '@sidianlabs/map-sdk';
 
 try {
   await client.dispatch({ ... });
@@ -234,7 +234,7 @@ import {
   InMemorySpanExporter,
   SpanKind,
   SpanStatus,
-} from '@mapprotocol/sdk';
+} from '@sidianlabs/map-sdk';
 
 // Create tracer with exporter
 const tracer = new Tracer({
@@ -295,7 +295,7 @@ type SpanStatus = 'ok' | 'error' | 'uninstrumented';
 Collect and export metrics in Prometheus format:
 
 ```typescript
-import { PrometheusMetricsCollector } from '@mapprotocol/sdk';
+import { PrometheusMetricsCollector } from '@sidianlabs/map-sdk';
 
 const metrics = new PrometheusMetricsCollector({
   prefix: 'map',
@@ -337,14 +337,14 @@ import {
   HTTPHealthCheck,
   WebSocketHealthCheck,
   FunctionalHealthCheck,
-} from '@mapprotocol/sdk';
+} from '@sidianlabs/map-sdk';
 
 // Build health checks
 const healthChecker = new HealthCheckBuilder()
   .withServiceName('payment-agent')
   .withVersion({ protocol: '1.0', schema: '1.0', transport: '1.0' })
-  .addHTTP('api', 'https://api.mapprotocol.ai/health')
-  .addWebSocket('ws', 'wss://api.mapprotocol.ai/ws')
+  .addHTTP('api', 'http://localhost:8787/health')
+  .addWebSocket('ws', 'ws://localhost:8787')
   .addCheck('custom', async () => {
     // Custom health check logic
     return {
@@ -395,7 +395,7 @@ new FunctionalHealthCheck('custom', async () => {
 Convenience class for integrated observability:
 
 ```typescript
-import { ObservabilityManager, LogLevel } from '@mapprotocol/sdk';
+import { ObservabilityManager, LogLevel } from '@sidianlabs/map-sdk';
 
 const obs = new ObservabilityManager({
   serviceName: 'payment-agent',
@@ -413,20 +413,20 @@ obs.recordAgentInvocation('agent-payment', 'payment.process', 120);
 ## Storage Adapters
 
 ```typescript
-import { SQLiteStorage } from '@mapprotocol/sdk';
+import { SQLiteStorage } from '@sidianlabs/map-sdk';
 
 // Use SQLite for persistence
 const storage = new SQLiteStorage('./map.db');
 
 // Or in-memory for testing
-import { InMemoryStorage } from '@mapprotocol/sdk';
+import { InMemoryStorage } from '@sidianlabs/map-sdk';
 const storage = new InMemoryStorage();
 ```
 
 ## Logging
 
 ```typescript
-import { MAPLogger, LogLevel } from '@mapprotocol/sdk';
+import { MAPLogger, LogLevel } from '@sidianlabs/map-sdk';
 
 const logger = new MAPLogger({
   level: LogLevel.INFO,
@@ -443,7 +443,7 @@ import {
   validateTaskEnvelope,
   validateDispatchRequest,
   validateExecutionReceipt,
-} from '@mapprotocol/sdk';
+} from '@sidianlabs/map-sdk';
 
 try {
   validateTaskEnvelope(envelope);
@@ -456,7 +456,7 @@ try {
 ## Policy Engine
 
 ```typescript
-import { PolicyEngine, PolicyContext } from '@mapprotocol/sdk';
+import { PolicyEngine, PolicyContext } from '@sidianlabs/map-sdk';
 
 const engine = new PolicyEngine(policyRules);
 
@@ -487,7 +487,7 @@ import {
   HealthCheckBuilder,
   Tracer,
   SpanKind,
-} from '@mapprotocol/sdk';
+} from '@sidianlabs/map-sdk';
 
 async function main() {
   // Setup observability
@@ -495,12 +495,12 @@ async function main() {
   const metrics = new PrometheusMetricsCollector({ prefix: 'payment' });
   const tracer = new Tracer({ serviceName: 'payment-agent' });
   const healthChecker = new HealthCheckBuilder()
-    .addHTTP('api', 'https://api.mapprotocol.ai/health')
+    .addHTTP('api', 'http://localhost:8787/health')
     .build();
 
   // Create client
   const client = new MapAssistantClient({
-    baseUrl: 'https://api.mapprotocol.ai',
+    baseUrl: 'http://localhost:8787',
     timeout: 30_000,
     retryAttempts: 3,
   });
