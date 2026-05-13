@@ -1,10 +1,10 @@
-import { BaseMicroAgent } from "./micro-agent.js";
+import { BaseMicroAgent } from "../../src/src/runtime/micro-agent.js";
 import type {
   AgentDescriptor,
   DelegationToken,
   InvokeResult,
   TaskEnvelope
-} from "../types.js";
+} from "../../src/src/types.js";
 
 export class PaymentAgent extends BaseMicroAgent {
   readonly descriptor: AgentDescriptor = {

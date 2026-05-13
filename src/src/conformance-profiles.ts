@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { createMapHandler } from "./server.js";
 import { signHttpRequest } from "./security/signing.js";
+import { createExampleAgents } from "../../demo/agents/index.js";
 
 interface DispatchResponse {
   statusCode: number;
@@ -30,7 +31,7 @@ function makeRequest(
   method: string,
   url: string,
   body?: unknown,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
 ): Readable & { method: string; url: string; headers: Record<string, string> } {
   const payload = body === undefined ? [] : [JSON.stringify(body)];
   const req = Readable.from(payload) as Readable & {
@@ -45,12 +46,15 @@ function makeRequest(
 }
 
 function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
-  const handler = createMapHandler({ ...options, includeExampleAgents: true });
+  const handler = createMapHandler({
+    ...options,
+    agents: createExampleAgents(),
+  });
   return async (
     method: string,
     url: string,
     body?: unknown,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
   ): Promise<DispatchResponse> => {
     const req = makeRequest(method, url, body, headers);
     const res = new MockResponse();
@@ -58,12 +62,15 @@ function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
     return {
       statusCode: res.statusCode,
       headers: res.headers,
-      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {}
+      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {},
     };
   };
 }
 
-function withEnv<T>(values: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> {
+function withEnv<T>(
+  values: Record<string, string | undefined>,
+  fn: () => Promise<T>,
+): Promise<T> {
   const previous = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(values)) {
     previous.set(key, process.env[key]);
@@ -98,18 +105,18 @@ function makeDispatchBody(input: { taskId: string; tenantId?: string }) {
       requester_identity: {
         type: "user",
         id: "profile_conformance_user",
-        ...(input.tenantId ? { tenant_id: input.tenantId } : {})
+        ...(input.tenantId ? { tenant_id: input.tenantId } : {}),
       },
       target_agent: "dbread-agent-v1",
       intent: "Profile conformance task",
       constraints: {
         common: { environment: "staging", redaction_level: "basic" },
-        domain: { dataset: "incident_metrics", service: "payments" }
+        domain: { dataset: "incident_metrics", service: "payments" },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
-    }
+      requested_output_mode: "summary",
+    },
   };
 }
 
@@ -119,38 +126,48 @@ async function run(): Promise<void> {
   const openDispatch = createDispatcher({
     deploymentProfile: "open",
     enforceSignedRequests: false,
-    requireTenant: false
+    requireTenant: false,
   });
   const openResponse = await openDispatch(
     "POST",
     "/dispatch",
-    makeDispatchBody({ taskId: `task_open_${randomUUID()}` })
+    makeDispatchBody({ taskId: `task_open_${randomUUID()}` }),
   );
   checks.push({
     name: "open_profile_allows_unsigned_dispatch",
-    ok: openResponse.statusCode === 200 || openResponse.statusCode === 202
+    ok: openResponse.statusCode === 200 || openResponse.statusCode === 202,
   });
 
   const verifiedDispatchUnsigned = createDispatcher({
     deploymentProfile: "verified",
     enforceSignedRequests: true,
-    requireTenant: true
+    requireTenant: true,
   });
   const verifiedUnsigned = await verifiedDispatchUnsigned(
     "POST",
     "/dispatch",
-    makeDispatchBody({ taskId: `task_verified_unsigned_${randomUUID()}`, tenantId: "tenant_A" })
+    makeDispatchBody({
+      taskId: `task_verified_unsigned_${randomUUID()}`,
+      tenantId: "tenant_A",
+    }),
   );
   checks.push({
     name: "verified_profile_rejects_unsigned_dispatch",
-    ok: verifiedUnsigned.statusCode === 401 || verifiedUnsigned.statusCode === 403
+    ok:
+      verifiedUnsigned.statusCode === 401 ||
+      verifiedUnsigned.statusCode === 403,
   });
 
-  const { privateKey: verifiedPrivateKey, publicKey: verifiedPublicKey } = generateKeyPairSync("rsa", {
-    modulusLength: 2048
-  });
-  const verifiedPrivatePem = verifiedPrivateKey.export({ type: "pkcs8", format: "pem" }).toString();
-  const verifiedPublicPem = verifiedPublicKey.export({ type: "spki", format: "pem" }).toString();
+  const { privateKey: verifiedPrivateKey, publicKey: verifiedPublicKey } =
+    generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+    });
+  const verifiedPrivatePem = verifiedPrivateKey
+    .export({ type: "pkcs8", format: "pem" })
+    .toString();
+  const verifiedPublicPem = verifiedPublicKey
+    .export({ type: "spki", format: "pem" })
+    .toString();
 
   await withEnv(
     {
@@ -161,26 +178,26 @@ async function run(): Promise<void> {
           private_key_pem: verifiedPrivatePem,
           public_key_pem: verifiedPublicPem,
           status: "active",
-          demo_only: false
-        }
+          demo_only: false,
+        },
       ]),
-      MAP_SIGNING_ACTIVE_KID: "kid_verified_rs"
+      MAP_SIGNING_ACTIVE_KID: "kid_verified_rs",
     },
     async () => {
       const verifiedDispatch = createDispatcher({
         deploymentProfile: "verified",
         enforceSignedRequests: true,
-        requireTenant: true
+        requireTenant: true,
       });
       const ready = await verifiedDispatch("GET", "/ready");
       checks.push({
         name: "verified_profile_ready_compliant",
-        ok: ready.statusCode === 200
+        ok: ready.statusCode === 200,
       });
 
       const body = makeDispatchBody({
         taskId: `task_verified_signed_${randomUUID()}`,
-        tenantId: "tenant_A"
+        tenantId: "tenant_A",
       });
       const rawBody = JSON.stringify(body);
       const signedHeaders = signHttpRequest({
@@ -188,30 +205,38 @@ async function run(): Promise<void> {
         path: "/dispatch",
         timestamp: new Date().toISOString(),
         key_id: "kid_verified_rs",
-        body: rawBody
+        body: rawBody,
       });
-      const response = await verifiedDispatch("POST", "/dispatch", body, { ...signedHeaders });
+      const response = await verifiedDispatch("POST", "/dispatch", body, {
+        ...signedHeaders,
+      });
       checks.push({
         name: "verified_profile_allows_signed_dispatch",
-        ok: response.statusCode === 200 || response.statusCode === 202
+        ok: response.statusCode === 200 || response.statusCode === 202,
       });
-    }
+    },
   );
 
   const regulatedNonCompliant = createDispatcher({
     deploymentProfile: "regulated",
     enforceSignedRequests: true,
-    requireTenant: false
+    requireTenant: false,
   });
   const regulatedReadyFail = await regulatedNonCompliant("GET", "/ready");
   checks.push({
     name: "regulated_profile_detects_non_compliance",
-    ok: regulatedReadyFail.statusCode === 503
+    ok: regulatedReadyFail.statusCode === 503,
   });
 
-  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  const privatePem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
-  const publicPem = publicKey.export({ type: "spki", format: "pem" }).toString();
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+  });
+  const privatePem = privateKey
+    .export({ type: "pkcs8", format: "pem" })
+    .toString();
+  const publicPem = publicKey
+    .export({ type: "spki", format: "pem" })
+    .toString();
 
   await withEnv(
     {
@@ -222,26 +247,26 @@ async function run(): Promise<void> {
           private_key_pem: privatePem,
           public_key_pem: publicPem,
           status: "active",
-          demo_only: false
-        }
+          demo_only: false,
+        },
       ]),
-      MAP_SIGNING_ACTIVE_KID: "kid_regulated_rs"
+      MAP_SIGNING_ACTIVE_KID: "kid_regulated_rs",
     },
     async () => {
       const regulatedDispatch = createDispatcher({
         deploymentProfile: "regulated",
         enforceSignedRequests: true,
-        requireTenant: true
+        requireTenant: true,
       });
       const ready = await regulatedDispatch("GET", "/ready");
       checks.push({
         name: "regulated_profile_ready_compliant",
-        ok: ready.statusCode === 200
+        ok: ready.statusCode === 200,
       });
 
       const body = makeDispatchBody({
         taskId: `task_regulated_signed_${randomUUID()}`,
-        tenantId: "tenant_A"
+        tenantId: "tenant_A",
       });
       const rawBody = JSON.stringify(body);
       const signedHeaders = signHttpRequest({
@@ -249,16 +274,16 @@ async function run(): Promise<void> {
         path: "/dispatch",
         timestamp: new Date().toISOString(),
         key_id: "kid_regulated_rs",
-        body: rawBody
+        body: rawBody,
       });
       const response = await regulatedDispatch("POST", "/dispatch", body, {
-        ...signedHeaders
+        ...signedHeaders,
       });
       checks.push({
         name: "regulated_profile_allows_signed_rs256_dispatch",
-        ok: response.statusCode === 200 || response.statusCode === 202
+        ok: response.statusCode === 200 || response.statusCode === 202,
       });
-    }
+    },
   );
 
   const failed = checks.filter((check) => !check.ok);
@@ -267,7 +292,7 @@ async function run(): Promise<void> {
     total_checks: checks.length,
     passed_checks: checks.length - failed.length,
     failed_checks: failed.length,
-    checks
+    checks,
   };
   console.log(JSON.stringify(summary, null, 2));
   if (failed.length > 0) {

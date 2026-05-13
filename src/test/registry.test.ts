@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AgentRegistry } from "../src/control-plane/registry.js";
-import { PaymentAgent } from "../src/runtime/payment-agent.js";
+import { PaymentAgent } from "../../demo/agents/index.js";
 import { verifyAgentDescriptorSignature } from "../src/security/signing.js";
 
 test("registry signs descriptors when registering unsigned providers", () => {
@@ -30,8 +30,8 @@ test("registry rejects tampered signed descriptors", () => {
     () =>
       registry.register({
         ...signedDescriptor!,
-        organization: "tampered-corp"
+        organization: "tampered-corp",
       }),
-    /Invalid MAP agent descriptor signature/
+    /Invalid MAP agent descriptor signature/,
   );
 });

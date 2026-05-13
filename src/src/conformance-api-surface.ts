@@ -1,5 +1,6 @@
 import { Readable } from "node:stream";
 import { createMapHandler } from "./server.js";
+import { createExampleAgents } from "../../demo/agents/index.js";
 
 interface DispatchResponse {
   statusCode: number;
@@ -28,7 +29,7 @@ function makeRequest(
   method: string,
   url: string,
   body?: unknown,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
 ): Readable & { method: string; url: string; headers: Record<string, string> } {
   const payload = body === undefined ? [] : [JSON.stringify(body)];
   const req = Readable.from(payload) as Readable & {
@@ -43,12 +44,15 @@ function makeRequest(
 }
 
 function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
-  const handler = createMapHandler({ ...options, includeExampleAgents: true });
+  const handler = createMapHandler({
+    ...options,
+    agents: createExampleAgents(),
+  });
   return async (
     method: string,
     url: string,
     body?: unknown,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
   ): Promise<DispatchResponse> => {
     const req = makeRequest(method, url, body, headers);
     const res = new MockResponse();
@@ -56,7 +60,7 @@ function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
     return {
       statusCode: res.statusCode,
       headers: res.headers,
-      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {}
+      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {},
     };
   };
 }
@@ -67,11 +71,14 @@ interface ConformanceCheck {
 }
 
 function hasPagination(body: Record<string, unknown>): boolean {
-  const pagination = body.pagination as { limit?: unknown; next_cursor?: unknown } | null | undefined;
+  const pagination = body.pagination as
+    | { limit?: unknown; next_cursor?: unknown }
+    | null
+    | undefined;
   if (pagination === null) {
     return true;
   }
-  if (!pagination || typeof pagination !== 'object') {
+  if (!pagination || typeof pagination !== "object") {
     return false;
   }
   const hasLimit = typeof pagination.limit === "number";
@@ -93,17 +100,18 @@ async function run(): Promise<void> {
     { name: "dead_letters_contract", path: "/dead-letters?limit=1" },
     { name: "alerts_contract", path: "/alerts?limit=1" },
     { name: "audit_events_contract", path: "/audit-events?limit=1" },
-    { name: "key_discovery_contract", path: "/.well-known/map-keys?limit=1" }
+    { name: "key_discovery_contract", path: "/.well-known/map-keys?limit=1" },
   ];
 
   for (const endpoint of listEndpoints) {
     const first = await dispatch("GET", endpoint.path);
     const etag = first.headers.etag;
     const second = await dispatch("GET", endpoint.path, undefined, {
-      "if-none-match": etag ?? ""
+      "if-none-match": etag ?? "",
     });
 
-    let ok = first.statusCode === 200 &&
+    let ok =
+      first.statusCode === 200 &&
       typeof etag === "string" &&
       etag.length > 0 &&
       second.statusCode === 304;
@@ -121,7 +129,7 @@ async function run(): Promise<void> {
     total_checks: checks.length,
     passed_checks: checks.length - failed.length,
     failed_checks: failed.length,
-    checks
+    checks,
   };
 
   console.log(JSON.stringify(summary, null, 2));

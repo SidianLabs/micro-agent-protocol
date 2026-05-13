@@ -2,9 +2,10 @@ import { Readable } from "node:stream";
 import {
   verifyAuditExportSignature,
   verifyConformanceExportSignature,
-  verifyTrustBundleSignature
+  verifyTrustBundleSignature,
 } from "./security/signing.js";
 import { createMapHandler } from "./server.js";
+import { createExampleAgents } from "../../demo/agents/index.js";
 
 interface DispatchResponse {
   statusCode: number;
@@ -33,7 +34,7 @@ function makeRequest(
   method: string,
   url: string,
   body?: unknown,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
 ): Readable & { method: string; url: string; headers: Record<string, string> } {
   const payload = body === undefined ? [] : [JSON.stringify(body)];
   const req = Readable.from(payload) as Readable & {
@@ -48,12 +49,15 @@ function makeRequest(
 }
 
 function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
-  const handler = createMapHandler({ ...options, includeExampleAgents: true });
+  const handler = createMapHandler({
+    ...options,
+    agents: createExampleAgents(),
+  });
   return async (
     method: string,
     url: string,
     body?: unknown,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
   ): Promise<DispatchResponse> => {
     const req = makeRequest(method, url, body, headers);
     const res = new MockResponse();
@@ -61,7 +65,7 @@ function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
     return {
       statusCode: res.statusCode,
       headers: res.headers,
-      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {}
+      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {},
     };
   };
 }
@@ -80,12 +84,16 @@ async function run(): Promise<void> {
     name: "key_discovery_includes_trust_metadata",
     ok:
       keys.statusCode === 200 &&
-      typeof (keys.body.trust as { trust_domain?: unknown } | undefined)?.trust_domain === "string" &&
-      typeof (keys.body.trust as { issuer?: unknown } | undefined)?.issuer === "string"
+      typeof (keys.body.trust as { trust_domain?: unknown } | undefined)
+        ?.trust_domain === "string" &&
+      typeof (keys.body.trust as { issuer?: unknown } | undefined)?.issuer ===
+        "string",
   });
 
   const trustBundle = await dispatch("GET", "/trust-bundle/export");
-  const trust = trustBundle.body.trust_bundle as Record<string, unknown> | undefined;
+  const trust = trustBundle.body.trust_bundle as
+    | Record<string, unknown>
+    | undefined;
   checks.push({
     name: "trust_bundle_signature_valid",
     ok:
@@ -97,11 +105,12 @@ async function run(): Promise<void> {
           created_at: String(trust.created_at ?? ""),
           trust_domain: String(trust.trust_domain ?? ""),
           issuer: String(trust.issuer ?? ""),
-          profile: (trust.profile as "open" | "verified" | "regulated") ?? "open",
-          keys_hash: String(trust.keys_hash ?? "")
+          profile:
+            (trust.profile as "open" | "verified" | "regulated") ?? "open",
+          keys_hash: String(trust.keys_hash ?? ""),
         },
-        String(trust.signature ?? "")
-      )
+        String(trust.signature ?? ""),
+      ),
   });
 
   const auditExport = await dispatch("GET", "/audit-events/export");
@@ -118,14 +127,16 @@ async function run(): Promise<void> {
           events_count: Number(audit.events_count ?? 0),
           checkpoints_count: Number(audit.checkpoints_count ?? 0),
           latest_chain_index: Number(audit.latest_chain_index ?? 0),
-          latest_event_hash: String(audit.latest_event_hash ?? "")
+          latest_event_hash: String(audit.latest_event_hash ?? ""),
         },
-        String(audit.signature ?? "")
-      )
+        String(audit.signature ?? ""),
+      ),
   });
 
   const confExport = await dispatch("GET", "/conformance/export");
-  const conf = confExport.body.conformance as Record<string, unknown> | undefined;
+  const conf = confExport.body.conformance as
+    | Record<string, unknown>
+    | undefined;
   checks.push({
     name: "conformance_export_signature_valid",
     ok:
@@ -135,14 +146,15 @@ async function run(): Promise<void> {
         {
           export_id: String(conf.export_id ?? ""),
           created_at: String(conf.created_at ?? ""),
-          profile: (conf.profile as "open" | "verified" | "regulated") ?? "open",
+          profile:
+            (conf.profile as "open" | "verified" | "regulated") ?? "open",
           total_checks: Number(conf.total_checks ?? 0),
           passed_checks: Number(conf.passed_checks ?? 0),
           failed_checks: Number(conf.failed_checks ?? 0),
-          artifact_hash: String(conf.artifact_hash ?? "")
+          artifact_hash: String(conf.artifact_hash ?? ""),
         },
-        String(conf.signature ?? "")
-      )
+        String(conf.signature ?? ""),
+      ),
   });
 
   const failed = checks.filter((c) => !c.ok);
@@ -151,7 +163,7 @@ async function run(): Promise<void> {
     total_checks: checks.length,
     passed_checks: checks.length - failed.length,
     failed_checks: failed.length,
-    checks
+    checks,
   };
 
   console.log(JSON.stringify(summary, null, 2));

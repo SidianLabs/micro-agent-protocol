@@ -1,5 +1,6 @@
 import { performance } from "node:perf_hooks";
 import { createMapServer } from "./server.js";
+import { createExampleAgents } from "../../demo/agents/index.js";
 
 interface LoadResult {
   total: number;
@@ -15,22 +16,33 @@ function percentile(values: number[], p: number): number {
     return 0;
   }
   const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil((p / 100) * sorted.length) - 1),
+  );
   return sorted[index];
 }
 
 async function run(): Promise<void> {
-  const totalRequests = Math.max(1, Number(process.env.MAP_LOAD_TOTAL_REQUESTS ?? 200));
-  const concurrency = Math.max(1, Number(process.env.MAP_LOAD_CONCURRENCY ?? 20));
+  const totalRequests = Math.max(
+    1,
+    Number(process.env.MAP_LOAD_TOTAL_REQUESTS ?? 200),
+  );
+  const concurrency = Math.max(
+    1,
+    Number(process.env.MAP_LOAD_CONCURRENCY ?? 20),
+  );
   const baseUrl = `http://127.0.0.1:${Number(process.env.MAP_LOAD_PORT ?? 8877)}`;
   const server = createMapServer({
     deploymentProfile: "open",
     enforceSignedRequests: false,
     requireTenant: true,
-    includeExampleAgents: true
+    agents: createExampleAgents(),
   });
 
-  await new Promise<void>((resolve) => server.listen(Number(process.env.MAP_LOAD_PORT ?? 8877), resolve));
+  await new Promise<void>((resolve) =>
+    server.listen(Number(process.env.MAP_LOAD_PORT ?? 8877), resolve),
+  );
   const latencies: number[] = [];
   let succeeded = 0;
   let failed = 0;
@@ -49,17 +61,21 @@ async function run(): Promise<void> {
         capability: "db.read.aggregate",
         envelope: {
           task_id: taskId,
-          requester_identity: { type: "user", id: "load_user", tenant_id: "tenant_load" },
+          requester_identity: {
+            type: "user",
+            id: "load_user",
+            tenant_id: "tenant_load",
+          },
           target_agent: "dbread-agent-v1",
           intent: "Load-test request",
           constraints: {
             common: { environment: "staging", redaction_level: "basic" },
-            domain: { dataset: "incident_metrics", service: "payments" }
+            domain: { dataset: "incident_metrics", service: "payments" },
           },
           risk_class: "medium",
           delegation_token: "placeholder",
-          requested_output_mode: "summary"
-        }
+          requested_output_mode: "summary",
+        },
       };
 
       const reqStarted = performance.now();
@@ -67,7 +83,7 @@ async function run(): Promise<void> {
         const res = await fetch(`${baseUrl}/dispatch`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(requestBody)
+          body: JSON.stringify(requestBody),
         });
         if (res.ok || res.status === 202) {
           succeeded += 1;
@@ -90,19 +106,21 @@ async function run(): Promise<void> {
     failed,
     duration_ms: Number(durationMs.toFixed(2)),
     throughput_rps: Number(((totalRequests / durationMs) * 1000).toFixed(2)),
-    p95_ms: Number(percentile(latencies, 95).toFixed(2))
+    p95_ms: Number(percentile(latencies, 95).toFixed(2)),
   };
 
-  const metrics = await fetch(`${baseUrl}/metrics?tenant_id=tenant_load`).then((res) => res.json());
+  const metrics = await fetch(`${baseUrl}/metrics?tenant_id=tenant_load`).then(
+    (res) => res.json(),
+  );
   console.log(
     JSON.stringify(
       {
         load_result: result,
-        tenant_metrics_snapshot: metrics.metrics?.tasks ?? {}
+        tenant_metrics_snapshot: metrics.metrics?.tasks ?? {},
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 
   await new Promise<void>((resolve, reject) => {

@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
 import { createMapHandler } from "./server.js";
 import { signHttpRequest } from "./security/signing.js";
+import { createExampleAgents } from "../../demo/agents/index.js";
 
 interface DispatchResponse {
   statusCode: number;
@@ -30,7 +31,7 @@ function makeRequest(
   method: string,
   url: string,
   body?: unknown,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
 ): Readable & { method: string; url: string; headers: Record<string, string> } {
   const payload = body === undefined ? [] : [JSON.stringify(body)];
   const req = Readable.from(payload) as Readable & {
@@ -45,12 +46,15 @@ function makeRequest(
 }
 
 function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
-  const handler = createMapHandler({ ...options, includeExampleAgents: true });
+  const handler = createMapHandler({
+    ...options,
+    agents: createExampleAgents(),
+  });
   return async (
     method: string,
     url: string,
     body?: unknown,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
   ): Promise<DispatchResponse> => {
     const req = makeRequest(method, url, body, headers);
     const res = new MockResponse();
@@ -58,7 +62,7 @@ function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
     return {
       statusCode: res.statusCode,
       headers: res.headers,
-      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {}
+      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {},
     };
   };
 }
@@ -74,51 +78,59 @@ async function run(): Promise<void> {
   const dispatch = createDispatcher({
     deploymentProfile: "verified",
     enforceSignedRequests: true,
-    requireTenant: true
+    requireTenant: true,
   });
 
   const ready = await dispatch("GET", "/ready");
   checks.push({
     name: "ready_endpoint_available",
-    ok: ready.statusCode === 503 || ready.statusCode === 200
+    ok: ready.statusCode === 503 || ready.statusCode === 200,
   });
 
   const unsigned = await dispatch("POST", "/dispatch", {
     capability: "db.read.aggregate",
     envelope: {
       task_id: `task_conf_unsigned_${randomUUID()}`,
-      requester_identity: { type: "user", id: "conformance_user", tenant_id: "tenant_A" },
+      requester_identity: {
+        type: "user",
+        id: "conformance_user",
+        tenant_id: "tenant_A",
+      },
       target_agent: "dbread-agent-v1",
       intent: "Unsigned request should be rejected in verified mode",
       constraints: {
         common: { environment: "staging", redaction_level: "basic" },
-        domain: { dataset: "incident_metrics", service: "payments" }
+        domain: { dataset: "incident_metrics", service: "payments" },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
-    }
+      requested_output_mode: "summary",
+    },
   });
   checks.push({
     name: "signed_request_required",
-    ok: unsigned.statusCode === 401 || unsigned.statusCode === 403
+    ok: unsigned.statusCode === 401 || unsigned.statusCode === 403,
   });
 
   const signedBody = {
     capability: "db.read.aggregate",
     envelope: {
       task_id: `task_conf_signed_${randomUUID()}`,
-      requester_identity: { type: "user", id: "conformance_user", tenant_id: "tenant_A" },
+      requester_identity: {
+        type: "user",
+        id: "conformance_user",
+        tenant_id: "tenant_A",
+      },
       target_agent: "dbread-agent-v1",
       intent: "Signed request should succeed",
       constraints: {
         common: { environment: "staging", redaction_level: "basic" },
-        domain: { dataset: "incident_metrics", service: "payments" }
+        domain: { dataset: "incident_metrics", service: "payments" },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
-    }
+      requested_output_mode: "summary",
+    },
   };
   const rawBody = JSON.stringify(signedBody);
   const signedHeaders = signHttpRequest({
@@ -126,27 +138,35 @@ async function run(): Promise<void> {
     path: "/dispatch",
     timestamp: new Date().toISOString(),
     key_id: "map-dev-key-1",
-    body: rawBody
+    body: rawBody,
   });
-  const signed = await dispatch("POST", "/dispatch", signedBody, { ...signedHeaders });
+  const signed = await dispatch("POST", "/dispatch", signedBody, {
+    ...signedHeaders,
+  });
   checks.push({
     name: "signed_dispatch_succeeds",
-    ok: signed.statusCode === 200 || signed.statusCode === 202
+    ok: signed.statusCode === 200 || signed.statusCode === 202,
   });
 
-  const receiptId = String((signed.body.receipt as { receipt_id?: string } | undefined)?.receipt_id ?? "");
+  const receiptId = String(
+    (signed.body.receipt as { receipt_id?: string } | undefined)?.receipt_id ??
+      "",
+  );
   const receiptLookup = receiptId
-    ? await dispatch("GET", `/receipts/${encodeURIComponent(receiptId)}?tenant_id=tenant_A`)
+    ? await dispatch(
+        "GET",
+        `/receipts/${encodeURIComponent(receiptId)}?tenant_id=tenant_A`,
+      )
     : undefined;
   checks.push({
     name: "receipt_partition_lookup",
-    ok: Boolean(receiptLookup && receiptLookup.statusCode === 200)
+    ok: Boolean(receiptLookup && receiptLookup.statusCode === 200),
   });
 
   const blockedCrossTenant = await dispatch("GET", "/tasks?tenant_id=tenant_B");
   checks.push({
     name: "tenant_partition_query_supported",
-    ok: blockedCrossTenant.statusCode === 200
+    ok: blockedCrossTenant.statusCode === 200,
   });
 
   const pagedTasks = await dispatch("GET", "/tasks?tenant_id=tenant_A&limit=1");
@@ -154,7 +174,8 @@ async function run(): Promise<void> {
     name: "tasks_pagination_contract",
     ok:
       pagedTasks.statusCode === 200 &&
-      typeof (pagedTasks.body.pagination as { limit?: unknown } | undefined)?.limit === "number"
+      typeof (pagedTasks.body.pagination as { limit?: unknown } | undefined)
+        ?.limit === "number",
   });
 
   const pagedAudit = await dispatch("GET", "/audit-events?limit=1");
@@ -162,8 +183,9 @@ async function run(): Promise<void> {
     name: "audit_pagination_contract",
     ok:
       pagedAudit.statusCode === 200 &&
-      typeof (pagedAudit.body.pagination as { next_cursor?: unknown } | undefined)?.next_cursor !==
-        "undefined"
+      typeof (
+        pagedAudit.body.pagination as { next_cursor?: unknown } | undefined
+      )?.next_cursor !== "undefined",
   });
 
   const pagedDeadLetters = await dispatch("GET", "/dead-letters?limit=1");
@@ -171,7 +193,9 @@ async function run(): Promise<void> {
     name: "dead_letters_pagination_contract",
     ok:
       pagedDeadLetters.statusCode === 200 &&
-      typeof (pagedDeadLetters.body.pagination as { limit?: unknown } | undefined)?.limit === "number"
+      typeof (
+        pagedDeadLetters.body.pagination as { limit?: unknown } | undefined
+      )?.limit === "number",
   });
 
   const pagedAlerts = await dispatch("GET", "/alerts?limit=1");
@@ -179,7 +203,8 @@ async function run(): Promise<void> {
     name: "alerts_pagination_contract",
     ok:
       pagedAlerts.statusCode === 200 &&
-      typeof (pagedAlerts.body.pagination as { limit?: unknown } | undefined)?.limit === "number"
+      typeof (pagedAlerts.body.pagination as { limit?: unknown } | undefined)
+        ?.limit === "number",
   });
 
   const failed = checks.filter((check) => !check.ok);
@@ -188,7 +213,7 @@ async function run(): Promise<void> {
     total_checks: checks.length,
     passed_checks: checks.length - failed.length,
     failed_checks: failed.length,
-    checks
+    checks,
   };
 
   console.log(JSON.stringify(summary, null, 2));

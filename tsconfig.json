@@ -12,10 +12,7 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
   },
-  "include": [
-    "src/**/*.ts",
-    "protocol/**/*.ts"
-  ]
+  "include": ["src/**/*.ts", "protocol/**/*.ts", "demo/**/*.ts"],
 }

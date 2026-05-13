@@ -8,6 +8,7 @@ import { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import type { DelegationToken, TaskEnvelope } from "../src/types.js";
 import type { MicroAgent } from "../src/runtime/micro-agent.js";
+import { createExampleAgents } from "../../demo/agents/index.js";
 import {
   getSignatureKeyId,
   signHttpRequest,
@@ -56,7 +57,7 @@ function makeRequest(
 
 function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
   const handler = createMapHandler({
-    includeExampleAgents: true,
+    agents: createExampleAgents(),
     ...(options ?? {}),
   });
 

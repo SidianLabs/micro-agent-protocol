@@ -6,7 +6,5 @@ export * from "./control-plane/delegation.js";
 export * from "./control-plane/orchestrator.js";
 export * from "./security/signing.js";
 export * from "./runtime/micro-agent.js";
-export * from "./runtime/dbread-agent.js";
-export * from "./runtime/payment-agent.js";
 export * from "./validation/schema-validator.js";
 export * from "./sdk/client.js";

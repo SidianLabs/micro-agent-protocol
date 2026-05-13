@@ -1,10 +1,11 @@
-import { createMapServer } from "./server.js";
-import { resolveServerOptionsFromEnv } from "./server/env.js";
+import { createMapServer } from "../src/src/server.js";
+import { resolveServerOptionsFromEnv } from "../src/src/server/env.js";
+import { createExampleAgents } from "./agents/index.js";
 
 const { port, ...serverOptions } = resolveServerOptionsFromEnv();
 const server = createMapServer({
   ...serverOptions,
-  includeExampleAgents: true
+  agents: createExampleAgents()
 });
 
 server.listen(port, () => {

@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
 import { createMapHandler } from "./server.js";
 import { signHttpRequest } from "./security/signing.js";
+import { createExampleAgents } from "../../demo/agents/index.js";
 
 interface DispatchResponse {
   statusCode: number;
@@ -30,7 +31,7 @@ function makeRequest(
   method: string,
   url: string,
   body?: unknown,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
 ): Readable & { method: string; url: string; headers: Record<string, string> } {
   const payload = body === undefined ? [] : [JSON.stringify(body)];
   const req = Readable.from(payload) as Readable & {
@@ -45,12 +46,15 @@ function makeRequest(
 }
 
 function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
-  const handler = createMapHandler({ ...options, includeExampleAgents: true });
+  const handler = createMapHandler({
+    ...options,
+    agents: createExampleAgents(),
+  });
   return async (
     method: string,
     url: string,
     body?: unknown,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
   ): Promise<DispatchResponse> => {
     const req = makeRequest(method, url, body, headers);
     const res = new MockResponse();
@@ -58,7 +62,7 @@ function createDispatcher(options?: Parameters<typeof createMapHandler>[0]) {
     return {
       statusCode: res.statusCode,
       headers: res.headers,
-      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {}
+      body: res.body ? (JSON.parse(res.body) as Record<string, unknown>) : {},
     };
   };
 }
@@ -70,7 +74,8 @@ interface ConformanceCheck {
 
 function getErrorCode(response: DispatchResponse): string {
   return String(
-    (response.body.error as { code?: unknown } | undefined)?.code ?? "missing_error_code"
+    (response.body.error as { code?: unknown } | undefined)?.code ??
+      "missing_error_code",
   );
 }
 
@@ -78,73 +83,92 @@ async function run(): Promise<void> {
   const checks: ConformanceCheck[] = [];
 
   const openDispatch = createDispatcher();
-  const invalidRequest = await openDispatch("POST", "/dispatch", { capability: "" });
+  const invalidRequest = await openDispatch("POST", "/dispatch", {
+    capability: "",
+  });
   checks.push({
     name: "error_invalid_request",
-    ok: invalidRequest.statusCode === 400 && getErrorCode(invalidRequest) === "invalid_request"
+    ok:
+      invalidRequest.statusCode === 400 &&
+      getErrorCode(invalidRequest) === "invalid_request",
   });
 
   const notFound = await openDispatch("GET", "/definitely-not-a-route");
   checks.push({
     name: "error_not_found",
-    ok: notFound.statusCode === 404 && getErrorCode(notFound) === "not_found"
+    ok: notFound.statusCode === 404 && getErrorCode(notFound) === "not_found",
   });
 
-  const signedDispatch = createDispatcher({ enforceSignedRequests: true, requireTenant: true });
+  const signedDispatch = createDispatcher({
+    enforceSignedRequests: true,
+    requireTenant: true,
+  });
   const unsigned = await signedDispatch("POST", "/dispatch", {
     capability: "db.read.aggregate",
     envelope: {
       task_id: `task_conf_error_unsigned_${randomUUID()}`,
-      requester_identity: { type: "user", id: "error_user", tenant_id: "tenant_A" },
+      requester_identity: {
+        type: "user",
+        id: "error_user",
+        tenant_id: "tenant_A",
+      },
       target_agent: "dbread-agent-v1",
       intent: "Unsigned should fail",
       constraints: {
         common: { environment: "staging", redaction_level: "basic" },
-        domain: { dataset: "incident_metrics", service: "payments" }
+        domain: { dataset: "incident_metrics", service: "payments" },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
-    }
+      requested_output_mode: "summary",
+    },
   });
   checks.push({
     name: "error_auth_required",
-    ok: unsigned.statusCode === 401 && getErrorCode(unsigned) === "auth_required"
+    ok:
+      unsigned.statusCode === 401 && getErrorCode(unsigned) === "auth_required",
   });
 
   const validBody = {
     capability: "db.read.aggregate",
     envelope: {
       task_id: `task_conf_error_signed_${randomUUID()}`,
-      requester_identity: { type: "user", id: "error_user", tenant_id: "tenant_A" },
+      requester_identity: {
+        type: "user",
+        id: "error_user",
+        tenant_id: "tenant_A",
+      },
       target_agent: "dbread-agent-v1",
       intent: "Signed route",
       constraints: {
         common: { environment: "staging", redaction_level: "basic" },
-        domain: { dataset: "incident_metrics", service: "payments" }
+        domain: { dataset: "incident_metrics", service: "payments" },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
-    }
+      requested_output_mode: "summary",
+    },
   };
   const tamperedHeaders = signHttpRequest({
     method: "POST",
     path: "/dispatch",
     timestamp: new Date().toISOString(),
     key_id: "map-dev-key-1",
-    body: JSON.stringify(validBody)
+    body: JSON.stringify(validBody),
   });
-  tamperedHeaders["x-map-request-signature"] = `${tamperedHeaders["x-map-request-signature"]}tampered`;
+  tamperedHeaders["x-map-request-signature"] =
+    `${tamperedHeaders["x-map-request-signature"]}tampered`;
   const invalidAuth = await signedDispatch(
     "POST",
     "/dispatch",
     validBody,
-    tamperedHeaders as unknown as Record<string, string>
+    tamperedHeaders as unknown as Record<string, string>,
   );
   checks.push({
     name: "error_invalid_auth",
-    ok: invalidAuth.statusCode === 403 && getErrorCode(invalidAuth) === "invalid_auth"
+    ok:
+      invalidAuth.statusCode === 403 &&
+      getErrorCode(invalidAuth) === "invalid_auth",
   });
 
   const conflictDispatch = createDispatcher();
@@ -157,36 +181,34 @@ async function run(): Promise<void> {
       intent: "Conflict seed 1",
       constraints: {
         common: { environment: "staging", redaction_level: "basic" },
-        domain: { dataset: "incident_metrics", service: "payments" }
+        domain: { dataset: "incident_metrics", service: "payments" },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
-    }
+      requested_output_mode: "summary",
+    },
   });
-  const conflict = await conflictDispatch(
-    "POST",
-    "/dispatch",
-    {
-      capability: "db.read.aggregate",
-      envelope: {
-        task_id: "task_conflict_error_fixed",
-        requester_identity: { type: "user", id: "error_user_B" },
-        target_agent: "dbread-agent-v1",
-        intent: "Conflict seed 2",
-        constraints: {
-          common: { environment: "staging", redaction_level: "basic" },
-          domain: { dataset: "incident_metrics", service: "payments" }
-        },
-        risk_class: "medium",
-        delegation_token: "placeholder",
-        requested_output_mode: "summary"
-      }
-    }
-  );
+  const conflict = await conflictDispatch("POST", "/dispatch", {
+    capability: "db.read.aggregate",
+    envelope: {
+      task_id: "task_conflict_error_fixed",
+      requester_identity: { type: "user", id: "error_user_B" },
+      target_agent: "dbread-agent-v1",
+      intent: "Conflict seed 2",
+      constraints: {
+        common: { environment: "staging", redaction_level: "basic" },
+        domain: { dataset: "incident_metrics", service: "payments" },
+      },
+      risk_class: "medium",
+      delegation_token: "placeholder",
+      requested_output_mode: "summary",
+    },
+  });
   checks.push({
     name: "error_conflict",
-    ok: conflict.statusCode === 409 && getErrorCode(conflict) === "idempotency_conflict"
+    ok:
+      conflict.statusCode === 409 &&
+      getErrorCode(conflict) === "idempotency_conflict",
   });
 
   const failed = checks.filter((check) => !check.ok);
@@ -195,7 +217,7 @@ async function run(): Promise<void> {
     total_checks: checks.length,
     passed_checks: checks.length - failed.length,
     failed_checks: failed.length,
-    checks
+    checks,
   };
 
   console.log(JSON.stringify(summary, null, 2));

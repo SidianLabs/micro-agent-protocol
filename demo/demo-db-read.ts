@@ -4,13 +4,13 @@ const port = Number(process.env.PORT ?? 8787);
 const baseUrl = `http://localhost:${port}`;
 
 async function loadExample(name: string): Promise<unknown> {
-  const fileUrl = new URL(`../../examples/${name}`, import.meta.url);
+  const fileUrl = new URL(`../examples/${name}`, import.meta.url);
   const content = await readFile(fileUrl, "utf8");
   return JSON.parse(content);
 }
 
 async function main(): Promise<void> {
-  const envelope = await loadExample("payment-task-envelope.json");
+  const envelope = await loadExample("dbread-task-envelope.json");
 
   const response = await fetch(`${baseUrl}/dispatch`, {
     method: "POST",
@@ -18,7 +18,7 @@ async function main(): Promise<void> {
       "content-type": "application/json"
     },
     body: JSON.stringify({
-      capability: "payment.execute",
+      capability: "db.read.aggregate",
       envelope
     })
   });

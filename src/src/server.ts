@@ -22,13 +22,17 @@ import {
 } from "./security/signing.js";
 import {
   validateApprovalRequest,
-  validateDispatchRequest
+  validateDispatchRequest,
 } from "./validation/schema-validator.js";
-import { getRequiredAuthScheme, getSignedRequestError, getBearerTokenError } from "./server/auth.js";
+import {
+  getRequiredAuthScheme,
+  getSignedRequestError,
+  getBearerTokenError,
+} from "./server/auth.js";
 import {
   readJsonBody as parseJsonBody,
   sendError as sendErrorResponse,
-  sendJson as sendJsonResponse
+  sendJson as sendJsonResponse,
 } from "./server/http.js";
 import { handleMutationRoutes } from "./server/mutation-routes.js";
 import { handleReadRoutes } from "./server/read-routes.js";
@@ -41,7 +45,7 @@ import {
   normalizePath,
   parsePositiveIntOrDefault,
   wantsSignedRequestAuth,
-  type JsonBodyReadResult
+  type JsonBodyReadResult,
 } from "./server/utils.js";
 
 export interface MapHttpServerOptions {
@@ -81,7 +85,6 @@ export interface MapHttpServerOptions {
   alertStorePath?: string;
   runtimeControlStorePath?: string;
   agents?: MicroAgent[];
-  includeExampleAgents?: boolean;
   certPath?: string;
   keyPath?: string;
   mtls?: { requestCert: boolean; rejectUnauthorized: boolean; caPath?: string };
@@ -138,12 +141,21 @@ interface AlertRecord {
 }
 
 interface RuntimeControlState {
-  disabled_agents: Record<string, { disabled_at: string; disabled_by: string; reason?: string }>;
+  disabled_agents: Record<
+    string,
+    { disabled_at: string; disabled_by: string; reason?: string }
+  >;
   disabled_capabilities: Record<
     string,
-    Record<string, { disabled_at: string; disabled_by: string; reason?: string }>
+    Record<
+      string,
+      { disabled_at: string; disabled_by: string; reason?: string }
+    >
   >;
-  revoked_keys: Record<string, { revoked_at: string; revoked_by: string; reason?: string }>;
+  revoked_keys: Record<
+    string,
+    { revoked_at: string; revoked_by: string; reason?: string }
+  >;
 }
 
 interface DeploymentProfileEvaluation {
@@ -175,33 +187,47 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     deadLetterStorePath: options.deadLetterStorePath,
     asyncQueueMaxDeadLetters: options.asyncQueueMaxDeadLetters,
     agents: options.agents,
-    includeExampleAgents: options.includeExampleAgents ?? false
   });
 
   const metricsWindowMs = Math.max(1, options.metricsWindowMs ?? 5 * 60 * 1000);
   const rateLimitWindowMs = Math.max(1, options.rateLimitWindowMs ?? 60_000);
   const maxLatencySamplesPerCapability = Math.max(
     10,
-    options.metricsMaxLatencySamplesPerCapability ?? 200
+    options.metricsMaxLatencySamplesPerCapability ?? 200,
   );
   const metricsStorePath = options.metricsStorePath;
   const auditStorePath = options.auditStorePath;
   const alertStorePath = options.alertStorePath;
   const runtimeControlStorePath = options.runtimeControlStorePath;
-  const taskStorePersistencePath = options.taskStoreDbPath ?? options.taskStorePath;
-  const receiptStorePersistencePath = options.receiptStoreDbPath ?? options.receiptStorePath;
+  const taskStorePersistencePath =
+    options.taskStoreDbPath ?? options.taskStorePath;
+  const receiptStorePersistencePath =
+    options.receiptStoreDbPath ?? options.receiptStorePath;
   const auditMaxEvents = Math.max(1, options.auditMaxEvents ?? 5_000);
-  const auditCheckpointInterval = Math.max(1, options.auditCheckpointInterval ?? 100);
-  const signingRetiringKeyCriticalRatio = clampRatio(options.signingRetiringKeyCriticalRatio ?? 0.2);
-  const signingUnknownKeyCriticalRatio = clampRatio(options.signingUnknownKeyCriticalRatio ?? 0);
+  const auditCheckpointInterval = Math.max(
+    1,
+    options.auditCheckpointInterval ?? 100,
+  );
+  const signingRetiringKeyCriticalRatio = clampRatio(
+    options.signingRetiringKeyCriticalRatio ?? 0.2,
+  );
+  const signingUnknownKeyCriticalRatio = clampRatio(
+    options.signingUnknownKeyCriticalRatio ?? 0,
+  );
   const globalRateLimitEvents: number[] = [];
   const tenantRateLimitEvents = new Map<string, number[]>();
   const rateLimitStatePath = options.rateLimitStatePath;
   const auditEvents: AuditEvent[] = [];
   const auditCheckpoints: AuditCheckpoint[] = [];
   const alertState = new Map<string, AlertRecord>();
-  const revokedSigningKeys = new Map<string, { revoked_at: string; revoked_by: string; reason?: string }>();
-  const disabledAgents = new Map<string, { disabled_at: string; disabled_by: string; reason?: string }>();
+  const revokedSigningKeys = new Map<
+    string,
+    { revoked_at: string; revoked_by: string; reason?: string }
+  >();
+  const disabledAgents = new Map<
+    string,
+    { disabled_at: string; disabled_by: string; reason?: string }
+  >();
   const disabledCapabilities = new Map<
     string,
     Map<string, { disabled_at: string; disabled_by: string; reason?: string }>
@@ -218,23 +244,31 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     try {
       const raw = readFileSync(runtimeControlStorePath, "utf8");
       const parsed = JSON.parse(raw) as Partial<RuntimeControlState>;
-      for (const [agentId, value] of Object.entries(parsed.disabled_agents ?? {})) {
+      for (const [agentId, value] of Object.entries(
+        parsed.disabled_agents ?? {},
+      )) {
         if (!agentId || !value) continue;
         disabledAgents.set(agentId, {
           disabled_at: value.disabled_at,
           disabled_by: value.disabled_by,
-          reason: value.reason
+          reason: value.reason,
         });
       }
-      for (const [agentId, capabilityMap] of Object.entries(parsed.disabled_capabilities ?? {})) {
-        if (!agentId || !capabilityMap || typeof capabilityMap !== "object") continue;
-        const nested = new Map<string, { disabled_at: string; disabled_by: string; reason?: string }>();
+      for (const [agentId, capabilityMap] of Object.entries(
+        parsed.disabled_capabilities ?? {},
+      )) {
+        if (!agentId || !capabilityMap || typeof capabilityMap !== "object")
+          continue;
+        const nested = new Map<
+          string,
+          { disabled_at: string; disabled_by: string; reason?: string }
+        >();
         for (const [capability, value] of Object.entries(capabilityMap)) {
           if (!capability || !value) continue;
           nested.set(capability, {
             disabled_at: value.disabled_at,
             disabled_by: value.disabled_by,
-            reason: value.reason
+            reason: value.reason,
           });
         }
         if (nested.size > 0) disabledCapabilities.set(agentId, nested);
@@ -244,7 +278,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         revokedSigningKeys.set(kid, {
           revoked_at: value.revoked_at,
           revoked_by: value.revoked_by,
-          reason: value.reason
+          reason: value.reason,
         });
       }
     } catch {
@@ -255,18 +289,26 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   function persistRuntimeControls(): void {
     if (!runtimeControlStorePath) return;
     const disabledCapabilitiesObj = Object.fromEntries(
-      Array.from(disabledCapabilities.entries()).map(([agentId, capabilities]) => [
-        agentId,
-        Object.fromEntries(capabilities.entries())
-      ])
+      Array.from(disabledCapabilities.entries()).map(
+        ([agentId, capabilities]) => [
+          agentId,
+          Object.fromEntries(capabilities.entries()),
+        ],
+      ),
     );
     const payload: RuntimeControlState = {
       disabled_agents: Object.fromEntries(disabledAgents.entries()),
       disabled_capabilities: disabledCapabilitiesObj,
-      revoked_keys: Object.fromEntries(revokedSigningKeys.entries())
+      revoked_keys: Object.fromEntries(revokedSigningKeys.entries()),
     };
-    mkdirSync(dirname(runtimeControlStorePath), { recursive: true, mode: 0o700 });
-    writeFileSync(runtimeControlStorePath, JSON.stringify(payload, null, 2), { encoding: "utf8", mode: 0o600 });
+    mkdirSync(dirname(runtimeControlStorePath), {
+      recursive: true,
+      mode: 0o700,
+    });
+    writeFileSync(runtimeControlStorePath, JSON.stringify(payload, null, 2), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
   }
 
   function hydrateRateLimitState(): void {
@@ -303,7 +345,10 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   function persistRateLimitState(): void {
     if (!rateLimitStatePath) return;
     const now = Date.now();
-    while (globalRateLimitEvents.length > 0 && now - globalRateLimitEvents[0] > rateLimitWindowMs) {
+    while (
+      globalRateLimitEvents.length > 0 &&
+      now - globalRateLimitEvents[0] > rateLimitWindowMs
+    ) {
       globalRateLimitEvents.shift();
     }
     const tenants: Record<string, number[]> = {};
@@ -313,36 +358,51 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       }
       if (events.length > 0) tenants[tenantId] = events;
     }
-    const serialized: PersistedRateLimitState = { global: globalRateLimitEvents, tenants };
+    const serialized: PersistedRateLimitState = {
+      global: globalRateLimitEvents,
+      tenants,
+    };
     mkdirSync(dirname(rateLimitStatePath), { recursive: true, mode: 0o700 });
-    writeFileSync(rateLimitStatePath, JSON.stringify(serialized, null, 2), { encoding: "utf8", mode: 0o600 });
+    writeFileSync(rateLimitStatePath, JSON.stringify(serialized, null, 2), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
   }
 
   function getEffectiveRevokedKeyIds(): Set<string> {
     const fromEnv = process.env.MAP_SIGNING_REVOKED_KIDS;
     if (fromEnv && fromEnv.trim().length > 0) {
-      return new Set(fromEnv.split(",").map(v => v.trim()).filter(v => v.length > 0));
+      return new Set(
+        fromEnv
+          .split(",")
+          .map((v) => v.trim())
+          .filter((v) => v.length > 0),
+      );
     }
     return new Set<string>(revokedSigningKeys.keys());
   }
 
-  function getEffectiveVerificationKeys(): ReturnType<typeof getVerificationKeys> {
+  function getEffectiveVerificationKeys(): ReturnType<
+    typeof getVerificationKeys
+  > {
     const revoked = getEffectiveRevokedKeyIds();
     return getVerificationKeys().map((key) =>
-      revoked.has(key.kid) ? { ...key, status: "revoked" as const } : key
+      revoked.has(key.kid) ? { ...key, status: "revoked" as const } : key,
     );
   }
 
-  function getRuntimeRevocationMetadata(keyId: string):
-    | { revoked_at: string; revoked_by: string; reason?: string }
-    | null {
+  function getRuntimeRevocationMetadata(
+    keyId: string,
+  ): { revoked_at: string; revoked_by: string; reason?: string } | null {
     return revokedSigningKeys.get(keyId) ?? null;
   }
 
   function evaluateDeploymentProfile(): DeploymentProfileEvaluation {
     const violations: string[] = [];
     const verificationKeys = getEffectiveVerificationKeys();
-    const signableKeys = verificationKeys.filter((key) => key.status !== "revoked");
+    const signableKeys = verificationKeys.filter(
+      (key) => key.status !== "revoked",
+    );
     const activeKid = getActiveSignatureKeyId();
     const activeSignableKey =
       activeKid && activeKid.trim().length > 0
@@ -375,7 +435,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     return {
       profile: deploymentProfile,
       compliant: violations.length === 0,
-      violations
+      violations,
     };
   }
 
@@ -391,12 +451,14 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     return {
       disabled_agents: Object.fromEntries(disabledAgents.entries()),
       disabled_capabilities: Object.fromEntries(
-        Array.from(disabledCapabilities.entries()).map(([agentId, capabilities]) => [
-          agentId,
-          Object.fromEntries(capabilities.entries())
-        ])
+        Array.from(disabledCapabilities.entries()).map(
+          ([agentId, capabilities]) => [
+            agentId,
+            Object.fromEntries(capabilities.entries()),
+          ],
+        ),
       ),
-      revoked_keys: Object.fromEntries(revokedSigningKeys.entries())
+      revoked_keys: Object.fromEntries(revokedSigningKeys.entries()),
     };
   }
 
@@ -422,7 +484,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     writeFileSync(
       alertStorePath,
       JSON.stringify({ alerts: [...alertState.values()] }, null, 2),
-      { encoding: "utf8", mode: 0o600 }
+      { encoding: "utf8", mode: 0o600 },
     );
   }
 
@@ -430,10 +492,17 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     if (!auditStorePath || !existsSync(auditStorePath)) return;
     try {
       const raw = readFileSync(auditStorePath, "utf8");
-      const parsed = JSON.parse(raw) as { events?: AuditEvent[]; checkpoints?: AuditCheckpoint[] };
+      const parsed = JSON.parse(raw) as {
+        events?: AuditEvent[];
+        checkpoints?: AuditCheckpoint[];
+      };
       const events = Array.isArray(parsed.events) ? parsed.events : [];
-      auditEvents.push(...events.slice(Math.max(0, events.length - auditMaxEvents)));
-      const checkpoints = Array.isArray(parsed.checkpoints) ? parsed.checkpoints : [];
+      auditEvents.push(
+        ...events.slice(Math.max(0, events.length - auditMaxEvents)),
+      );
+      const checkpoints = Array.isArray(parsed.checkpoints)
+        ? parsed.checkpoints
+        : [];
       auditCheckpoints.push(...checkpoints);
     } catch {
       // Ignore malformed audit store in reference mode.
@@ -445,8 +514,12 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     mkdirSync(dirname(auditStorePath), { recursive: true, mode: 0o700 });
     writeFileSync(
       auditStorePath,
-      JSON.stringify({ events: auditEvents, checkpoints: auditCheckpoints }, null, 2),
-      { encoding: "utf8", mode: 0o600 }
+      JSON.stringify(
+        { events: auditEvents, checkpoints: auditCheckpoints },
+        null,
+        2,
+      ),
+      { encoding: "utf8", mode: 0o600 },
     );
   }
 
@@ -472,7 +545,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       input.tenant_id ?? "",
       input.target_agent ?? "",
       String(input.chain_index),
-      input.prev_event_hash
+      input.prev_event_hash,
     ].join("|");
     return createHash("sha256").update(canonical).digest("hex");
   }
@@ -485,13 +558,13 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       last_chain_index: lastEvent.chain_index,
       last_event_hash: lastEvent.event_hash,
       key_id: "",
-      signature: ""
+      signature: "",
     };
     checkpoint.signature = signAuditCheckpoint({
       checkpoint_id: checkpoint.checkpoint_id,
       created_at: checkpoint.created_at,
       last_chain_index: checkpoint.last_chain_index,
-      last_event_hash: checkpoint.last_event_hash
+      last_event_hash: checkpoint.last_event_hash,
     });
     checkpoint.key_id = getSignatureKeyId(checkpoint.signature) ?? "unknown";
     auditCheckpoints.push(checkpoint);
@@ -503,16 +576,23 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   function verifyAuditIntegrity(): {
     ok: boolean;
     errors: string[];
-    summary: { events_checked: number; checkpoints_checked: number; latest_chain_index: number };
+    summary: {
+      events_checked: number;
+      checkpoints_checked: number;
+      latest_chain_index: number;
+    };
   } {
     const errors: string[] = [];
     for (let index = 0; index < auditEvents.length; index += 1) {
       const current = auditEvents[index];
       const expectedIndex = index + 1;
       if (current.chain_index !== expectedIndex) {
-        errors.push(`event_chain_index_mismatch_at_${index}: expected ${expectedIndex}, got ${current.chain_index}`);
+        errors.push(
+          `event_chain_index_mismatch_at_${index}: expected ${expectedIndex}, got ${current.chain_index}`,
+        );
       }
-      const expectedPrev = index === 0 ? "GENESIS" : auditEvents[index - 1].event_hash;
+      const expectedPrev =
+        index === 0 ? "GENESIS" : auditEvents[index - 1].event_hash;
       if (current.prev_event_hash !== expectedPrev) {
         errors.push(`event_prev_hash_mismatch_at_${index}`);
       }
@@ -526,7 +606,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         tenant_id: current.tenant_id,
         target_agent: current.target_agent,
         chain_index: current.chain_index,
-        prev_event_hash: current.prev_event_hash
+        prev_event_hash: current.prev_event_hash,
       });
       if (current.event_hash !== expectedHash) {
         errors.push(`event_hash_mismatch_at_${index}`);
@@ -543,15 +623,15 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
           checkpoint_id: checkpoint.checkpoint_id,
           created_at: checkpoint.created_at,
           last_chain_index: checkpoint.last_chain_index,
-          last_event_hash: checkpoint.last_event_hash
+          last_event_hash: checkpoint.last_event_hash,
         },
-        checkpoint.signature
+        checkpoint.signature,
       );
       if (!signatureOk) {
         errors.push(`checkpoint_signature_invalid_at_${index}`);
       }
       const targetEvent = auditEvents.find(
-        (event) => event.chain_index === checkpoint.last_chain_index
+        (event) => event.chain_index === checkpoint.last_chain_index,
       );
       if (!targetEvent) {
         errors.push(`checkpoint_missing_chain_index_at_${index}`);
@@ -565,8 +645,9 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       summary: {
         events_checked: auditEvents.length,
         checkpoints_checked: auditCheckpoints.length,
-        latest_chain_index: auditEvents[auditEvents.length - 1]?.chain_index ?? 0
-      }
+        latest_chain_index:
+          auditEvents[auditEvents.length - 1]?.chain_index ?? 0,
+      },
     };
   }
 
@@ -579,7 +660,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     return collectSigningKeyUsageForData({
       descriptors,
       receipts: app.receiptStore.list(),
-      checkpoints: auditCheckpoints
+      checkpoints: auditCheckpoints,
     });
   }
 
@@ -592,31 +673,41 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     receipts_by_key_id: Record<string, number>;
     audit_checkpoints_by_key_id: Record<string, number>;
   } {
-    const descriptorCounts = input.descriptors.reduce<Record<string, number>>((acc, descriptor) => {
-      const keyId =
-        typeof descriptor.descriptor_key_id === "string" && descriptor.descriptor_key_id.length > 0
-          ? descriptor.descriptor_key_id
-          : "unknown";
-      acc[keyId] = (acc[keyId] ?? 0) + 1;
-      return acc;
-    }, {});
+    const descriptorCounts = input.descriptors.reduce<Record<string, number>>(
+      (acc, descriptor) => {
+        const keyId =
+          typeof descriptor.descriptor_key_id === "string" &&
+          descriptor.descriptor_key_id.length > 0
+            ? descriptor.descriptor_key_id
+            : "unknown";
+        acc[keyId] = (acc[keyId] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
 
-    const receiptCounts = input.receipts.reduce<Record<string, number>>((acc, receipt) => {
-      const keyId = getSignatureKeyId(receipt.signature) ?? "unknown";
-      acc[keyId] = (acc[keyId] ?? 0) + 1;
-      return acc;
-    }, {});
+    const receiptCounts = input.receipts.reduce<Record<string, number>>(
+      (acc, receipt) => {
+        const keyId = getSignatureKeyId(receipt.signature) ?? "unknown";
+        acc[keyId] = (acc[keyId] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
 
-    const checkpointCounts = input.checkpoints.reduce<Record<string, number>>((acc, checkpoint) => {
-      const keyId = checkpoint.key_id || "unknown";
-      acc[keyId] = (acc[keyId] ?? 0) + 1;
-      return acc;
-    }, {});
+    const checkpointCounts = input.checkpoints.reduce<Record<string, number>>(
+      (acc, checkpoint) => {
+        const keyId = checkpoint.key_id || "unknown";
+        acc[keyId] = (acc[keyId] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
 
     return {
       agent_descriptors_by_key_id: descriptorCounts,
       receipts_by_key_id: receiptCounts,
-      audit_checkpoints_by_key_id: checkpointCounts
+      audit_checkpoints_by_key_id: checkpointCounts,
     };
   }
 
@@ -630,44 +721,62 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     unknown_key_usage_ratio: number;
     retiring_key_usage_ratio: number;
     total_signatures_analyzed: number;
-    thresholds: { unknown_key_critical_ratio: number; retiring_key_critical_ratio: number };
-    threshold_breaches: { unknown_key_ratio_exceeded: boolean; retiring_key_ratio_exceeded: boolean };
+    thresholds: {
+      unknown_key_critical_ratio: number;
+      retiring_key_critical_ratio: number;
+    };
+    threshold_breaches: {
+      unknown_key_ratio_exceeded: boolean;
+      retiring_key_ratio_exceeded: boolean;
+    };
     severity: "ok" | "warning" | "critical";
     recommended_action: string;
   } {
     const verificationKeys = getEffectiveVerificationKeys();
     const retiringKeyIds = new Set(
-      verificationKeys.filter((key) => key.status === "retiring").map((key) => key.kid)
+      verificationKeys
+        .filter((key) => key.status === "retiring")
+        .map((key) => key.kid),
     );
     const allUsageEntries = [
       ...Object.entries(signingUsage.agent_descriptors_by_key_id),
       ...Object.entries(signingUsage.receipts_by_key_id),
-      ...Object.entries(signingUsage.audit_checkpoints_by_key_id)
+      ...Object.entries(signingUsage.audit_checkpoints_by_key_id),
     ];
 
     const unknownKeyUsageDetected = allUsageEntries.some(
-      ([keyId, count]) => keyId === "unknown" && Number(count) > 0
+      ([keyId, count]) => keyId === "unknown" && Number(count) > 0,
     );
     const retiringKeyUsageDetected = allUsageEntries.some(
-      ([keyId, count]) => retiringKeyIds.has(keyId) && Number(count) > 0
+      ([keyId, count]) => retiringKeyIds.has(keyId) && Number(count) > 0,
     );
     const totalSignaturesAnalyzed = allUsageEntries.reduce(
-      (acc, [, count]) => acc + Number(count), 0
+      (acc, [, count]) => acc + Number(count),
+      0,
     );
     const unknownKeyUsageCount = allUsageEntries.reduce(
-      (acc, [keyId, count]) => acc + (keyId === "unknown" ? Number(count) : 0), 0
+      (acc, [keyId, count]) => acc + (keyId === "unknown" ? Number(count) : 0),
+      0,
     );
     const retiringKeyUsageCount = allUsageEntries.reduce(
-      (acc, [keyId, count]) => acc + (retiringKeyIds.has(keyId) ? Number(count) : 0), 0
+      (acc, [keyId, count]) =>
+        acc + (retiringKeyIds.has(keyId) ? Number(count) : 0),
+      0,
     );
     const unknownKeyUsageRatio =
-      totalSignaturesAnalyzed > 0 ? unknownKeyUsageCount / totalSignaturesAnalyzed : 0;
+      totalSignaturesAnalyzed > 0
+        ? unknownKeyUsageCount / totalSignaturesAnalyzed
+        : 0;
     const retiringKeyUsageRatio =
-      totalSignaturesAnalyzed > 0 ? retiringKeyUsageCount / totalSignaturesAnalyzed : 0;
+      totalSignaturesAnalyzed > 0
+        ? retiringKeyUsageCount / totalSignaturesAnalyzed
+        : 0;
     const unknownKeyRatioExceeded =
-      unknownKeyUsageDetected && unknownKeyUsageRatio > signingUnknownKeyCriticalRatio;
+      unknownKeyUsageDetected &&
+      unknownKeyUsageRatio > signingUnknownKeyCriticalRatio;
     const retiringKeyRatioExceeded =
-      retiringKeyUsageDetected && retiringKeyUsageRatio > signingRetiringKeyCriticalRatio;
+      retiringKeyUsageDetected &&
+      retiringKeyUsageRatio > signingRetiringKeyCriticalRatio;
 
     const severity: "ok" | "warning" | "critical" =
       unknownKeyRatioExceeded || retiringKeyRatioExceeded
@@ -691,29 +800,33 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       total_signatures_analyzed: totalSignaturesAnalyzed,
       thresholds: {
         unknown_key_critical_ratio: signingUnknownKeyCriticalRatio,
-        retiring_key_critical_ratio: signingRetiringKeyCriticalRatio
+        retiring_key_critical_ratio: signingRetiringKeyCriticalRatio,
       },
       threshold_breaches: {
         unknown_key_ratio_exceeded: unknownKeyRatioExceeded,
-        retiring_key_ratio_exceeded: retiringKeyRatioExceeded
+        retiring_key_ratio_exceeded: retiringKeyRatioExceeded,
       },
       severity,
-      recommended_action: recommendedAction
+      recommended_action: recommendedAction,
     };
   }
 
-  function computeAlertCandidates(tenantId?: string): Array<Omit<AlertRecord, "first_seen" | "last_seen">> {
+  function computeAlertCandidates(
+    tenantId?: string,
+  ): Array<Omit<AlertRecord, "first_seen" | "last_seen">> {
     const queueStats = app.asyncQueue.getStats();
     const requestMetrics = getRequestMetrics();
     const deadLetterCount = tenantId
       ? app.asyncQueue.listDeadLettersByTenant(tenantId).length
       : queueStats.dead_letter_count;
     const signalAlerts = getAlerts(requestMetrics, queueStats, deadLetterCount);
-    const tenantReceipts = tenantId ? app.receiptStore.list(tenantId) : app.receiptStore.list();
+    const tenantReceipts = tenantId
+      ? app.receiptStore.list(tenantId)
+      : app.receiptStore.list();
     const signingUsage = collectSigningKeyUsageForData({
       descriptors: app.registry.list(),
       receipts: tenantReceipts,
-      checkpoints: auditCheckpoints
+      checkpoints: auditCheckpoints,
     });
     const signingAnomalies = collectSigningAnomalies(signingUsage);
     const scopeSuffix = tenantId ? `:${tenantId}` : ":global";
@@ -726,8 +839,9 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         code: "dead_letter_count_exceeded",
         severity: "warning",
         message: "Dead-letter count exceeded configured threshold.",
-        recommended_action: "Inspect dead letters and remediate recurring execution failures.",
-        ...(tenantId ? { tenant_id: tenantId } : {})
+        recommended_action:
+          "Inspect dead letters and remediate recurring execution failures.",
+        ...(tenantId ? { tenant_id: tenantId } : {}),
       });
     }
 
@@ -738,8 +852,9 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         code: "oldest_dead_letter_age_exceeded",
         severity: "warning",
         message: "Oldest dead-letter age exceeded configured threshold.",
-        recommended_action: "Investigate stalled failures and clear or replay dead-letter tasks.",
-        ...(tenantId ? { tenant_id: tenantId } : {})
+        recommended_action:
+          "Investigate stalled failures and clear or replay dead-letter tasks.",
+        ...(tenantId ? { tenant_id: tenantId } : {}),
       });
     }
 
@@ -750,8 +865,9 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         code: "request_failure_rate_exceeded",
         severity: "warning",
         message: "Request failure rate exceeded configured threshold.",
-        recommended_action: "Check recent errors and mitigate root causes before traffic impact grows.",
-        ...(tenantId ? { tenant_id: tenantId } : {})
+        recommended_action:
+          "Check recent errors and mitigate root causes before traffic impact grows.",
+        ...(tenantId ? { tenant_id: tenantId } : {}),
       });
     }
 
@@ -760,10 +876,12 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         id: `alert:signing:unknown_key_usage${scopeSuffix}`,
         source: "signing",
         code: "unknown_key_usage_detected",
-        severity: signingAnomalies.threshold_breaches.unknown_key_ratio_exceeded ? "critical" : "warning",
+        severity: signingAnomalies.threshold_breaches.unknown_key_ratio_exceeded
+          ? "critical"
+          : "warning",
         message: "Unknown signing key usage was detected.",
         recommended_action: signingAnomalies.recommended_action,
-        ...(tenantId ? { tenant_id: tenantId } : {})
+        ...(tenantId ? { tenant_id: tenantId } : {}),
       });
     }
 
@@ -772,10 +890,13 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         id: `alert:signing:retiring_key_usage${scopeSuffix}`,
         source: "signing",
         code: "retiring_key_usage_detected",
-        severity: signingAnomalies.threshold_breaches.retiring_key_ratio_exceeded ? "critical" : "warning",
+        severity: signingAnomalies.threshold_breaches
+          .retiring_key_ratio_exceeded
+          ? "critical"
+          : "warning",
         message: "Retiring signing key usage was detected.",
         recommended_action: signingAnomalies.recommended_action,
-        ...(tenantId ? { tenant_id: tenantId } : {})
+        ...(tenantId ? { tenant_id: tenantId } : {}),
       });
     }
 
@@ -793,14 +914,14 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         alertState.set(candidate.id, {
           ...candidate,
           first_seen: nowIso,
-          last_seen: nowIso
+          last_seen: nowIso,
         });
       } else {
         alertState.set(candidate.id, {
           ...existing,
           ...candidate,
           first_seen: existing.first_seen,
-          last_seen: nowIso
+          last_seen: nowIso,
         });
       }
     }
@@ -821,25 +942,31 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         if (!activeIds.has(alert.id)) return false;
         if (!alert.suppressed_until) return true;
         const suppressedUntilMs = Date.parse(alert.suppressed_until);
-        return Number.isNaN(suppressedUntilMs) || suppressedUntilMs <= Date.now();
+        return (
+          Number.isNaN(suppressedUntilMs) || suppressedUntilMs <= Date.now()
+        );
       })
-      .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "critical" ? -1 : 1));
+      .sort((a, b) =>
+        a.severity === b.severity ? 0 : a.severity === "critical" ? -1 : 1,
+      );
   }
 
-  function recordAuditEvent(event: Omit<AuditEvent, "chain_index" | "prev_event_hash" | "event_hash">): void {
+  function recordAuditEvent(
+    event: Omit<AuditEvent, "chain_index" | "prev_event_hash" | "event_hash">,
+  ): void {
     const last = auditEvents[auditEvents.length - 1];
     const chainIndex = last ? last.chain_index + 1 : 1;
     const prevEventHash = last ? last.event_hash : "GENESIS";
     const eventHash = hashAuditEventBase({
       ...event,
       chain_index: chainIndex,
-      prev_event_hash: prevEventHash
+      prev_event_hash: prevEventHash,
     });
     const chainedEvent: AuditEvent = {
       ...event,
       chain_index: chainIndex,
       prev_event_hash: prevEventHash,
-      event_hash: eventHash
+      event_hash: eventHash,
     };
     auditEvents.push(chainedEvent);
     if (auditEvents.length > auditMaxEvents) {
@@ -864,25 +991,44 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         errors_by_code: {},
         errors_by_agent: {},
         errors_by_agent_by_code: {},
-        capability_latency_samples: {}
+        capability_latency_samples: {},
       };
     }
     try {
       const raw = readFileSync(metricsStorePath, "utf8");
       const parsed = JSON.parse(raw) as Partial<PersistedMetricsState>;
       return {
-        requests_total: typeof parsed.requests_total === "number" ? parsed.requests_total : 0,
-        requests_succeeded: typeof parsed.requests_succeeded === "number" ? parsed.requests_succeeded : 0,
-        requests_failed: typeof parsed.requests_failed === "number" ? parsed.requests_failed : 0,
-        request_events: Array.isArray(parsed.request_events) ? parsed.request_events : [],
-        errors_by_code: parsed.errors_by_code && typeof parsed.errors_by_code === "object" ? parsed.errors_by_code : {},
-        errors_by_agent: parsed.errors_by_agent && typeof parsed.errors_by_agent === "object" ? parsed.errors_by_agent : {},
+        requests_total:
+          typeof parsed.requests_total === "number" ? parsed.requests_total : 0,
+        requests_succeeded:
+          typeof parsed.requests_succeeded === "number"
+            ? parsed.requests_succeeded
+            : 0,
+        requests_failed:
+          typeof parsed.requests_failed === "number"
+            ? parsed.requests_failed
+            : 0,
+        request_events: Array.isArray(parsed.request_events)
+          ? parsed.request_events
+          : [],
+        errors_by_code:
+          parsed.errors_by_code && typeof parsed.errors_by_code === "object"
+            ? parsed.errors_by_code
+            : {},
+        errors_by_agent:
+          parsed.errors_by_agent && typeof parsed.errors_by_agent === "object"
+            ? parsed.errors_by_agent
+            : {},
         errors_by_agent_by_code:
-          parsed.errors_by_agent_by_code && typeof parsed.errors_by_agent_by_code === "object"
-            ? parsed.errors_by_agent_by_code : {},
+          parsed.errors_by_agent_by_code &&
+          typeof parsed.errors_by_agent_by_code === "object"
+            ? parsed.errors_by_agent_by_code
+            : {},
         capability_latency_samples:
-          parsed.capability_latency_samples && typeof parsed.capability_latency_samples === "object"
-            ? parsed.capability_latency_samples : {}
+          parsed.capability_latency_samples &&
+          typeof parsed.capability_latency_samples === "object"
+            ? parsed.capability_latency_samples
+            : {},
       };
     } catch {
       return {
@@ -893,29 +1039,38 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         errors_by_code: {},
         errors_by_agent: {},
         errors_by_agent_by_code: {},
-        capability_latency_samples: {}
+        capability_latency_samples: {},
       };
     }
   }
 
   const hydratedMetrics = hydrateMetricsState();
-  const requestEvents: Array<{ timestamp: number; ok: boolean }> = hydratedMetrics.request_events;
+  const requestEvents: Array<{ timestamp: number; ok: boolean }> =
+    hydratedMetrics.request_events;
   let requestsTotal = hydratedMetrics.requests_total;
   let requestsSucceeded = hydratedMetrics.requests_succeeded;
   let requestsFailed = hydratedMetrics.requests_failed;
-  const errorsByCode = new Map<string, number>(Object.entries(hydratedMetrics.errors_by_code));
-  const errorsByAgent = new Map<string, number>(Object.entries(hydratedMetrics.errors_by_agent));
+  const errorsByCode = new Map<string, number>(
+    Object.entries(hydratedMetrics.errors_by_code),
+  );
+  const errorsByAgent = new Map<string, number>(
+    Object.entries(hydratedMetrics.errors_by_agent),
+  );
   const errorsByAgentByCode = new Map<string, Map<string, number>>(
-    Object.entries(hydratedMetrics.errors_by_agent_by_code).map(([agent, codes]) => [
-      agent,
-      new Map<string, number>(Object.entries(codes))
-    ])
+    Object.entries(hydratedMetrics.errors_by_agent_by_code).map(
+      ([agent, codes]) => [
+        agent,
+        new Map<string, number>(Object.entries(codes)),
+      ],
+    ),
   );
   const capabilityLatencySamples = new Map<string, number[]>(
-    Object.entries(hydratedMetrics.capability_latency_samples).map(([capability, samples]) => [
-      capability,
-      Array.isArray(samples) ? samples : []
-    ])
+    Object.entries(hydratedMetrics.capability_latency_samples).map(
+      ([capability, samples]) => [
+        capability,
+        Array.isArray(samples) ? samples : [],
+      ],
+    ),
   );
 
   function persistMetricsState(): void {
@@ -930,23 +1085,35 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       errors_by_agent_by_code: Object.fromEntries(
         Array.from(errorsByAgentByCode.entries()).map(([agent, codeMap]) => [
           agent,
-          Object.fromEntries(codeMap.entries())
-        ])
+          Object.fromEntries(codeMap.entries()),
+        ]),
       ),
-      capability_latency_samples: Object.fromEntries(capabilityLatencySamples.entries())
+      capability_latency_samples: Object.fromEntries(
+        capabilityLatencySamples.entries(),
+      ),
     };
     mkdirSync(dirname(metricsStorePath), { recursive: true, mode: 0o700 });
-    writeFileSync(metricsStorePath, JSON.stringify(serialized, null, 2), { encoding: "utf8", mode: 0o600 });
+    writeFileSync(metricsStorePath, JSON.stringify(serialized, null, 2), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
   }
 
   function pruneRequestEvents(now: number): void {
-    while (requestEvents.length > 0 && now - requestEvents[0].timestamp > metricsWindowMs) {
+    while (
+      requestEvents.length > 0 &&
+      now - requestEvents[0].timestamp > metricsWindowMs
+    ) {
       requestEvents.shift();
     }
     persistMetricsState();
   }
 
-  function recordRequest(ok: boolean, errorCode?: string, targetAgent?: string): void {
+  function recordRequest(
+    ok: boolean,
+    errorCode?: string,
+    targetAgent?: string,
+  ): void {
     const now = Date.now();
     requestsTotal += 1;
     if (ok) {
@@ -957,8 +1124,13 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         errorsByCode.set(errorCode, (errorsByCode.get(errorCode) ?? 0) + 1);
         if (typeof targetAgent === "string" && targetAgent.trim().length > 0) {
           const normalizedAgent = targetAgent.trim();
-          errorsByAgent.set(normalizedAgent, (errorsByAgent.get(normalizedAgent) ?? 0) + 1);
-          const agentCodes = errorsByAgentByCode.get(normalizedAgent) ?? new Map<string, number>();
+          errorsByAgent.set(
+            normalizedAgent,
+            (errorsByAgent.get(normalizedAgent) ?? 0) + 1,
+          );
+          const agentCodes =
+            errorsByAgentByCode.get(normalizedAgent) ??
+            new Map<string, number>();
           agentCodes.set(errorCode, (agentCodes.get(errorCode) ?? 0) + 1);
           errorsByAgentByCode.set(normalizedAgent, agentCodes);
         }
@@ -973,7 +1145,10 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     const now = Date.now();
     pruneRequestEvents(now);
     const windowTotal = requestEvents.length;
-    const windowFailed = requestEvents.reduce((acc, event) => acc + (event.ok ? 0 : 1), 0);
+    const windowFailed = requestEvents.reduce(
+      (acc, event) => acc + (event.ok ? 0 : 1),
+      0,
+    );
     const windowSuccess = windowTotal - windowFailed;
     const failureRateWindow = windowTotal > 0 ? windowFailed / windowTotal : 0;
     return {
@@ -984,11 +1159,14 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       window_total: windowTotal,
       window_succeeded: windowSuccess,
       window_failed: windowFailed,
-      failure_rate_window: failureRateWindow
+      failure_rate_window: failureRateWindow,
     };
   }
 
-  function recordCapabilityLatency(capability: string, durationMs: number): void {
+  function recordCapabilityLatency(
+    capability: string,
+    durationMs: number,
+  ): void {
     const key = capability.trim();
     if (!key) return;
     const existing = capabilityLatencySamples.get(key) ?? [];
@@ -1002,7 +1180,10 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
 
   function percentile(sorted: number[], p: number): number {
     if (sorted.length === 0) return 0;
-    const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
+    const index = Math.min(
+      sorted.length - 1,
+      Math.max(0, Math.ceil(p * sorted.length) - 1),
+    );
     return sorted[index];
   }
 
@@ -1010,7 +1191,10 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     string,
     { count: number; avg_ms: number; p50_ms: number; p95_ms: number }
   > {
-    const result: Record<string, { count: number; avg_ms: number; p50_ms: number; p95_ms: number }> = {};
+    const result: Record<
+      string,
+      { count: number; avg_ms: number; p50_ms: number; p95_ms: number }
+    > = {};
     for (const [capability, samples] of capabilityLatencySamples.entries()) {
       if (samples.length === 0) continue;
       const sorted = [...samples].sort((a, b) => a - b);
@@ -1019,7 +1203,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         count: sorted.length,
         avg_ms: sum / sorted.length,
         p50_ms: percentile(sorted, 0.5),
-        p95_ms: percentile(sorted, 0.95)
+        p95_ms: percentile(sorted, 0.95),
       };
     }
     return result;
@@ -1028,7 +1212,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   function getAlerts(
     requestMetrics: ReturnType<typeof getRequestMetrics>,
     queueStats: ReturnType<(typeof app.asyncQueue)["getStats"]>,
-    deadLetterCount: number
+    deadLetterCount: number,
   ): {
     thresholds: {
       dead_letter_count?: number;
@@ -1063,15 +1247,16 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       thresholds,
       breaches: {
         dead_letter_count_exceeded:
-          typeof deadLetterCountThreshold === "number" && deadLetterCount > deadLetterCountThreshold,
+          typeof deadLetterCountThreshold === "number" &&
+          deadLetterCount > deadLetterCountThreshold,
         oldest_dead_letter_age_exceeded:
           typeof oldestDeadLetterAgeThreshold === "number" &&
           typeof queueStats.oldest_dead_letter_age_ms === "number" &&
           queueStats.oldest_dead_letter_age_ms > oldestDeadLetterAgeThreshold,
         request_failure_rate_exceeded:
           typeof failureRateThreshold === "number" &&
-          requestMetrics.failure_rate_window > failureRateThreshold
-      }
+          requestMetrics.failure_rate_window > failureRateThreshold,
+      },
     };
   }
 
@@ -1080,23 +1265,48 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     statusCode: number,
     body: unknown,
     requestId: string,
-    tracking: { ok: boolean; errorCode?: string; targetAgent?: string } = { ok: true },
-    extraHeaders?: Record<string, string>
+    tracking: { ok: boolean; errorCode?: string; targetAgent?: string } = {
+      ok: true,
+    },
+    extraHeaders?: Record<string, string>,
   ): void {
-    sendJsonResponse(res, statusCode, body, requestId, recordRequest, tracking, extraHeaders);
+    sendJsonResponse(
+      res,
+      statusCode,
+      body,
+      requestId,
+      recordRequest,
+      tracking,
+      extraHeaders,
+    );
   }
 
   function sendError(
     res: ServerResponse,
     statusCode: number,
     requestId: string,
-    error: { code: string; message: string; retryable: boolean; details?: Record<string, unknown> },
-    targetAgent?: string
+    error: {
+      code: string;
+      message: string;
+      retryable: boolean;
+      details?: Record<string, unknown>;
+    },
+    targetAgent?: string,
   ): void {
-    sendErrorResponse(res, statusCode, requestId, error, recordRequest, targetAgent);
+    sendErrorResponse(
+      res,
+      statusCode,
+      requestId,
+      error,
+      recordRequest,
+      targetAgent,
+    );
   }
 
-  function consumeRateLimitSlot(events: number[], limit: number | undefined): {
+  function consumeRateLimitSlot(
+    events: number[],
+    limit: number | undefined,
+  ): {
     allowed: boolean;
     retryAfterMs: number;
   } {
@@ -1126,61 +1336,85 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     scope?: "global" | "tenant";
     retryAfterMs?: number;
   } {
-    const globalLimit = consumeRateLimitSlot(globalRateLimitEvents, options.rateLimitMaxRequests);
+    const globalLimit = consumeRateLimitSlot(
+      globalRateLimitEvents,
+      options.rateLimitMaxRequests,
+    );
     if (!globalLimit.allowed) {
-      return { allowed: false, scope: "global", retryAfterMs: globalLimit.retryAfterMs };
+      return {
+        allowed: false,
+        scope: "global",
+        retryAfterMs: globalLimit.retryAfterMs,
+      };
     }
 
     if (tenantId && typeof options.rateLimitMaxRequestsPerTenant === "number") {
       const events = tenantRateLimitEvents.get(tenantId) ?? [];
-      const tenantLimit = consumeRateLimitSlot(events, options.rateLimitMaxRequestsPerTenant);
+      const tenantLimit = consumeRateLimitSlot(
+        events,
+        options.rateLimitMaxRequestsPerTenant,
+      );
       tenantRateLimitEvents.set(tenantId, events);
       if (!tenantLimit.allowed) {
-        return { allowed: false, scope: "tenant", retryAfterMs: tenantLimit.retryAfterMs };
+        return {
+          allowed: false,
+          scope: "tenant",
+          retryAfterMs: tenantLimit.retryAfterMs,
+        };
       }
     }
 
     return { allowed: true };
   }
 
-  async function readJsonBody(req: IncomingMessage): Promise<JsonBodyReadResult> {
+  async function readJsonBody(
+    req: IncomingMessage,
+  ): Promise<JsonBodyReadResult> {
     return parseJsonBody(req);
   }
 
   async function getAdminTokenError(
     req: IncomingMessage,
-    rawBody: string
+    rawBody: string,
   ): Promise<{ statusCode: number; code: string; message: string } | null> {
     const configuredToken = process.env.MAP_ADMIN_TOKEN;
-    const configuredHash = configuredToken && configuredToken.trim().length > 0
-      ? hashToken(configuredToken)
-      : null;
+    const configuredHash =
+      configuredToken && configuredToken.trim().length > 0
+        ? hashToken(configuredToken)
+        : null;
 
     if (!configuredHash) {
       return {
         statusCode: 403,
         code: "invalid_auth",
-        message: "Admin controls are not enabled."
+        message: "Admin controls are not enabled.",
       };
     }
 
     const providedToken = req.headers["x-map-admin-token"];
-    if (typeof providedToken !== "string" || hashToken(providedToken) !== configuredHash) {
+    if (
+      typeof providedToken !== "string" ||
+      hashToken(providedToken) !== configuredHash
+    ) {
       // Artificial delay to slow brute-force attacks (50-100ms)
-      await new Promise(r => setTimeout(r, 50 + Math.random() * 50));
+      await new Promise((r) => setTimeout(r, 50 + Math.random() * 50));
       return {
         statusCode: 403,
         code: "invalid_auth",
-        message: "Invalid admin token."
+        message: "Invalid admin token.",
       };
     }
 
-    const signedRequestError = getSignedRequestError(req, rawBody, getEffectiveRevokedKeyIds());
+    const signedRequestError = getSignedRequestError(
+      req,
+      rawBody,
+      getEffectiveRevokedKeyIds(),
+    );
     if (signedRequestError) {
       return {
         statusCode: signedRequestError.code === "auth_required" ? 401 : 403,
         code: signedRequestError.code,
-        message: signedRequestError.message
+        message: signedRequestError.message,
       };
     }
 
@@ -1201,7 +1435,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         sendError(res, 400, requestId, {
           code: "invalid_request",
           message: "Missing request metadata.",
-          retryable: false
+          retryable: false,
         });
         return;
       }
@@ -1212,7 +1446,9 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         req.url &&
         req.url.match(/^\/agents\/[^/]+\/resources(\?.*)?$/)
       ) {
-        const pathParts = new URL(req.url, "http://localhost").pathname.split("/");
+        const pathParts = new URL(req.url, "http://localhost").pathname.split(
+          "/",
+        );
         const agentId = decodeURIComponent(pathParts[2]);
         const agent = app.registry.get(agentId);
         if (!agent) {
@@ -1223,21 +1459,26 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
           });
           return;
         }
-        sendJson(res, 200, {
-          agent_id: agent.agent_id,
-          resources: [
-            {
-              name: "input_schema",
-              uri: agent.input_schema_ref,
-              mime_type: "application/schema+json",
-            },
-            {
-              name: "output_schema",
-              uri: agent.output_schema_ref,
-              mime_type: "application/schema+json",
-            },
-          ],
-        }, requestId);
+        sendJson(
+          res,
+          200,
+          {
+            agent_id: agent.agent_id,
+            resources: [
+              {
+                name: "input_schema",
+                uri: agent.input_schema_ref,
+                mime_type: "application/schema+json",
+              },
+              {
+                name: "output_schema",
+                uri: agent.output_schema_ref,
+                mime_type: "application/schema+json",
+              },
+            ],
+          },
+          requestId,
+        );
         return;
       }
 
@@ -1272,12 +1513,14 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
             by_code: Object.fromEntries(errorsByCode.entries()),
             by_agent: Object.fromEntries(errorsByAgent.entries()),
             by_agent_by_code: Object.fromEntries(
-              Array.from(errorsByAgentByCode.entries()).map(([agent, codeMap]) => [
-                agent,
-                Object.fromEntries(codeMap.entries())
-              ])
-            )
-          }
+              Array.from(errorsByAgentByCode.entries()).map(
+                ([agent, codeMap]) => [
+                  agent,
+                  Object.fromEntries(codeMap.entries()),
+                ],
+              ),
+            ),
+          },
         }),
         getAlerts,
         getCapabilityLatencyMetrics,
@@ -1288,7 +1531,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         readJsonBody,
         snapshotRuntimeControls,
         getAdminTokenError,
-        getRuntimeRevocationMetadata
+        getRuntimeRevocationMetadata,
       });
       if (readRouteHandled) return;
 
@@ -1308,25 +1551,33 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         disabledCapabilities,
         revokedSigningKeys,
         persistRuntimeControls,
-        recordAuditEvent
+        recordAuditEvent,
       });
       if (adminRouteHandled) return;
 
       // Handle task cancellation
-      if (req.method === "POST" && req.url?.startsWith("/tasks/") && req.url?.endsWith("/cancel")) {
-        const taskId = req.url.slice("/tasks/".length, req.url.length - "/cancel".length);
+      if (
+        req.method === "POST" &&
+        req.url?.startsWith("/tasks/") &&
+        req.url?.endsWith("/cancel")
+      ) {
+        const taskId = req.url.slice(
+          "/tasks/".length,
+          req.url.length - "/cancel".length,
+        );
         if (!taskId || taskId.includes("/")) {
           sendError(res, 400, requestId, {
             code: "invalid_request",
             message: "Invalid task ID in cancel path.",
-            retryable: false
+            retryable: false,
           });
           return;
         }
 
-        const tenantId = typeof req.headers["x-map-tenant-id"] === "string"
-          ? req.headers["x-map-tenant-id"]
-          : undefined;
+        const tenantId =
+          typeof req.headers["x-map-tenant-id"] === "string"
+            ? req.headers["x-map-tenant-id"]
+            : undefined;
 
         try {
           const result = app.orchestrator.cancelTask(taskId, tenantId);
@@ -1338,23 +1589,28 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
             method: req.method,
             route: `/tasks/${taskId}/cancel`,
             tenant_id: tenantId,
-            target_agent: result.result.structured_output?.target_agent as string | undefined
+            target_agent: result.result.structured_output?.target_agent as
+              | string
+              | undefined,
           });
           sendJson(res, 200, result, requestId);
         } catch (err) {
-          const message = err instanceof Error ? err.message : "Unknown error cancelling task.";
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Unknown error cancelling task.";
           if (message.includes("Task not found")) {
             sendError(res, 404, requestId, {
               code: "task_not_found",
               message,
-              retryable: false
+              retryable: false,
             });
             return;
           }
           sendError(res, 409, requestId, {
             code: "invalid_request",
             message,
-            retryable: false
+            retryable: false,
           });
         }
         return;
@@ -1381,47 +1637,105 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         recordAuditEvent,
         recordCapabilityLatency,
         sendJson,
-        sendError
+        sendError,
       });
       routeTargetAgent = mutationRouteResult.routeTargetAgent;
       routeTenantId = mutationRouteResult.routeTenantId;
       if (mutationRouteResult.handled) return;
 
-      sendError(res, 404, requestId, {
-        code: "not_found",
-        message: "Route not found.",
-        retryable: false
-      }, routeTargetAgent);
+      sendError(
+        res,
+        404,
+        requestId,
+        {
+          code: "not_found",
+          message: "Route not found.",
+          retryable: false,
+        },
+        routeTargetAgent,
+      );
     } catch (error) {
-      const originalMessage = error instanceof Error ? error.message : "Unknown server error.";
-      const code =
-        originalMessage.includes("No micro-agent found") ? "agent_not_found"
-        : originalMessage.includes("Target agent is disabled in registry") ? "agent_disabled"
-        : originalMessage.includes("Capability not supported") ? "capability_not_found"
-        : originalMessage.includes("Capability is disabled for target agent") ? "capability_disabled"
-        : originalMessage.includes("Approval task not found") ? "task_not_found"
-        : originalMessage.includes("Task not found") ? "task_not_found"
-        : originalMessage.includes("Receipt not found") ? "receipt_not_found"
-        : originalMessage.includes("not awaiting approval") ? "approval_required"
-        : originalMessage.includes("Invalid approval reference") ? "invalid_request"
-        : originalMessage.includes("Task id conflict") || originalMessage.includes("Idempotency key conflict") ? "idempotency_conflict"
-        : originalMessage.includes("Async queue capacity exceeded") ? "rate_limited"
-        : originalMessage.includes("tenant_id is required") ? "policy_denied"
-        : originalMessage.includes("Task denied") ? "policy_denied"
-        : originalMessage.includes("Unsupported schema version") ? "schema_version_unsupported"
-        : originalMessage.includes("Unsupported output mode") ? "unsupported_output_mode"
-        : originalMessage.includes("Invalid task state transition") ||
-          originalMessage.includes("Terminal task state") ||
-          originalMessage.includes("Task lifecycle invariant violated") ? "invalid_request"
-        : originalMessage.includes("Negotiation delivery mode conflicts") ? "invalid_request"
-        : originalMessage.includes("requires approval") ? "approval_required"
-        : originalMessage.includes("replay detected") ? "invalid_auth"
-        : originalMessage.includes("Approval request") ? "invalid_request"
-        : originalMessage.includes("Invalid MAP") ? "invalid_request"
-        : originalMessage.includes("Delegation token has expired") ? "token_expired"
-        : "request_failed";
+      const originalMessage =
+        error instanceof Error ? error.message : "Unknown server error.";
+      const code = originalMessage.includes("No micro-agent found")
+        ? "agent_not_found"
+        : originalMessage.includes("Target agent is disabled in registry")
+          ? "agent_disabled"
+          : originalMessage.includes("Capability not supported")
+            ? "capability_not_found"
+            : originalMessage.includes(
+                  "Capability is disabled for target agent",
+                )
+              ? "capability_disabled"
+              : originalMessage.includes("Approval task not found")
+                ? "task_not_found"
+                : originalMessage.includes("Task not found")
+                  ? "task_not_found"
+                  : originalMessage.includes("Receipt not found")
+                    ? "receipt_not_found"
+                    : originalMessage.includes("not awaiting approval")
+                      ? "approval_required"
+                      : originalMessage.includes("Invalid approval reference")
+                        ? "invalid_request"
+                        : originalMessage.includes("Task id conflict") ||
+                            originalMessage.includes("Idempotency key conflict")
+                          ? "idempotency_conflict"
+                          : originalMessage.includes(
+                                "Async queue capacity exceeded",
+                              )
+                            ? "rate_limited"
+                            : originalMessage.includes("tenant_id is required")
+                              ? "policy_denied"
+                              : originalMessage.includes("Task denied")
+                                ? "policy_denied"
+                                : originalMessage.includes(
+                                      "Unsupported schema version",
+                                    )
+                                  ? "schema_version_unsupported"
+                                  : originalMessage.includes(
+                                        "Unsupported output mode",
+                                      )
+                                    ? "unsupported_output_mode"
+                                    : originalMessage.includes(
+                                          "Invalid task state transition",
+                                        ) ||
+                                        originalMessage.includes(
+                                          "Terminal task state",
+                                        ) ||
+                                        originalMessage.includes(
+                                          "Task lifecycle invariant violated",
+                                        )
+                                      ? "invalid_request"
+                                      : originalMessage.includes(
+                                            "Negotiation delivery mode conflicts",
+                                          )
+                                        ? "invalid_request"
+                                        : originalMessage.includes(
+                                              "requires approval",
+                                            )
+                                          ? "approval_required"
+                                          : originalMessage.includes(
+                                                "replay detected",
+                                              )
+                                            ? "invalid_auth"
+                                            : originalMessage.includes(
+                                                  "Approval request",
+                                                )
+                                              ? "invalid_request"
+                                              : originalMessage.includes(
+                                                    "Invalid MAP",
+                                                  )
+                                                ? "invalid_request"
+                                                : originalMessage.includes(
+                                                      "Delegation token has expired",
+                                                    )
+                                                  ? "token_expired"
+                                                  : "request_failed";
 
-      console.error("MAP internal error:", originalMessage, { requestId, code });
+      console.error("MAP internal error:", originalMessage, {
+        requestId,
+        code,
+      });
 
       const retryable = code === "request_failed" || code === "rate_limited";
       if (code === "policy_denied" || code === "invalid_auth") {
@@ -1433,29 +1747,43 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
           method: req.method ?? "UNKNOWN",
           route: normalizePath(req.url ?? "/"),
           tenant_id: routeTenantId,
-          target_agent: routeTargetAgent
+          target_agent: routeTargetAgent,
         });
       }
       const statusCode =
-        code === "rate_limited" ? 429
-        : code === "idempotency_conflict" ? 409
-        : code === "capability_not_found" ? 404
-        : 400;
+        code === "rate_limited"
+          ? 429
+          : code === "idempotency_conflict"
+            ? 409
+            : code === "capability_not_found"
+              ? 404
+              : 400;
 
-      sendError(res, statusCode, requestId, {
-        code,
-        message: "The requested operation could not be completed.",
-        retryable,
-        details: {
-          category:
-            code === "idempotency_conflict" ? "conflict"
-            : code === "rate_limited" ? "throttling"
-            : code === "policy_denied" || code === "approval_required" ? "policy"
-            : code === "schema_version_unsupported" ? "versioning"
-            : code === "unsupported_output_mode" ? "capability"
-            : "runtime"
-        }
-      }, routeTargetAgent);
+      sendError(
+        res,
+        statusCode,
+        requestId,
+        {
+          code,
+          message: "The requested operation could not be completed.",
+          retryable,
+          details: {
+            category:
+              code === "idempotency_conflict"
+                ? "conflict"
+                : code === "rate_limited"
+                  ? "throttling"
+                  : code === "policy_denied" || code === "approval_required"
+                    ? "policy"
+                    : code === "schema_version_unsupported"
+                      ? "versioning"
+                      : code === "unsupported_output_mode"
+                        ? "capability"
+                        : "runtime",
+          },
+        },
+        routeTargetAgent,
+      );
     }
   };
 }
