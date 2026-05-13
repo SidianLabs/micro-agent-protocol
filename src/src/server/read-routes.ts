@@ -228,21 +228,21 @@ export async function handleReadRoutes(ctx: RouteContext): Promise<boolean> {
     const body = {
       protocol: {
         name: "MAP",
-        discovery_version: "v1"
+        discovery_version: "v1",
       },
       provider: {
         provider_id: host,
-        display_name: `MAP Provider (${ctx.deploymentProfile})`
+        display_name: `MAP Provider (${ctx.deploymentProfile})`,
       },
       trust: {
-        key_discovery_url: `${baseUrl}/.well-known/map-keys`
+        key_discovery_url: `${baseUrl}/.well-known/map-keys`,
       },
       documentation: {
-        agents_url: `${baseUrl}/agents`
+        agents_url: `${baseUrl}/agents`,
       },
       agents: {
-        items: agents
-      }
+        items: agents,
+      },
     };
     return sendEtagJson(ctx, body, {
       "cache-control": "public, max-age=300, must-revalidate",
@@ -844,11 +844,22 @@ export async function handleReadRoutes(ctx: RouteContext): Promise<boolean> {
         ? ctx.app.taskStore.listByTenant(tenantId)
         : ctx.app.taskStore.list();
       const orderId = requestUrl.searchParams.get("order_id");
-      const filteredTasks = orderId
-        ? allTasks.filter((task) => task.order_id === orderId)
-        : allTasks;
+      const contextId = requestUrl.searchParams.get("context_id");
+      const filteredTasks = (() => {
+        let tasks = allTasks;
+        if (orderId) {
+          tasks = tasks.filter((task) => task.order_id === orderId);
+        }
+        if (contextId) {
+          tasks = tasks.filter((task) => task.context_id === contextId);
+        }
+        return tasks;
+      })();
       const startIndex = cursor
-        ? Math.max(0, filteredTasks.findIndex((task) => task.task_id === cursor) + 1)
+        ? Math.max(
+            0,
+            filteredTasks.findIndex((task) => task.task_id === cursor) + 1,
+          )
         : 0;
       const tasks = filteredTasks.slice(startIndex, startIndex + limit);
       const nextCursorIndex = startIndex + limit;

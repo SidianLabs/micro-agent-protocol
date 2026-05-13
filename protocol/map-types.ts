@@ -54,7 +54,8 @@ export type ErrorCode =
   | "idempotency_conflict"
   | "resource_not_found"
   | "unauthorized"
-  | "forbidden";
+  | "forbidden"
+  | "extension_support_required";
 
 export interface RequesterIdentity {
   type: "user" | "service" | "agent";
@@ -80,6 +81,13 @@ export interface TaskConstraints {
   };
   domain?: Record<string, unknown>;
   [key: string]: unknown;
+}
+
+export interface AgentExtension {
+  uri: string;
+  description?: string;
+  required?: boolean;
+  params?: Record<string, unknown>;
 }
 
 export interface AgentDescriptor {
@@ -110,6 +118,7 @@ export interface AgentDescriptor {
   descriptor_signature?: string;
   descriptor_key_id?: string;
   descriptor_signature_alg?: "HS256" | "RS256";
+  extensions?: AgentExtension[];
 }
 
 export interface MapSignedRequestHeaders {
@@ -126,7 +135,15 @@ export interface MapErrorResponse {
   retryable: boolean;
   status: number;
   details?: {
-    category: "validation" | "authentication" | "authorization" | "not_found" | "conflict" | "rate_limit" | "server" | "client";
+    category:
+      | "validation"
+      | "authentication"
+      | "authorization"
+      | "not_found"
+      | "conflict"
+      | "rate_limit"
+      | "server"
+      | "client";
     field?: string;
     value?: unknown;
     context?: Record<string, unknown>;
@@ -186,7 +203,10 @@ export interface CapabilityDescriptor {
     to: string;
     mode: "provider_translation";
   }>;
-  compatibility?: "backward_compatible" | "forward_compatible" | "breaking_change";
+  compatibility?:
+    | "backward_compatible"
+    | "forward_compatible"
+    | "breaking_change";
   status?: "active" | "deprecated" | "disabled";
 }
 
@@ -209,6 +229,7 @@ export interface TaskEnvelope {
   task_id: string;
   order_id?: string;
   parent_task_id?: string;
+  context_id?: string;
   requester_identity: RequesterIdentity;
   target_agent: string;
   intent: string;
@@ -223,6 +244,7 @@ export interface TaskEnvelope {
    *  - `request_id`, `capability`, `tenant_id`, `schema_version`, etc.
    */
   metadata?: Record<string, unknown>;
+  extensions?: string[];
 }
 
 export interface InvocationNegotiationRequest {
@@ -246,6 +268,7 @@ export interface InvocationNegotiation {
 
 export interface ResultPackage {
   task_id: string;
+  context_id?: string;
   status: TaskStatus;
   summary?: string;
   structured_output: Record<string, unknown>;
@@ -257,6 +280,7 @@ export interface ResultPackage {
   redactions_applied?: string[];
   followup_required: boolean;
   escalation_reason?: string;
+  extensions?: string[];
 }
 
 export interface ExecutionReceipt {
@@ -276,6 +300,7 @@ export interface ExecutionReceipt {
   executed_schema_version?: string;
   negotiation?: InvocationNegotiation;
   signature: string;
+  extensions?: string[];
 }
 
 export interface PolicyDecision {
@@ -295,6 +320,7 @@ export interface InvokeResult {
 export interface TaskRecord {
   task_id: string;
   order_id?: string;
+  context_id?: string;
   requester_identity: RequesterIdentity;
   idempotency_key?: string;
   capability: string;
@@ -383,12 +409,15 @@ export function createErrorResponse(
   message: string,
   status: number,
   retryable: boolean,
-  details?: MapErrorResponse["details"]
+  details?: MapErrorResponse["details"],
 ): MapErrorResponse {
   return { code, message, retryable, status, details };
 }
 
-export function isErrorResponse(response: { ok: unknown; error?: unknown }): response is { ok: "error"; error: MapErrorResponse } {
+export function isErrorResponse(response: {
+  ok: unknown;
+  error?: unknown;
+}): response is { ok: "error"; error: MapErrorResponse } {
   return response.ok === "error" && response.error !== undefined;
 }
 
@@ -418,7 +447,10 @@ export function compareVersions(a: string, b: string): -1 | 0 | 1 {
 export function isVersionCompatible(
   clientVersion: string,
   serverVersion: string,
-  compatibilityMode: "backward_compatible" | "forward_compatible" | "breaking_change" = "backward_compatible"
+  compatibilityMode:
+    | "backward_compatible"
+    | "forward_compatible"
+    | "breaking_change" = "backward_compatible",
 ): boolean {
   const comparison = compareVersions(clientVersion, serverVersion);
   const [clientMajor] = clientVersion.split(".").map(Number);
@@ -439,10 +471,16 @@ export function isVersionCompatible(
 export function selectVersion(
   clientVersions: string[],
   serverVersions: string[],
-  compatibilityMode: "backward_compatible" | "forward_compatible" = "backward_compatible"
+  compatibilityMode:
+    | "backward_compatible"
+    | "forward_compatible" = "backward_compatible",
 ): string | null {
-  const sortedClient = [...clientVersions].sort((a, b) => compareVersions(b, a));
-  const sortedServer = [...serverVersions].sort((a, b) => compareVersions(b, a));
+  const sortedClient = [...clientVersions].sort((a, b) =>
+    compareVersions(b, a),
+  );
+  const sortedServer = [...serverVersions].sort((a, b) =>
+    compareVersions(b, a),
+  );
 
   for (const clientVer of sortedClient) {
     for (const serverVer of sortedServer) {

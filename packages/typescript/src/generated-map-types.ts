@@ -59,7 +59,8 @@ export type ErrorCode =
   | "idempotency_conflict"
   | "resource_not_found"
   | "unauthorized"
-  | "forbidden";
+  | "forbidden"
+  | "extension_support_required";
 
 export interface RequesterIdentity {
   type: "user" | "service" | "agent";
@@ -85,6 +86,13 @@ export interface TaskConstraints {
   };
   domain?: Record<string, unknown>;
   [key: string]: unknown;
+}
+
+export interface AgentExtension {
+  uri: string;
+  description?: string;
+  required?: boolean;
+  params?: Record<string, unknown>;
 }
 
 export interface AgentDescriptor {
@@ -115,6 +123,7 @@ export interface AgentDescriptor {
   descriptor_signature?: string;
   descriptor_key_id?: string;
   descriptor_signature_alg?: "HS256" | "RS256";
+  extensions?: AgentExtension[];
 }
 
 export interface MapSignedRequestHeaders {
@@ -212,8 +221,9 @@ export interface DelegationToken {
 
 export interface TaskEnvelope {
   task_id: string;
-  parent_task_id?: string;
   order_id?: string;
+  parent_task_id?: string;
+  context_id?: string;
   requester_identity: RequesterIdentity;
   target_agent: string;
   intent: string;
@@ -223,6 +233,7 @@ export interface TaskEnvelope {
   delegation_token: string;
   requested_output_mode: VisibilityMode;
   metadata?: Record<string, unknown>;
+  extensions?: string[];
 }
 
 export interface InvocationNegotiationRequest {
@@ -246,6 +257,7 @@ export interface InvocationNegotiation {
 
 export interface ResultPackage {
   task_id: string;
+  context_id?: string;
   status: TaskStatus;
   summary?: string;
   structured_output: Record<string, unknown>;
@@ -257,6 +269,7 @@ export interface ResultPackage {
   redactions_applied?: string[];
   followup_required: boolean;
   escalation_reason?: string;
+  extensions?: string[];
 }
 
 export interface ExecutionReceipt {
@@ -276,6 +289,7 @@ export interface ExecutionReceipt {
   executed_schema_version?: string;
   negotiation?: InvocationNegotiation;
   signature: string;
+  extensions?: string[];
 }
 
 export interface PolicyDecision {
@@ -295,6 +309,7 @@ export interface InvokeResult {
 export interface TaskRecord {
   task_id: string;
   order_id?: string;
+  context_id?: string;
   requester_identity: RequesterIdentity;
   idempotency_key?: string;
   capability: string;

@@ -12,18 +12,28 @@ const TERMINAL_TASK_STATUSES = new Set<TaskRecord["status"]>([
   "completed",
   "failed",
   "denied",
-  "revoked"
+  "revoked",
 ]);
 
-const ALLOWED_TRANSITIONS: Record<TaskRecord["status"], TaskRecord["status"][]> = {
-  accepted: ["running", "awaiting_approval", "completed", "failed", "denied", "revoked"],
+const ALLOWED_TRANSITIONS: Record<
+  TaskRecord["status"],
+  TaskRecord["status"][]
+> = {
+  accepted: [
+    "running",
+    "awaiting_approval",
+    "completed",
+    "failed",
+    "denied",
+    "revoked",
+  ],
   proposed: ["accepted", "awaiting_approval", "denied", "revoked"],
   awaiting_approval: ["running", "completed", "failed", "denied", "revoked"],
   denied: [],
   running: ["completed", "failed", "revoked"],
   completed: [],
   failed: [],
-  revoked: []
+  revoked: [],
 };
 
 export class TaskStore {
@@ -69,6 +79,7 @@ export class TaskStore {
 
   save(params: {
     task_id: string;
+    context_id?: string;
     requester_identity: TaskRecord["requester_identity"];
     idempotency_key?: string;
     capability: string;
@@ -83,12 +94,15 @@ export class TaskStore {
     if (params.idempotency_key) {
       const existingTaskId = this.idempotencyIndex.get(params.idempotency_key);
       if (existingTaskId && existingTaskId !== params.task_id) {
-        throw new Error(`Idempotency key already exists: ${params.idempotency_key}`);
+        throw new Error(
+          `Idempotency key already exists: ${params.idempotency_key}`,
+        );
       }
     }
 
     const record: TaskRecord = {
       task_id: params.task_id,
+      context_id: params.context_id,
       requester_identity: params.requester_identity,
       idempotency_key: params.idempotency_key,
       capability: params.capability,
@@ -96,7 +110,7 @@ export class TaskStore {
       status: params.result.status,
       result: params.result,
       receipt: params.receipt,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     this.tasks.set(record.task_id, record);
@@ -117,11 +131,16 @@ export class TaskStore {
       return undefined;
     }
 
-    const recordTenant = this.resolveTenantId(record.requester_identity.tenant_id);
+    const recordTenant = this.resolveTenantId(
+      record.requester_identity.tenant_id,
+    );
     return recordTenant === this.resolveTenantId(tenantId) ? record : undefined;
   }
 
-  update(taskId: string, updates: Partial<Omit<TaskRecord, "task_id">>): TaskRecord | undefined {
+  update(
+    taskId: string,
+    updates: Partial<Omit<TaskRecord, "task_id">>,
+  ): TaskRecord | undefined {
     const existing = this.tasks.get(taskId);
     if (!existing) {
       return undefined;
@@ -134,7 +153,7 @@ export class TaskStore {
       ...updates,
       task_id: existing.task_id,
       status: nextStatus,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     this.tasks.set(taskId, next);
@@ -150,7 +169,8 @@ export class TaskStore {
     const normalizedTenantId = this.resolveTenantId(tenantId);
     return this.list().filter(
       (record) =>
-        this.resolveTenantId(record.requester_identity.tenant_id) === normalizedTenantId
+        this.resolveTenantId(record.requester_identity.tenant_id) ===
+        normalizedTenantId,
     );
   }
 
@@ -169,7 +189,10 @@ export class TaskStore {
       .filter((receipt): receipt is ExecutionReceipt => Boolean(receipt));
   }
 
-  getReceipt(receiptId: string, tenantId?: string): ExecutionReceipt | undefined {
+  getReceipt(
+    receiptId: string,
+    tenantId?: string,
+  ): ExecutionReceipt | undefined {
     const receipts = this.listReceipts(tenantId);
     return receipts.find((receipt) => receipt.receipt_id === receiptId);
   }
@@ -202,7 +225,7 @@ export class TaskStore {
               result_json,
               receipt_json,
               updated_at
-             FROM tasks`
+             FROM tasks`,
           )
           .all() as Array<{
           task_id: string;
@@ -223,11 +246,13 @@ export class TaskStore {
             capability: row.capability,
             target_agent: row.target_agent,
             status: row.status,
-            result: row.result_json ? (JSON.parse(row.result_json) as ResultPackage) : undefined,
+            result: row.result_json
+              ? (JSON.parse(row.result_json) as ResultPackage)
+              : undefined,
             receipt: row.receipt_json
               ? (JSON.parse(row.receipt_json) as ExecutionReceipt)
               : undefined,
-            updated_at: row.updated_at
+            updated_at: row.updated_at,
           });
           if (row.idempotency_key) {
             this.idempotencyIndex.set(row.idempotency_key, row.task_id);
@@ -282,7 +307,7 @@ export class TaskStore {
           status = excluded.status,
           result_json = excluded.result_json,
           receipt_json = excluded.receipt_json,
-          updated_at = excluded.updated_at`
+          updated_at = excluded.updated_at`,
       );
 
       try {
@@ -297,7 +322,7 @@ export class TaskStore {
             record.status,
             record.result ? JSON.stringify(record.result) : null,
             record.receipt ? JSON.stringify(record.receipt) : null,
-            record.updated_at
+            record.updated_at,
           );
         }
         this.db.exec("COMMIT");
@@ -316,7 +341,7 @@ export class TaskStore {
     writeFileSync(
       this.filePath,
       JSON.stringify({ tasks: this.list() }, null, 2),
-      "utf8"
+      "utf8",
     );
   }
 
@@ -327,44 +352,59 @@ export class TaskStore {
   private validateTransition(
     existing: TaskRecord,
     nextStatus: TaskRecord["status"],
-    updates: Partial<Omit<TaskRecord, "task_id">>
+    updates: Partial<Omit<TaskRecord, "task_id">>,
   ): void {
-    if (updates.idempotency_key !== undefined && updates.idempotency_key !== existing.idempotency_key) {
-      throw new Error(`Idempotency key is immutable for task ${existing.task_id}.`);
+    if (
+      updates.idempotency_key !== undefined &&
+      updates.idempotency_key !== existing.idempotency_key
+    ) {
+      throw new Error(
+        `Idempotency key is immutable for task ${existing.task_id}.`,
+      );
     }
     if (
       updates.requester_identity !== undefined &&
-      JSON.stringify(updates.requester_identity) !== JSON.stringify(existing.requester_identity)
+      JSON.stringify(updates.requester_identity) !==
+        JSON.stringify(existing.requester_identity)
     ) {
       throw new Error(
-        `Task lifecycle invariant violated: requester_identity is immutable for task ${existing.task_id}.`
+        `Task lifecycle invariant violated: requester_identity is immutable for task ${existing.task_id}.`,
       );
     }
-    if (updates.capability !== undefined && updates.capability !== existing.capability) {
+    if (
+      updates.capability !== undefined &&
+      updates.capability !== existing.capability
+    ) {
       throw new Error(
-        `Task lifecycle invariant violated: capability is immutable for task ${existing.task_id}.`
+        `Task lifecycle invariant violated: capability is immutable for task ${existing.task_id}.`,
       );
     }
-    if (updates.target_agent !== undefined && updates.target_agent !== existing.target_agent) {
+    if (
+      updates.target_agent !== undefined &&
+      updates.target_agent !== existing.target_agent
+    ) {
       throw new Error(
-        `Task lifecycle invariant violated: target_agent is immutable for task ${existing.task_id}.`
+        `Task lifecycle invariant violated: target_agent is immutable for task ${existing.task_id}.`,
       );
     }
     if (updates.result !== undefined) {
       if (updates.result.task_id !== existing.task_id) {
         throw new Error(
-          `Task lifecycle invariant violated: result.task_id mismatch for task ${existing.task_id}.`
+          `Task lifecycle invariant violated: result.task_id mismatch for task ${existing.task_id}.`,
         );
       }
       if (updates.result.status !== nextStatus) {
         throw new Error(
-          `Task lifecycle invariant violated: result.status must match task status for task ${existing.task_id}.`
+          `Task lifecycle invariant violated: result.status must match task status for task ${existing.task_id}.`,
         );
       }
     }
-    if (updates.receipt !== undefined && updates.receipt.task_id !== existing.task_id) {
+    if (
+      updates.receipt !== undefined &&
+      updates.receipt.task_id !== existing.task_id
+    ) {
       throw new Error(
-        `Task lifecycle invariant violated: receipt.task_id mismatch for task ${existing.task_id}.`
+        `Task lifecycle invariant violated: receipt.task_id mismatch for task ${existing.task_id}.`,
       );
     }
     if (existing.status === nextStatus) {
@@ -379,7 +419,7 @@ export class TaskStore {
         JSON.stringify(updates.receipt) !== JSON.stringify(existing.receipt);
       if (resultChanged || receiptChanged) {
         throw new Error(
-          `Terminal task state is immutable for task ${existing.task_id} (${existing.status}).`
+          `Terminal task state is immutable for task ${existing.task_id} (${existing.status}).`,
         );
       }
       return;
@@ -387,20 +427,20 @@ export class TaskStore {
 
     if (TERMINAL_TASK_STATUSES.has(existing.status)) {
       throw new Error(
-        `Terminal task state transition is not allowed for task ${existing.task_id}: ${existing.status} -> ${nextStatus}.`
+        `Terminal task state transition is not allowed for task ${existing.task_id}: ${existing.status} -> ${nextStatus}.`,
       );
     }
 
     const allowed = ALLOWED_TRANSITIONS[existing.status];
     if (!allowed.includes(nextStatus)) {
       throw new Error(
-        `Invalid task state transition for task ${existing.task_id}: ${existing.status} -> ${nextStatus}.`
+        `Invalid task state transition for task ${existing.task_id}: ${existing.status} -> ${nextStatus}.`,
       );
     }
 
     if (updates.result === undefined || updates.receipt === undefined) {
       throw new Error(
-        `Task lifecycle invariant violated: transitions must include result and receipt for task ${existing.task_id}.`
+        `Task lifecycle invariant violated: transitions must include result and receipt for task ${existing.task_id}.`,
       );
     }
   }

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { AgentRegistry } from "./registry.js";
 import { AsyncTaskQueue } from "./async-queue.js";
 import { DelegationService } from "./delegation.js";
@@ -13,14 +14,14 @@ import type {
   InvokeResult,
   ResultPackage,
   TaskEnvelope,
-  TaskRecord
+  TaskRecord,
 } from "../types.js";
 import type { PolicyEngine } from "./policy.js";
 import {
   validateDelegationToken,
   validateExecutionReceipt,
   validateResultPackage,
-  validateTaskEnvelope
+  validateTaskEnvelope,
 } from "../validation/schema-validator.js";
 import { signReceipt } from "../security/signing.js";
 
@@ -32,27 +33,58 @@ export class OrchestratorRuntime {
     private readonly runtimes: Map<string, MicroAgent>,
     private readonly taskStore: TaskStore,
     private readonly receiptStore: ReceiptStore,
-    private readonly asyncQueue: AsyncTaskQueue
+    private readonly asyncQueue: AsyncTaskQueue,
   ) {}
 
   async dispatch(
     envelope: TaskEnvelope,
     capability: string,
     requestedSchemaVersion?: string,
-    negotiationRequest?: InvocationNegotiationRequest
+    negotiationRequest?: InvocationNegotiationRequest,
   ): Promise<InvokeResult> {
     validateTaskEnvelope(envelope);
 
-    const descriptor = this.resolveDescriptor(envelope.target_agent, capability);
+    const descriptor = this.resolveDescriptor(
+      envelope.target_agent,
+      capability,
+    );
+
+    // --- Multi-turn context ---
+    // If the caller provides a context_id, we preserve it so that follow-up
+    // tasks within the same conversation / workflow can be correlated.
+    // If none is provided, we generate a new UUID to anchor this task in a
+    // fresh context.  Downstream agents and audit surfaces can use this id
+    // to group related interactions without requiring a shared order_id.
+    const contextId = envelope.context_id ?? randomUUID();
+
+    // --- URI-based Extensions ---
+    // Verify that every extension the agent declares as required is present
+    // in the task envelope.  Missing required extensions mean the caller
+    // cannot fulfil the contract the agent demands, so we must abort.
+    if (descriptor.extensions) {
+      const envelopeExtensions = envelope.extensions ?? [];
+      for (const ext of descriptor.extensions) {
+        if (ext.required && !envelopeExtensions.includes(ext.uri)) {
+          throw new Error(
+            `Extension "${ext.uri}" is required by agent "${descriptor.agent_id}" but was not declared in the task envelope.`,
+          );
+        }
+      }
+    }
+
     const idempotencyKey = this.resolveIdempotencyKey(envelope);
     if (idempotencyKey) {
-      const existingByIdempotency = this.taskStore.findByIdempotencyKey(idempotencyKey);
+      const existingByIdempotency =
+        this.taskStore.findByIdempotencyKey(idempotencyKey);
       if (existingByIdempotency) {
         const sameIdempotencyIdentity =
-          existingByIdempotency.requester_identity.type === envelope.requester_identity.type &&
-          existingByIdempotency.requester_identity.id === envelope.requester_identity.id &&
-          this.resolveTenantId(existingByIdempotency.requester_identity.tenant_id) ===
-            this.resolveTenantId(envelope.requester_identity.tenant_id) &&
+          existingByIdempotency.requester_identity.type ===
+            envelope.requester_identity.type &&
+          existingByIdempotency.requester_identity.id ===
+            envelope.requester_identity.id &&
+          this.resolveTenantId(
+            existingByIdempotency.requester_identity.tenant_id,
+          ) === this.resolveTenantId(envelope.requester_identity.tenant_id) &&
           existingByIdempotency.capability === capability &&
           existingByIdempotency.target_agent === descriptor.agent_id;
 
@@ -61,7 +93,10 @@ export class OrchestratorRuntime {
         }
 
         if (existingByIdempotency.result && existingByIdempotency.receipt) {
-          return { result: existingByIdempotency.result, receipt: existingByIdempotency.receipt };
+          return {
+            result: existingByIdempotency.result,
+            receipt: existingByIdempotency.receipt,
+          };
         }
       }
     }
@@ -69,7 +104,8 @@ export class OrchestratorRuntime {
     const existingTask = this.taskStore.get(envelope.task_id);
     if (existingTask) {
       const sameIdentity =
-        existingTask.requester_identity.type === envelope.requester_identity.type &&
+        existingTask.requester_identity.type ===
+          envelope.requester_identity.type &&
         existingTask.requester_identity.id === envelope.requester_identity.id &&
         this.resolveTenantId(existingTask.requester_identity.tenant_id) ===
           this.resolveTenantId(envelope.requester_identity.tenant_id) &&
@@ -90,36 +126,46 @@ export class OrchestratorRuntime {
       throw new Error(`No runtime bound for agent: ${descriptor.agent_id}`);
     }
 
-    const capabilityDescriptor = this.getCapabilityDescriptor(descriptor.agent_id, capability);
+    const capabilityDescriptor = this.getCapabilityDescriptor(
+      descriptor.agent_id,
+      capability,
+    );
     const negotiation = this.negotiateInvocation(
       descriptor.visibility_modes,
       capabilityDescriptor,
       envelope,
       capability,
       requestedSchemaVersion,
-      negotiationRequest
+      negotiationRequest,
     );
     const negotiatedEnvelope = this.withNegotiatedInvocation(
       envelope,
       capability,
-      negotiation
+      negotiation,
     );
 
-    const decision = this.policyEngine.evaluate({ descriptor, envelope: negotiatedEnvelope });
+    const decision = this.policyEngine.evaluate({
+      descriptor,
+      envelope: negotiatedEnvelope,
+    });
     if (decision.action === "deny") {
-      this.notifyWebhook(envelope, { status: "denied", summary: decision.reason ?? "Task denied by policy." });
+      this.notifyWebhook(envelope, {
+        status: "denied",
+        summary: decision.reason ?? "Task denied by policy.",
+      });
       throw new Error(decision.reason ?? "Task denied by policy.");
     }
 
     if (decision.action === "require_approval") {
-      const result = {
+      const result: ResultPackage = {
         task_id: envelope.task_id,
+        context_id: contextId,
         status: "awaiting_approval" as const,
         summary: decision.reason ?? "Task requires approval before execution.",
         structured_output: {
           capability,
           target_agent: descriptor.agent_id,
-          approval_reference: `approval:${envelope.task_id}`
+          approval_reference: `approval:${envelope.task_id}`,
         },
         negotiated_schema_version: negotiation.selected.schema_version,
         requested_schema_version: negotiation.requested.schema_version,
@@ -127,7 +173,8 @@ export class OrchestratorRuntime {
         negotiation,
         followup_required: true,
         escalation_reason: decision.reason,
-        redactions_applied: ["credentials", "internal_reasoning"]
+        redactions_applied: ["credentials", "internal_reasoning"],
+        extensions: envelope.extensions,
       };
 
       const unsignedReceipt = {
@@ -135,7 +182,9 @@ export class OrchestratorRuntime {
         task_id: envelope.task_id,
         tenant_id: this.resolveTenantId(envelope.requester_identity.tenant_id),
         request_id:
-          typeof envelope.metadata?.request_id === "string" ? envelope.metadata.request_id : undefined,
+          typeof envelope.metadata?.request_id === "string"
+            ? envelope.metadata.request_id
+            : undefined,
         agent_id: descriptor.agent_id,
         action_taken: `${capability}.approval_required`,
         resource_touched: descriptor.domain,
@@ -145,24 +194,26 @@ export class OrchestratorRuntime {
         result_hash: `sha256:${envelope.task_id}:approval`,
         requested_schema_version: negotiation.requested.schema_version,
         executed_schema_version: negotiation.selected.schema_version,
-        negotiation
+        negotiation,
+        extensions: envelope.extensions,
       };
 
       const receipt = {
         ...unsignedReceipt,
-        signature: signReceipt(unsignedReceipt)
+        signature: signReceipt(unsignedReceipt),
       };
 
       validateResultPackage(result);
       validateExecutionReceipt(receipt);
       this.taskStore.save({
         task_id: envelope.task_id,
+        context_id: contextId,
         requester_identity: envelope.requester_identity,
         idempotency_key: idempotencyKey,
         capability,
         target_agent: descriptor.agent_id,
         result,
-        receipt
+        receipt,
       });
       this.receiptStore.append(receipt);
 
@@ -173,7 +224,7 @@ export class OrchestratorRuntime {
       capability,
       descriptorId: descriptor.agent_id,
       envelope: negotiatedEnvelope,
-      approvalReference: decision.approval_reference
+      approvalReference: decision.approval_reference,
     });
 
     // Check delegation token expiration
@@ -181,7 +232,7 @@ export class OrchestratorRuntime {
     if (tokenExpiresAt) {
       const expiresAt = new Date(tokenExpiresAt);
       if (Number.isNaN(expiresAt.getTime()) || expiresAt < new Date()) {
-        throw new Error('Delegation token has expired.');
+        throw new Error("Delegation token has expired.");
       }
     }
 
@@ -195,7 +246,9 @@ export class OrchestratorRuntime {
         task_id: envelope.task_id,
         tenant_id: this.resolveTenantId(envelope.requester_identity.tenant_id),
         request_id:
-          typeof envelope.metadata?.request_id === "string" ? envelope.metadata.request_id : undefined,
+          typeof envelope.metadata?.request_id === "string"
+            ? envelope.metadata.request_id
+            : undefined,
         agent_id: descriptor.agent_id,
         action_taken: `${capability}.running`,
         resource_touched: descriptor.domain,
@@ -205,41 +258,45 @@ export class OrchestratorRuntime {
         result_hash: `sha256:${envelope.task_id}:running`,
         requested_schema_version: negotiation.requested.schema_version,
         executed_schema_version: negotiation.selected.schema_version,
-        negotiation
+        negotiation,
+        extensions: envelope.extensions,
       };
 
       const receipt = {
         ...unsignedReceipt,
-        signature: signReceipt(unsignedReceipt)
+        signature: signReceipt(unsignedReceipt),
       };
 
-      const result = {
+      const result: ResultPackage = {
         task_id: envelope.task_id,
+        context_id: contextId,
         status: "running" as const,
         summary: "Task accepted and running asynchronously.",
         structured_output: {
           capability,
           target_agent: descriptor.agent_id,
-          poll_path: `/tasks/${envelope.task_id}`
+          poll_path: `/tasks/${envelope.task_id}`,
         },
         negotiated_schema_version: negotiation.selected.schema_version,
         requested_schema_version: negotiation.requested.schema_version,
         executed_schema_version: negotiation.selected.schema_version,
         negotiation,
         followup_required: true,
-        redactions_applied: ["credentials", "internal_reasoning"]
+        redactions_applied: ["credentials", "internal_reasoning"],
+        extensions: envelope.extensions,
       };
 
       validateResultPackage(result);
       validateExecutionReceipt(receipt);
       this.taskStore.save({
         task_id: envelope.task_id,
+        context_id: contextId,
         requester_identity: envelope.requester_identity,
         idempotency_key: idempotencyKey,
         capability,
         target_agent: descriptor.agent_id,
         result,
-        receipt
+        receipt,
       });
 
       const enqueueResult = this.asyncQueue.enqueue({
@@ -250,24 +307,33 @@ export class OrchestratorRuntime {
             {
               ...negotiatedEnvelope,
               target_agent: descriptor.agent_id,
-              delegation_token: token.signature
+              delegation_token: token.signature,
             },
-            token
+            token,
           );
-          const normalizedCompleted = this.withNegotiatedOutcome(completed, negotiation);
+          const normalizedCompleted = this.withNegotiatedOutcome(
+            completed,
+            negotiation,
+          );
           this.taskStore.update(envelope.task_id, {
             status: normalizedCompleted.result.status,
             result: normalizedCompleted.result,
-            receipt: normalizedCompleted.receipt
+            receipt: normalizedCompleted.receipt,
           });
           this.receiptStore.append(normalizedCompleted.receipt);
-          this.notifyWebhook(envelope, { status: normalizedCompleted.result.status, summary: normalizedCompleted.result.summary, structured_output: normalizedCompleted.result.structured_output });
+          this.notifyWebhook(envelope, {
+            status: normalizedCompleted.result.status,
+            summary: normalizedCompleted.result.summary,
+            structured_output: normalizedCompleted.result.structured_output,
+          });
         },
         onDeadLetter: (deadLetter) => {
           const unsignedReceipt = {
             receipt_id: `receipt:${envelope.task_id}:failed`,
             task_id: envelope.task_id,
-            tenant_id: this.resolveTenantId(envelope.requester_identity.tenant_id),
+            tenant_id: this.resolveTenantId(
+              envelope.requester_identity.tenant_id,
+            ),
             request_id:
               typeof envelope.metadata?.request_id === "string"
                 ? envelope.metadata.request_id
@@ -277,41 +343,50 @@ export class OrchestratorRuntime {
             resource_touched: descriptor.domain,
             policy_checks: ["execution_failed"],
             timestamp: new Date().toISOString(),
-            result_hash: `sha256:${envelope.task_id}:failed`
+            result_hash: `sha256:${envelope.task_id}:failed`,
+            extensions: envelope.extensions,
           };
           this.taskStore.update(envelope.task_id, {
             status: "failed",
             result: {
               task_id: envelope.task_id,
+              context_id: contextId,
               status: "failed",
               summary: deadLetter.error,
-              structured_output: { capability, target_agent: descriptor.agent_id },
+              structured_output: {
+                capability,
+                target_agent: descriptor.agent_id,
+              },
               negotiated_schema_version: negotiation.selected.schema_version,
               requested_schema_version: negotiation.requested.schema_version,
               executed_schema_version: negotiation.selected.schema_version,
               negotiation,
               followup_required: false,
-              redactions_applied: ["credentials", "internal_reasoning"]
+              redactions_applied: ["credentials", "internal_reasoning"],
+              extensions: envelope.extensions,
             },
             receipt: (() => {
               const failedReceipt = {
                 ...unsignedReceipt,
                 requested_schema_version: negotiation.requested.schema_version,
                 executed_schema_version: negotiation.selected.schema_version,
-                negotiation
+                negotiation,
               };
               return {
                 ...failedReceipt,
-                signature: signReceipt(failedReceipt)
+                signature: signReceipt(failedReceipt),
               };
-            })()
+            })(),
           });
           const failedTask = this.taskStore.get(envelope.task_id);
           if (failedTask?.receipt) {
             this.receiptStore.append(failedTask.receipt);
-            this.notifyWebhook(envelope, { status: "failed", summary: deadLetter.error });
+            this.notifyWebhook(envelope, {
+              status: "failed",
+              summary: deadLetter.error,
+            });
           }
-        }
+        },
       });
       if (!enqueueResult.accepted) {
         this.taskStore.delete(envelope.task_id);
@@ -326,26 +401,43 @@ export class OrchestratorRuntime {
       {
         ...negotiatedEnvelope,
         target_agent: descriptor.agent_id,
-        delegation_token: token.signature
+        delegation_token: token.signature,
       },
-      token
+      token,
     );
 
-    const normalizedInvokeResult = this.withNegotiatedOutcome(invokeResult, negotiation);
+    const normalizedInvokeResult = this.withNegotiatedOutcome(
+      invokeResult,
+      negotiation,
+    );
+    // Enrich the outcome with context and extensions from the dispatch envelope
+    // so the caller can correlate multi-turn interactions and extension usage.
+    normalizedInvokeResult.result.context_id =
+      normalizedInvokeResult.result.context_id ?? contextId;
+    normalizedInvokeResult.result.extensions =
+      normalizedInvokeResult.result.extensions ?? envelope.extensions;
+    normalizedInvokeResult.receipt.extensions =
+      normalizedInvokeResult.receipt.extensions ?? envelope.extensions;
+
     validateResultPackage(normalizedInvokeResult.result);
     validateExecutionReceipt(normalizedInvokeResult.receipt);
     this.taskStore.save({
       task_id: envelope.task_id,
+      context_id: contextId,
       requester_identity: envelope.requester_identity,
       idempotency_key: idempotencyKey,
       capability,
       target_agent: descriptor.agent_id,
       result: normalizedInvokeResult.result,
-      receipt: normalizedInvokeResult.receipt
+      receipt: normalizedInvokeResult.receipt,
     });
     this.receiptStore.append(normalizedInvokeResult.receipt);
 
-    this.notifyWebhook(envelope, { status: normalizedInvokeResult.result.status, summary: normalizedInvokeResult.result.summary, structured_output: normalizedInvokeResult.result.structured_output });
+    this.notifyWebhook(envelope, {
+      status: normalizedInvokeResult.result.status,
+      summary: normalizedInvokeResult.result.summary,
+      structured_output: normalizedInvokeResult.result.structured_output,
+    });
     return normalizedInvokeResult;
   }
 
@@ -355,34 +447,42 @@ export class OrchestratorRuntime {
       capability,
       approval_reference: approvalReference,
       requested_schema_version: requestedSchemaVersion,
-      negotiation: negotiationRequest
+      negotiation: negotiationRequest,
     } = request;
     validateTaskEnvelope(envelope);
 
     if (request.task_id !== envelope.task_id) {
-      throw new Error("Approval request task_id does not match the envelope task_id.");
+      throw new Error(
+        "Approval request task_id does not match the envelope task_id.",
+      );
     }
 
-    const descriptor = this.resolveDescriptor(envelope.target_agent, capability);
+    const descriptor = this.resolveDescriptor(
+      envelope.target_agent,
+      capability,
+    );
 
     const runtime = this.runtimes.get(descriptor.agent_id);
     if (!runtime) {
       throw new Error(`No runtime bound for agent: ${descriptor.agent_id}`);
     }
 
-    const capabilityDescriptor = this.getCapabilityDescriptor(descriptor.agent_id, capability);
+    const capabilityDescriptor = this.getCapabilityDescriptor(
+      descriptor.agent_id,
+      capability,
+    );
     const negotiation = this.negotiateInvocation(
       descriptor.visibility_modes,
       capabilityDescriptor,
       envelope,
       capability,
       requestedSchemaVersion,
-      negotiationRequest
+      negotiationRequest,
     );
     const negotiatedEnvelope = this.withNegotiatedInvocation(
       envelope,
       capability,
-      negotiation
+      negotiation,
     );
 
     const pendingTask = this.taskStore.get(request.task_id);
@@ -395,25 +495,34 @@ export class OrchestratorRuntime {
     }
 
     if (pendingTask.capability !== capability) {
-      throw new Error(`Approval capability mismatch for task: ${request.task_id}`);
+      throw new Error(
+        `Approval capability mismatch for task: ${request.task_id}`,
+      );
     }
 
     if (pendingTask.target_agent !== descriptor.agent_id) {
-      throw new Error(`Approval target agent mismatch for task: ${request.task_id}`);
+      throw new Error(
+        `Approval target agent mismatch for task: ${request.task_id}`,
+      );
     }
 
     const expectedApprovalReference = String(
-      pendingTask.result?.structured_output?.approval_reference ?? ""
+      pendingTask.result?.structured_output?.approval_reference ?? "",
     );
-    if (!expectedApprovalReference || expectedApprovalReference !== approvalReference) {
-      throw new Error(`Invalid approval reference for task: ${request.task_id}`);
+    if (
+      !expectedApprovalReference ||
+      expectedApprovalReference !== approvalReference
+    ) {
+      throw new Error(
+        `Invalid approval reference for task: ${request.task_id}`,
+      );
     }
 
     const token = this.issueToken({
       capability,
       descriptorId: descriptor.agent_id,
       envelope: negotiatedEnvelope,
-      approvalReference
+      approvalReference,
     });
 
     // Check delegation token expiration
@@ -421,7 +530,7 @@ export class OrchestratorRuntime {
     if (tokenExpiresAt) {
       const expiresAt = new Date(tokenExpiresAt);
       if (Number.isNaN(expiresAt.getTime()) || expiresAt < new Date()) {
-        throw new Error('Delegation token has expired.');
+        throw new Error("Delegation token has expired.");
       }
     }
 
@@ -429,22 +538,29 @@ export class OrchestratorRuntime {
       {
         ...negotiatedEnvelope,
         target_agent: descriptor.agent_id,
-        delegation_token: token.signature
+        delegation_token: token.signature,
       },
-      token
+      token,
     );
 
-    const normalizedInvokeResult = this.withNegotiatedOutcome(invokeResult, negotiation);
+    const normalizedInvokeResult = this.withNegotiatedOutcome(
+      invokeResult,
+      negotiation,
+    );
     validateResultPackage(normalizedInvokeResult.result);
     validateExecutionReceipt(normalizedInvokeResult.receipt);
     this.taskStore.update(envelope.task_id, {
       status: normalizedInvokeResult.result.status,
       result: normalizedInvokeResult.result,
-      receipt: normalizedInvokeResult.receipt
+      receipt: normalizedInvokeResult.receipt,
     });
     this.receiptStore.append(normalizedInvokeResult.receipt);
 
-    this.notifyWebhook(envelope, { status: normalizedInvokeResult.result.status, summary: normalizedInvokeResult.result.summary, structured_output: normalizedInvokeResult.result.structured_output });
+    this.notifyWebhook(envelope, {
+      status: normalizedInvokeResult.result.status,
+      summary: normalizedInvokeResult.result.summary,
+      structured_output: normalizedInvokeResult.result.structured_output,
+    });
     return normalizedInvokeResult;
   }
 
@@ -467,7 +583,7 @@ export class OrchestratorRuntime {
       "accepted",
       "proposed",
       "awaiting_approval",
-      "running"
+      "running",
     ];
 
     const existingTask = tenantId
@@ -480,7 +596,7 @@ export class OrchestratorRuntime {
 
     if (!CANCELLABLE_STATES.includes(existingTask.status)) {
       throw new Error(
-        "Task cannot be cancelled in its current state: " + existingTask.status
+        "Task cannot be cancelled in its current state: " + existingTask.status,
       );
     }
 
@@ -491,20 +607,22 @@ export class OrchestratorRuntime {
       structured_output: {
         target_agent: existingTask.target_agent,
         capability: existingTask.capability,
-        previous_status: existingTask.status
+        previous_status: existingTask.status,
       },
       negotiated_schema_version: existingTask.result?.negotiated_schema_version,
       requested_schema_version: existingTask.result?.requested_schema_version,
       executed_schema_version: existingTask.result?.executed_schema_version,
       redactions_applied: ["internal_reasoning"],
       followup_required: false,
-      escalation_reason: undefined
+      escalation_reason: undefined,
     };
 
     const unsignedReceipt: Omit<ExecutionReceipt, "signature"> = {
       receipt_id: "receipt:" + taskId + ":cancel",
       task_id: taskId,
-      tenant_id: this.resolveTenantId(existingTask.requester_identity.tenant_id),
+      tenant_id: this.resolveTenantId(
+        existingTask.requester_identity.tenant_id,
+      ),
       request_id: existingTask.receipt?.request_id,
       agent_id: existingTask.target_agent,
       action_taken: existingTask.capability + ".cancelled",
@@ -515,12 +633,12 @@ export class OrchestratorRuntime {
       result_hash: "sha256:" + taskId + ":cancel",
       requested_schema_version: result.requested_schema_version,
       executed_schema_version: result.executed_schema_version,
-      negotiation: existingTask.result?.negotiation
+      negotiation: existingTask.result?.negotiation,
     };
 
     const receipt: ExecutionReceipt = {
       ...unsignedReceipt,
-      signature: signReceipt(unsignedReceipt)
+      signature: signReceipt(unsignedReceipt),
     };
 
     validateResultPackage(result);
@@ -529,12 +647,11 @@ export class OrchestratorRuntime {
     this.taskStore.update(taskId, {
       status: result.status,
       result,
-      receipt
+      receipt,
     });
 
     return { result, receipt };
   }
-
 
   private issueToken(args: {
     capability: string;
@@ -552,9 +669,9 @@ export class OrchestratorRuntime {
         action: "allow",
         policy_checks: ["policy_passed"],
         approval_reference: args.approvalReference,
-        scoped_constraints: args.envelope.constraints
+        scoped_constraints: args.envelope.constraints,
       },
-      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     });
     validateDelegationToken(token);
     return token;
@@ -562,7 +679,7 @@ export class OrchestratorRuntime {
 
   private getCapabilityDescriptor(
     agentId: string,
-    capability: string
+    capability: string,
   ): CapabilityDescriptor | undefined {
     return this.registry.getCapabilityDescriptor(agentId, capability);
   }
@@ -573,7 +690,7 @@ export class OrchestratorRuntime {
     envelope: TaskEnvelope,
     capability: string,
     requestedSchemaVersion?: string,
-    negotiationRequest?: InvocationNegotiationRequest
+    negotiationRequest?: InvocationNegotiationRequest,
   ): InvocationNegotiation {
     if (
       requestedSchemaVersion &&
@@ -581,91 +698,100 @@ export class OrchestratorRuntime {
       requestedSchemaVersion !== negotiationRequest.schema_version
     ) {
       throw new Error(
-        "Negotiation schema_version conflicts with requested_schema_version."
+        "Negotiation schema_version conflicts with requested_schema_version.",
       );
     }
 
     const requestedDeliveryMode = this.resolveRequestedDeliveryMode(
       envelope,
-      negotiationRequest
+      negotiationRequest,
     );
-    this.assertSupportedVisibilityMode(supportedVisibilityModes, capability, envelope.requested_output_mode);
+    this.assertSupportedVisibilityMode(
+      supportedVisibilityModes,
+      capability,
+      envelope.requested_output_mode,
+    );
 
     const schemaResolution = this.negotiateSchemaVersion(
       capabilityDescriptor,
       capability,
-      negotiationRequest?.schema_version ?? requestedSchemaVersion
+      negotiationRequest?.schema_version ?? requestedSchemaVersion,
     );
 
     return {
       requested: {
         schema_version: schemaResolution.requested,
         output_mode: envelope.requested_output_mode,
-        delivery_mode: requestedDeliveryMode
+        delivery_mode: requestedDeliveryMode,
       },
       selected: {
         schema_version: schemaResolution.executed,
         output_mode: envelope.requested_output_mode,
-        delivery_mode: requestedDeliveryMode
+        delivery_mode: requestedDeliveryMode,
       },
       ...(schemaResolution.requested &&
       schemaResolution.executed &&
       schemaResolution.requested !== schemaResolution.executed
         ? { provider_actions: ["schema_translated" as const] }
-        : {})
+        : {}),
     };
   }
 
   private negotiateSchemaVersion(
     capabilityDescriptor: CapabilityDescriptor | undefined,
     capability: string,
-    requestedSchemaVersion?: string
+    requestedSchemaVersion?: string,
   ): { requested?: string; executed?: string } {
     if (!capabilityDescriptor) {
       return {
         requested: requestedSchemaVersion,
-        executed: requestedSchemaVersion
+        executed: requestedSchemaVersion,
       };
     }
 
-    const supportedVersions = capabilityDescriptor.supported_schema_versions ?? [];
+    const supportedVersions =
+      capabilityDescriptor.supported_schema_versions ?? [];
     const preferredVersion =
-      capabilityDescriptor.preferred_schema_version ?? capabilityDescriptor.schema_version;
+      capabilityDescriptor.preferred_schema_version ??
+      capabilityDescriptor.schema_version;
     const translationTargets = capabilityDescriptor.translation_targets ?? [];
 
     if (!requestedSchemaVersion) {
       return {
         requested: preferredVersion,
-        executed: preferredVersion
+        executed: preferredVersion,
       };
     }
 
     const translationTarget = translationTargets.find(
-      (target) => target.from === requestedSchemaVersion
+      (target) => target.from === requestedSchemaVersion,
     );
     if (translationTarget) {
       return {
         requested: requestedSchemaVersion,
-        executed: translationTarget.to
+        executed: translationTarget.to,
       };
     }
 
-    if (supportedVersions.length === 0 || supportedVersions.includes(requestedSchemaVersion)) {
+    if (
+      supportedVersions.length === 0 ||
+      supportedVersions.includes(requestedSchemaVersion)
+    ) {
       return {
         requested: requestedSchemaVersion,
-        executed: requestedSchemaVersion
+        executed: requestedSchemaVersion,
       };
     }
 
     throw new Error(
-      `Unsupported schema version for ${capability}: ${requestedSchemaVersion}. Supported versions: ${supportedVersions.join(", ")}`
+      `Unsupported schema version for ${capability}: ${requestedSchemaVersion}. Supported versions: ${supportedVersions.join(", ")}`,
     );
   }
 
   private withNegotiatedInvocation(
     envelope: TaskEnvelope,
     capability: string,
-    negotiation: InvocationNegotiation
+    negotiation: InvocationNegotiation,
   ): TaskEnvelope {
     return {
       ...envelope,
@@ -684,63 +810,70 @@ export class OrchestratorRuntime {
         ...(negotiation.selected.schema_version
           ? { executed_schema_version: negotiation.selected.schema_version }
           : {}),
-        negotiation
-      }
+        negotiation,
+      },
     };
   }
 
   private withNegotiatedOutcome(
     invokeResult: InvokeResult,
-    negotiation: InvocationNegotiation
+    negotiation: InvocationNegotiation,
   ): InvokeResult {
     const unsignedReceipt: Omit<ExecutionReceipt, "signature"> = {
       ...invokeResult.receipt,
       requested_schema_version:
-        invokeResult.receipt.requested_schema_version ?? negotiation.requested.schema_version,
+        invokeResult.receipt.requested_schema_version ??
+        negotiation.requested.schema_version,
       executed_schema_version:
-        invokeResult.receipt.executed_schema_version ?? negotiation.selected.schema_version,
-      negotiation: invokeResult.receipt.negotiation ?? negotiation
+        invokeResult.receipt.executed_schema_version ??
+        negotiation.selected.schema_version,
+      negotiation: invokeResult.receipt.negotiation ?? negotiation,
     };
 
     return {
       result: {
         ...invokeResult.result,
         negotiated_schema_version:
-          invokeResult.result.negotiated_schema_version ?? negotiation.selected.schema_version,
+          invokeResult.result.negotiated_schema_version ??
+          negotiation.selected.schema_version,
         requested_schema_version:
-          invokeResult.result.requested_schema_version ?? negotiation.requested.schema_version,
+          invokeResult.result.requested_schema_version ??
+          negotiation.requested.schema_version,
         executed_schema_version:
-          invokeResult.result.executed_schema_version ?? negotiation.selected.schema_version,
-        negotiation: invokeResult.result.negotiation ?? negotiation
+          invokeResult.result.executed_schema_version ??
+          negotiation.selected.schema_version,
+        negotiation: invokeResult.result.negotiation ?? negotiation,
       },
       receipt: {
         ...unsignedReceipt,
-        signature: signReceipt(unsignedReceipt)
-      }
+        signature: signReceipt(unsignedReceipt),
+      },
     };
   }
 
   private assertSupportedVisibilityMode(
     supportedVisibilityModes: TaskEnvelope["requested_output_mode"][],
     capability: string,
-    requestedOutputMode: TaskEnvelope["requested_output_mode"]
+    requestedOutputMode: TaskEnvelope["requested_output_mode"],
   ): void {
     if (
       supportedVisibilityModes.length > 0 &&
       !supportedVisibilityModes.includes(requestedOutputMode)
     ) {
       throw new Error(
-        `Unsupported output mode for ${capability}: ${requestedOutputMode}. Supported modes: ${supportedVisibilityModes.join(", ")}`
+        `Unsupported output mode for ${capability}: ${requestedOutputMode}. Supported modes: ${supportedVisibilityModes.join(", ")}`,
       );
     }
   }
 
   private resolveRequestedDeliveryMode(
     envelope: TaskEnvelope,
-    negotiationRequest?: InvocationNegotiationRequest
+    negotiationRequest?: InvocationNegotiationRequest,
   ): "sync" | "async" {
     const metadataAsync =
-      typeof envelope.metadata?.async === "boolean" ? envelope.metadata.async : undefined;
+      typeof envelope.metadata?.async === "boolean"
+        ? envelope.metadata.async
+        : undefined;
 
     if (
       negotiationRequest?.delivery_mode &&
@@ -748,7 +881,7 @@ export class OrchestratorRuntime {
       (negotiationRequest.delivery_mode === "async") !== metadataAsync
     ) {
       throw new Error(
-        "Negotiation delivery mode conflicts with envelope metadata.async."
+        "Negotiation delivery mode conflicts with envelope metadata.async.",
       );
     }
 
@@ -770,12 +903,17 @@ export class OrchestratorRuntime {
 
     if (!descriptor.capabilities.includes(capability)) {
       throw new Error(
-        `Capability not supported by target agent ${targetAgent}: ${capability}`
+        `Capability not supported by target agent ${targetAgent}: ${capability}`,
       );
     }
-    const capabilityDescriptor = this.getCapabilityDescriptor(targetAgent, capability);
+    const capabilityDescriptor = this.getCapabilityDescriptor(
+      targetAgent,
+      capability,
+    );
     if (capabilityDescriptor?.status === "disabled") {
-      throw new Error(`Capability is disabled for target agent ${targetAgent}: ${capability}`);
+      throw new Error(
+        `Capability is disabled for target agent ${targetAgent}: ${capability}`,
+      );
     }
 
     return descriptor;
@@ -787,12 +925,22 @@ export class OrchestratorRuntime {
 
   private resolveIdempotencyKey(envelope: TaskEnvelope): string | undefined {
     const value = envelope.metadata?.idempotency_key;
-    return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+    return typeof value === "string" && value.trim().length > 0
+      ? value
+      : undefined;
   }
 
-  private notifyWebhook(envelope: TaskEnvelope, taskResult?: { status: string; summary?: string; structured_output?: Record<string, unknown> }): void {
+  private notifyWebhook(
+    envelope: TaskEnvelope,
+    taskResult?: {
+      status: string;
+      summary?: string;
+      structured_output?: Record<string, unknown>;
+    },
+  ): void {
     const webhookUrl = envelope.metadata?.webhook_url;
-    if (typeof webhookUrl !== "string" || webhookUrl.trim().length === 0) return;
+    if (typeof webhookUrl !== "string" || webhookUrl.trim().length === 0)
+      return;
 
     const payload = {
       task_id: envelope.task_id,
@@ -808,7 +956,10 @@ export class OrchestratorRuntime {
       headers: { "content-type": "application/json; charset=utf-8" },
       body: JSON.stringify(payload),
     }).catch((err) => {
-      console.error(`MAP webhook delivery failed for task ${envelope.task_id}:`, err);
+      console.error(
+        `MAP webhook delivery failed for task ${envelope.task_id}:`,
+        err,
+      );
     });
   }
 }
