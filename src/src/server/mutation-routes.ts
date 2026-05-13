@@ -1,6 +1,25 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getRequiredAuthScheme, getSignedRequestError, getBearerTokenError } from "./auth.js";
-import { extractTargetAgent, extractTenantId, wantsSignedRequestAuth } from "./utils.js";
+import {
+  getRequiredAuthScheme,
+  getSignedRequestError,
+  getBearerTokenError,
+  validateOAuth2Token,
+} from "./auth.js";
+import {
+  extractTargetAgent,
+  extractTenantId,
+  wantsSignedRequestAuth,
+} from "./utils.js";
+
+/** Helper to extract Bearer token from Authorization header. */
+function extractBearerToken(req: IncomingMessage): string | null {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader || typeof authHeader !== "string") return null;
+  const lowered = authHeader.toLowerCase();
+  if (!lowered.startsWith("bearer ")) return null;
+  const token = authHeader.slice(7).trim();
+  return token || null;
+}
 
 interface MutationRouteContext {
   req: IncomingMessage;
@@ -21,13 +40,19 @@ interface MutationRouteContext {
         negotiation?: {
           schema_version?: string;
           delivery_mode?: "sync" | "async";
-        }
+        },
       ): Promise<any>;
       approve(payload: unknown): Promise<any>;
     };
   };
-  disabledAgents: Map<string, { disabled_at: string; disabled_by: string; reason?: string }>;
-  disabledCapabilities: Map<string, Map<string, { disabled_at: string; disabled_by: string; reason?: string }>>;
+  disabledAgents: Map<
+    string,
+    { disabled_at: string; disabled_by: string; reason?: string }
+  >;
+  disabledCapabilities: Map<
+    string,
+    Map<string, { disabled_at: string; disabled_by: string; reason?: string }>
+  >;
   isAgentDisabled(agentId: string): boolean;
   isCapabilityDisabled(agentId: string, capability: string): boolean;
   readJsonBody(req: IncomingMessage): Promise<{ raw: string; parsed: unknown }>;
@@ -50,7 +75,9 @@ interface MutationRouteContext {
     };
   };
   getEffectiveRevokedKeyIds(): Set<string>;
-  getBearerTokenError(req: IncomingMessage): { code: string; message: string } | null;
+  getBearerTokenError(
+    req: IncomingMessage,
+  ): { code: string; message: string } | null;
   checkMutationRateLimit(tenantId?: string): {
     allowed: boolean;
     scope?: "global" | "tenant";
@@ -65,6 +92,7 @@ interface MutationRouteContext {
     route: string;
     tenant_id?: string;
     target_agent?: string;
+    subject?: string;
   }): void;
   recordCapabilityLatency(capability: string, durationMs: number): void;
   sendJson(
@@ -73,26 +101,37 @@ interface MutationRouteContext {
     body: unknown,
     requestId: string,
     tracking?: { ok: boolean; errorCode?: string; targetAgent?: string },
-    extraHeaders?: Record<string, string>
+    extraHeaders?: Record<string, string>,
   ): void;
   sendError(
     res: ServerResponse,
     statusCode: number,
     requestId: string,
-    error: { code: string; message: string; retryable: boolean; details?: Record<string, unknown> },
-    targetAgent?: string
+    error: {
+      code: string;
+      message: string;
+      retryable: boolean;
+      details?: Record<string, unknown>;
+    },
+    targetAgent?: string,
   ): void;
 }
 
-export async function handleMutationRoutes(
-  ctx: MutationRouteContext
-): Promise<{ handled: boolean; routeTargetAgent?: string; routeTenantId?: string }> {
+export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
+  handled: boolean;
+  routeTargetAgent?: string;
+  routeTenantId?: string;
+}> {
   const { req, res, requestId } = ctx;
 
   if (req.method === "POST" && req.url === "/dispatch") {
     const body = await ctx.readJsonBody(req);
     let routeTargetAgent = extractTargetAgent(body.parsed);
     let routeTenantId = extractTenantId(body.parsed);
+
+    // Track the authenticated subject for audit logging
+    let authSubject: string | undefined;
+
     const dispatchRateLimit = ctx.checkMutationRateLimit(routeTenantId);
     if (!dispatchRateLimit.allowed) {
       ctx.recordAuditEvent({
@@ -103,7 +142,8 @@ export async function handleMutationRoutes(
         method: req.method,
         route: "/dispatch",
         tenant_id: routeTenantId,
-        target_agent: routeTargetAgent
+        target_agent: routeTargetAgent,
+        subject: authSubject,
       });
       ctx.sendError(
         res,
@@ -116,10 +156,10 @@ export async function handleMutationRoutes(
           details: {
             category: "throttling",
             scope: dispatchRateLimit.scope,
-            retry_after_ms: dispatchRateLimit.retryAfterMs ?? 0
-          }
+            retry_after_ms: dispatchRateLimit.retryAfterMs ?? 0,
+          },
         },
-        routeTargetAgent
+        routeTargetAgent,
       );
       return { handled: true, routeTargetAgent, routeTenantId };
     }
@@ -127,7 +167,9 @@ export async function handleMutationRoutes(
     const payload = ctx.validateDispatchRequest(body.parsed);
     routeTargetAgent = payload.envelope.target_agent;
     if (ctx.isAgentDisabled(payload.envelope.target_agent)) {
-      const disabledInfo = ctx.disabledAgents.get(payload.envelope.target_agent);
+      const disabledInfo = ctx.disabledAgents.get(
+        payload.envelope.target_agent,
+      );
       const message = `Target agent is disabled in runtime controls: ${payload.envelope.target_agent}`;
       ctx.recordAuditEvent({
         timestamp: new Date().toISOString(),
@@ -137,7 +179,8 @@ export async function handleMutationRoutes(
         method: req.method,
         route: "/dispatch",
         tenant_id: routeTenantId,
-        target_agent: routeTargetAgent
+        target_agent: routeTargetAgent,
+        subject: authSubject,
       });
       ctx.sendError(
         res,
@@ -147,15 +190,22 @@ export async function handleMutationRoutes(
           code: "agent_disabled",
           message,
           retryable: false,
-          details: disabledInfo ? { disabled: disabledInfo } : undefined
+          details: disabledInfo ? { disabled: disabledInfo } : undefined,
         },
-        routeTargetAgent
+        routeTargetAgent,
       );
       return { handled: true, routeTargetAgent, routeTenantId };
     }
 
-    if (ctx.isCapabilityDisabled(payload.envelope.target_agent, payload.capability)) {
-      const disabledInfo = ctx.disabledCapabilities.get(payload.envelope.target_agent)?.get(payload.capability);
+    if (
+      ctx.isCapabilityDisabled(
+        payload.envelope.target_agent,
+        payload.capability,
+      )
+    ) {
+      const disabledInfo = ctx.disabledCapabilities
+        .get(payload.envelope.target_agent)
+        ?.get(payload.capability);
       const message = `Capability is disabled in runtime controls: ${payload.capability}`;
       ctx.recordAuditEvent({
         timestamp: new Date().toISOString(),
@@ -165,7 +215,8 @@ export async function handleMutationRoutes(
         method: req.method,
         route: "/dispatch",
         tenant_id: routeTenantId,
-        target_agent: routeTargetAgent
+        target_agent: routeTargetAgent,
+        subject: authSubject,
       });
       ctx.sendError(
         res,
@@ -175,21 +226,29 @@ export async function handleMutationRoutes(
           code: "capability_disabled",
           message,
           retryable: false,
-          details: disabledInfo ? { disabled: disabledInfo } : undefined
+          details: disabledInfo ? { disabled: disabledInfo } : undefined,
         },
-        routeTargetAgent
+        routeTargetAgent,
       );
       return { handled: true, routeTargetAgent, routeTenantId };
     }
 
     const requiredAuthScheme = ctx.options.enforceSignedRequests
       ? "signed_request"
-      : getRequiredAuthScheme(ctx.app as never, payload.envelope.target_agent, payload.capability);
+      : getRequiredAuthScheme(
+          ctx.app as never,
+          payload.envelope.target_agent,
+          payload.capability,
+        );
     const requiresSignedRequest =
       requiredAuthScheme === "signed_request" || wantsSignedRequestAuth(req);
 
     // If enforceBearerAuth is true and signed_request is not present, fall back to bearer token
-    if (ctx.options.enforceBearerAuth && !wantsSignedRequestAuth(req) && requiredAuthScheme !== "signed_request") {
+    if (
+      ctx.options.enforceBearerAuth &&
+      !wantsSignedRequestAuth(req) &&
+      requiredAuthScheme !== "signed_request"
+    ) {
       const bearerError = ctx.getBearerTokenError(req);
       if (bearerError) {
         ctx.recordAuditEvent({
@@ -200,19 +259,43 @@ export async function handleMutationRoutes(
           method: req.method,
           route: "/dispatch",
           tenant_id: routeTenantId,
-          target_agent: routeTargetAgent
+          target_agent: routeTargetAgent,
+          subject: authSubject,
         });
         ctx.sendError(
           res,
           bearerError.code === "auth_required" ? 401 : 403,
           requestId,
           { ...bearerError, retryable: false },
-          routeTargetAgent
+          routeTargetAgent,
         );
         return { handled: true, routeTargetAgent, routeTenantId };
       }
+
+      // When Bearer token is used, validate with OAuth 2.0 and log the subject
+      const bearerToken = extractBearerToken(req);
+      if (bearerToken) {
+        try {
+          const oauth2Result = await validateOAuth2Token(bearerToken);
+          if (oauth2Result.valid && oauth2Result.sub) {
+            authSubject = oauth2Result.sub;
+            console.log(
+              `[MAP] OAuth2 authenticated subject: ${authSubject}` +
+                (oauth2Result.scopes
+                  ? ` (scopes: ${oauth2Result.scopes.join(", ")})`
+                  : ""),
+            );
+          }
+        } catch {
+          // Non-fatal: proceed even if OAuth2 validation fails
+        }
+      }
     } else if (requiresSignedRequest) {
-      const authError = getSignedRequestError(req, body.raw, ctx.getEffectiveRevokedKeyIds());
+      const authError = getSignedRequestError(
+        req,
+        body.raw,
+        ctx.getEffectiveRevokedKeyIds(),
+      );
       if (authError) {
         ctx.recordAuditEvent({
           timestamp: new Date().toISOString(),
@@ -222,14 +305,15 @@ export async function handleMutationRoutes(
           method: req.method,
           route: "/dispatch",
           tenant_id: routeTenantId,
-          target_agent: routeTargetAgent
+          target_agent: routeTargetAgent,
+          subject: authSubject,
         });
         ctx.sendError(
           res,
           authError.code === "auth_required" ? 401 : 403,
           requestId,
           { ...authError, retryable: false },
-          routeTargetAgent
+          routeTargetAgent,
         );
         return { handled: true, routeTargetAgent, routeTenantId };
       }
@@ -237,7 +321,8 @@ export async function handleMutationRoutes(
 
     const headerIdempotencyKey = req.headers["x-map-idempotency-key"];
     const idempotencyKey =
-      typeof headerIdempotencyKey === "string" && headerIdempotencyKey.trim().length > 0
+      typeof headerIdempotencyKey === "string" &&
+      headerIdempotencyKey.trim().length > 0
         ? headerIdempotencyKey
         : undefined;
     const envelopeWithRequestId = {
@@ -245,19 +330,22 @@ export async function handleMutationRoutes(
       metadata: {
         ...(payload.envelope.metadata ?? {}),
         request_id: requestId,
-        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {})
-      }
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+      },
     };
     const startedAt = Date.now();
     const result = await ctx.app.orchestrator.dispatch(
       envelopeWithRequestId,
       payload.capability,
       payload.requested_schema_version,
-      payload.negotiation
+      payload.negotiation,
     );
     ctx.recordCapabilityLatency(payload.capability, Date.now() - startedAt);
     const statusCode =
-      result.result.status === "awaiting_approval" || result.result.status === "running" ? 202 : 200;
+      result.result.status === "awaiting_approval" ||
+      result.result.status === "running"
+        ? 202
+        : 200;
     ctx.sendJson(res, statusCode, result, requestId);
     return { handled: true, routeTargetAgent, routeTenantId };
   }
@@ -266,6 +354,10 @@ export async function handleMutationRoutes(
     const body = await ctx.readJsonBody(req);
     let routeTargetAgent = extractTargetAgent(body.parsed);
     let routeTenantId = extractTenantId(body.parsed);
+
+    // Track the authenticated subject for audit logging
+    let authSubject: string | undefined;
+
     const approvalRateLimit = ctx.checkMutationRateLimit(routeTenantId);
     if (!approvalRateLimit.allowed) {
       ctx.recordAuditEvent({
@@ -276,7 +368,8 @@ export async function handleMutationRoutes(
         method: req.method,
         route: "/approve",
         tenant_id: routeTenantId,
-        target_agent: routeTargetAgent
+        target_agent: routeTargetAgent,
+        subject: authSubject,
       });
       ctx.sendError(
         res,
@@ -289,10 +382,10 @@ export async function handleMutationRoutes(
           details: {
             category: "throttling",
             scope: approvalRateLimit.scope,
-            retry_after_ms: approvalRateLimit.retryAfterMs ?? 0
-          }
+            retry_after_ms: approvalRateLimit.retryAfterMs ?? 0,
+          },
         },
-        routeTargetAgent
+        routeTargetAgent,
       );
       return { handled: true, routeTargetAgent, routeTenantId };
     }
@@ -300,7 +393,9 @@ export async function handleMutationRoutes(
     const payload = ctx.validateApprovalRequest(body.parsed);
     routeTargetAgent = payload.envelope.target_agent;
     if (ctx.isAgentDisabled(payload.envelope.target_agent)) {
-      const disabledInfo = ctx.disabledAgents.get(payload.envelope.target_agent);
+      const disabledInfo = ctx.disabledAgents.get(
+        payload.envelope.target_agent,
+      );
       ctx.sendError(
         res,
         403,
@@ -309,15 +404,22 @@ export async function handleMutationRoutes(
           code: "agent_disabled",
           message: `Target agent is disabled in runtime controls: ${payload.envelope.target_agent}`,
           retryable: false,
-          details: disabledInfo ? { disabled: disabledInfo } : undefined
+          details: disabledInfo ? { disabled: disabledInfo } : undefined,
         },
-        routeTargetAgent
+        routeTargetAgent,
       );
       return { handled: true, routeTargetAgent, routeTenantId };
     }
 
-    if (ctx.isCapabilityDisabled(payload.envelope.target_agent, payload.capability)) {
-      const disabledInfo = ctx.disabledCapabilities.get(payload.envelope.target_agent)?.get(payload.capability);
+    if (
+      ctx.isCapabilityDisabled(
+        payload.envelope.target_agent,
+        payload.capability,
+      )
+    ) {
+      const disabledInfo = ctx.disabledCapabilities
+        .get(payload.envelope.target_agent)
+        ?.get(payload.capability);
       ctx.sendError(
         res,
         403,
@@ -326,21 +428,29 @@ export async function handleMutationRoutes(
           code: "capability_disabled",
           message: `Capability is disabled in runtime controls: ${payload.capability}`,
           retryable: false,
-          details: disabledInfo ? { disabled: disabledInfo } : undefined
+          details: disabledInfo ? { disabled: disabledInfo } : undefined,
         },
-        routeTargetAgent
+        routeTargetAgent,
       );
       return { handled: true, routeTargetAgent, routeTenantId };
     }
 
     const requiredAuthScheme = ctx.options.enforceSignedRequests
       ? "signed_request"
-      : getRequiredAuthScheme(ctx.app as never, payload.envelope.target_agent, payload.capability);
+      : getRequiredAuthScheme(
+          ctx.app as never,
+          payload.envelope.target_agent,
+          payload.capability,
+        );
     const requiresSignedRequest =
       requiredAuthScheme === "signed_request" || wantsSignedRequestAuth(req);
 
     // If enforceBearerAuth is true and signed_request is not present, fall back to bearer token
-    if (ctx.options.enforceBearerAuth && !wantsSignedRequestAuth(req) && requiredAuthScheme !== "signed_request") {
+    if (
+      ctx.options.enforceBearerAuth &&
+      !wantsSignedRequestAuth(req) &&
+      requiredAuthScheme !== "signed_request"
+    ) {
       const bearerError = ctx.getBearerTokenError(req);
       if (bearerError) {
         ctx.recordAuditEvent({
@@ -351,19 +461,43 @@ export async function handleMutationRoutes(
           method: req.method,
           route: "/approve",
           tenant_id: routeTenantId,
-          target_agent: routeTargetAgent
+          target_agent: routeTargetAgent,
+          subject: authSubject,
         });
         ctx.sendError(
           res,
           bearerError.code === "auth_required" ? 401 : 403,
           requestId,
           { ...bearerError, retryable: false },
-          routeTargetAgent
+          routeTargetAgent,
         );
         return { handled: true, routeTargetAgent, routeTenantId };
       }
+
+      // When Bearer token is used, validate with OAuth 2.0 and log the subject
+      const bearerToken = extractBearerToken(req);
+      if (bearerToken) {
+        try {
+          const oauth2Result = await validateOAuth2Token(bearerToken);
+          if (oauth2Result.valid && oauth2Result.sub) {
+            authSubject = oauth2Result.sub;
+            console.log(
+              `[MAP] OAuth2 authenticated subject: ${authSubject}` +
+                (oauth2Result.scopes
+                  ? ` (scopes: ${oauth2Result.scopes.join(", ")})`
+                  : ""),
+            );
+          }
+        } catch {
+          // Non-fatal: proceed even if OAuth2 validation fails
+        }
+      }
     } else if (requiresSignedRequest) {
-      const authError = getSignedRequestError(req, body.raw, ctx.getEffectiveRevokedKeyIds());
+      const authError = getSignedRequestError(
+        req,
+        body.raw,
+        ctx.getEffectiveRevokedKeyIds(),
+      );
       if (authError) {
         ctx.recordAuditEvent({
           timestamp: new Date().toISOString(),
@@ -373,14 +507,15 @@ export async function handleMutationRoutes(
           method: req.method,
           route: "/approve",
           tenant_id: routeTenantId,
-          target_agent: routeTargetAgent
+          target_agent: routeTargetAgent,
+          subject: authSubject,
         });
         ctx.sendError(
           res,
           authError.code === "auth_required" ? 401 : 403,
           requestId,
           { ...authError, retryable: false },
-          routeTargetAgent
+          routeTargetAgent,
         );
         return { handled: true, routeTargetAgent, routeTenantId };
       }
@@ -392,9 +527,9 @@ export async function handleMutationRoutes(
         ...payload.envelope,
         metadata: {
           ...(payload.envelope.metadata ?? {}),
-          request_id: requestId
-        }
-      }
+          request_id: requestId,
+        },
+      },
     };
     const startedAt = Date.now();
     const result = await ctx.app.orchestrator.approve(payloadWithRequestId);
@@ -406,6 +541,6 @@ export async function handleMutationRoutes(
   return {
     handled: false,
     routeTargetAgent: ctx.routeTargetAgent,
-    routeTenantId: ctx.routeTenantId
+    routeTenantId: ctx.routeTenantId,
   };
 }

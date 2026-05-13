@@ -4,17 +4,17 @@ import {
   createPublicKey,
   createSign,
   createVerify,
-  timingSafeEqual
+  timingSafeEqual,
 } from "node:crypto";
 import type {
   AgentDescriptor,
   DelegationToken,
   ExecutionReceipt,
-  MapSignedRequestHeaders
+  MapSignedRequestHeaders,
 } from "../types.js";
 import {
   getKeyProviderInfo,
-  getSigningKeyConfigsFromProvider
+  getSigningKeyConfigsFromProvider,
 } from "./key-provider.js";
 
 const DEFAULT_KID = "map-dev-key-1";
@@ -31,7 +31,7 @@ const DEFAULT_SCOPES = [
   "audit_checkpoint",
   "audit_export",
   "conformance_export",
-  "trust_bundle"
+  "trust_bundle",
 ];
 
 function getDeploymentProfile(): "open" | "verified" | "regulated" {
@@ -97,7 +97,7 @@ function getRevokedKidsFromEnv(): Set<string> {
     raw
       .split(",")
       .map((value) => value.trim())
-      .filter((value) => value.length > 0)
+      .filter((value) => value.length > 0),
   );
 }
 
@@ -112,20 +112,20 @@ function getDefaultSigningKey(): SigningKey {
       demo_only: true,
       material: {
         type: "hmac",
-        secret
-      }
+        secret,
+      },
     };
   }
 
   const profile = getDeploymentProfile();
   if (profile !== "open") {
     throw new Error(
-      "MAP_SIGNING_SECRET must be configured for verified/regulated profiles."
+      "MAP_SIGNING_SECRET must be configured for verified/regulated profiles.",
     );
   }
 
   console.warn(
-    "WARNING: Using default demo signing secret. Not suitable for production."
+    "WARNING: Using default demo signing secret. Not suitable for production.",
   );
   return {
     kid: DEFAULT_KID,
@@ -135,8 +135,8 @@ function getDefaultSigningKey(): SigningKey {
     demo_only: true,
     material: {
       type: "hmac",
-      secret: "map-dev-secret"
-    }
+      secret: "map-dev-secret",
+    },
   };
 }
 
@@ -154,22 +154,33 @@ function getSigningKeys(): SigningKey[] {
   try {
     const keys = providerKeys
       .filter(
-        (key) => key && typeof key.kid === "string" && key.kid.trim().length > 0
+        (key) =>
+          key && typeof key.kid === "string" && key.kid.trim().length > 0,
       )
       .map((key): SigningKey | null => {
         const alg: SigningKey["alg"] = key.alg === "RS256" ? "RS256" : "HS256";
         const status: SigningKey["status"] =
-          key.status === "revoked" ? "revoked" : key.status === "retiring" ? "retiring" : "active";
+          key.status === "revoked"
+            ? "revoked"
+            : key.status === "retiring"
+              ? "retiring"
+              : "active";
         const base = {
           kid: key.kid.trim(),
           alg,
           status,
-          scopes: Array.isArray(key.scopes) && key.scopes.length > 0 ? key.scopes : DEFAULT_SCOPES,
-          demo_only: key.demo_only ?? false
+          scopes:
+            Array.isArray(key.scopes) && key.scopes.length > 0
+              ? key.scopes
+              : DEFAULT_SCOPES,
+          demo_only: key.demo_only ?? false,
         };
 
         if (alg === "RS256") {
-          if (typeof key.public_key_pem !== "string" || key.public_key_pem.trim().length === 0) {
+          if (
+            typeof key.public_key_pem !== "string" ||
+            key.public_key_pem.trim().length === 0
+          ) {
             return null;
           }
           return {
@@ -178,10 +189,11 @@ function getSigningKeys(): SigningKey[] {
               type: "rsa",
               public_key_pem: key.public_key_pem,
               private_key_pem:
-                typeof key.private_key_pem === "string" && key.private_key_pem.trim().length > 0
+                typeof key.private_key_pem === "string" &&
+                key.private_key_pem.trim().length > 0
                   ? key.private_key_pem
-                  : undefined
-            }
+                  : undefined,
+            },
           };
         }
 
@@ -192,16 +204,15 @@ function getSigningKeys(): SigningKey[] {
           ...base,
           material: {
             type: "hmac",
-            secret: key.secret
-          }
+            secret: key.secret,
+          },
         };
       })
       .filter((key): key is SigningKey => Boolean(key));
 
-    const normalized =
-      keys.length > 0 ? keys : [getDefaultSigningKey()];
+    const normalized = keys.length > 0 ? keys : [getDefaultSigningKey()];
     return normalized.map((key) =>
-      revokedKids.has(key.kid) ? { ...key, status: "revoked" } : key
+      revokedKids.has(key.kid) ? { ...key, status: "revoked" } : key,
     );
   } catch {
     const key = getDefaultSigningKey();
@@ -233,10 +244,13 @@ function getActiveSigningKey(): SigningKey {
 }
 
 function getRequestMaxAgeMs(): number {
-  const value = Number(process.env.MAP_REQUEST_MAX_AGE_MS ?? DEFAULT_REQUEST_MAX_AGE_MS);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_REQUEST_MAX_AGE_MS;
+  const value = Number(
+    process.env.MAP_REQUEST_MAX_AGE_MS ?? DEFAULT_REQUEST_MAX_AGE_MS,
+  );
+  return Number.isFinite(value) && value > 0
+    ? value
+    : DEFAULT_REQUEST_MAX_AGE_MS;
 }
-
 
 export function generateNonce(): string {
   return crypto.randomUUID();
@@ -264,27 +278,143 @@ function base64url(input: string): string {
   return Buffer.from(input, "utf8").toString("base64url");
 }
 
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+/**
+ * Serializes a number in a format compliant with RFC 8785 JCS.
+ *
+ * RFC 8785 requires:
+ * - No exponential notation
+ * - No leading zeros (except for "0" and decimal fractions like "0.5")
+ * - At most one leading minus sign
+ * - Decimal point only when necessary
+ * - No trailing zeros after the decimal point
+ */
+function serializeJcsNumber(n: number): string {
+  if (!Number.isFinite(n)) {
+    return "null"; // Infinity, NaN → null per JCS
   }
 
-  if (value && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-      a.localeCompare(b)
+  if (n === 0) {
+    return "0"; // Normalize -0 to 0
+  }
+
+  // For integers within the safe range where toString() never produces exponential
+  // notation (|n| < 1e21), use the native toString().
+  if (Number.isInteger(n) && Math.abs(n) < 1e21) {
+    return n.toString();
+  }
+
+  // For non-integers or very large numbers, use toFixed with sufficient precision
+  // and strip trailing zeros. This avoids exponential notation.
+  // We use 15 significant digits (max safe decimal precision for IEEE 754 doubles).
+  let str: string;
+  const absN = Math.abs(n);
+
+  if (absN >= 1e21) {
+    // Very large integer — use toFixed(0) to avoid exponential notation
+    str = n.toFixed(0);
+  } else if (absN < 1e-6 && absN > 0) {
+    // Very small fraction — use toFixed with enough places to capture precision
+    str = n.toFixed(15);
+    // Strip trailing zeros
+    str = str.replace(/0+$/, "");
+    if (str.endsWith(".")) {
+      str = str.slice(0, -1);
+    }
+  } else {
+    // General case: use toFixed(15) and strip trailing zeros
+    str = n.toFixed(15);
+    str = str.replace(/0+$/, "");
+    if (str.endsWith(".")) {
+      str = str.slice(0, -1);
+    }
+  }
+
+  return str;
+}
+
+/**
+ * Recursively serializes a value according to RFC 8785 JSON Canonicalization Scheme (JCS).
+ *
+ * Rules:
+ * - Object keys are sorted lexicographically
+ * - No insignificant whitespace
+ * - Numbers use non-exponential notation
+ * - Strings are escaped per JSON spec (using JSON.stringify)
+ * - null, boolean values serialized as "null", "true", "false"
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc8785
+ */
+function serializeJcs(value: unknown): string {
+  if (value === null) {
+    return "null";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+
+  if (typeof value === "number") {
+    return serializeJcsNumber(value);
+  }
+
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    const items = value.map((item) => serializeJcs(item));
+    return `[${items.join(",")}]`;
+  }
+
+  if (typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>).sort();
+    const items = keys.map(
+      (key) =>
+        `${JSON.stringify(key)}:${serializeJcs((value as Record<string, unknown>)[key])}`,
     );
-    return `{${entries
-      .map(([key, nestedValue]) => `${JSON.stringify(key)}:${stableStringify(nestedValue)}`)
-      .join(",")}}`;
+    return `{${items.join(",")}}`;
   }
 
   return JSON.stringify(value);
 }
 
-function createCompactSignature(
-  payload: Record<string, unknown>,
+/**
+ * Canonicalizes a JSON string according to RFC 8785 JSON Canonicalization Scheme (JCS).
+ *
+ * This implements the same approach used by the A2A protocol for descriptor signing:
+ * 1. Parse the JSON string into an object
+ * 2. Re-serialize with JCS rules (sorted keys, no whitespace, consistent number formatting)
+ *
+ * The resulting string is deterministic — the same logical JSON always produces the same
+ * canonical form, making it safe for hashing and signing.
+ *
+ * @param input - A valid JSON string
+ * @returns The canonicalized JSON string per RFC 8785
+ * @see https://datatracker.ietf.org/doc/html/rfc8785
+ */
+export function canonicalize(input: string): string {
+  const parsed = JSON.parse(input);
+  return serializeJcs(parsed);
+}
+
+function stableStringify(value: unknown): string {
+  // Delegate to JCS serialization for consistent, canonical output.
+  // This ensures all MAP signatures use the same deterministic serialization.
+  return serializeJcs(value);
+}
+
+/**
+ * Signs a pre-canonicalized payload string.
+ *
+ * Unlike {@link createCompactSignature}, this accepts an already-serialized
+ * payload string (e.g., from {@link canonicalize}) and signs it directly
+ * without further stringification.  This is the preferred path for payloads
+ * that must be canonicalized per RFC 8785 JCS before signing.
+ */
+function createCompactSignatureFromCanonical(
+  canonicalPayload: string,
   requestedKid?: string,
-  scope?: SignatureScope
+  scope?: SignatureScope,
 ): string {
   const signingKey =
     typeof requestedKid === "string" && requestedKid.trim().length > 0
@@ -297,36 +427,63 @@ function createCompactSignature(
     throw new Error(`Requested signing key is revoked: ${signingKey.kid}`);
   }
   if (scope && !signingKey.scopes.includes(scope)) {
-    throw new Error(`Signing key ${signingKey.kid} is not authorized for scope ${scope}.`);
+    throw new Error(
+      `Signing key ${signingKey.kid} is not authorized for scope ${scope}.`,
+    );
   }
 
   const header: SigningHeader = {
     alg: signingKey.alg,
     kid: signingKey.kid,
-    typ: "MAPSIG"
+    typ: "MAPSIG",
   };
   const encodedHeader = base64url(JSON.stringify(header));
-  const encodedPayload = base64url(stableStringify(payload));
+  const encodedPayload = base64url(canonicalPayload);
   const signingInput = `${encodedHeader}.${encodedPayload}`;
   const signature =
     signingKey.material.type === "hmac"
-      ? createHmac("sha256", signingKey.material.secret).update(signingInput).digest("base64url")
+      ? createHmac("sha256", signingKey.material.secret)
+          .update(signingInput)
+          .digest("base64url")
       : (() => {
           if (!signingKey.material.private_key_pem) {
-            throw new Error(`No private key configured for signing kid: ${signingKey.kid}`);
+            throw new Error(
+              `No private key configured for signing kid: ${signingKey.kid}`,
+            );
           }
           const signer = createSign("RSA-SHA256");
           signer.update(signingInput);
           signer.end();
-          return signer.sign(createPrivateKey(signingKey.material.private_key_pem)).toString("base64url");
+          return signer
+            .sign(createPrivateKey(signingKey.material.private_key_pem))
+            .toString("base64url");
         })();
   return `${signingInput}.${signature}`;
 }
 
-function verifyCompactSignature(
-  signature: string,
+function createCompactSignature(
   payload: Record<string, unknown>,
-  scope?: SignatureScope
+  requestedKid?: string,
+  scope?: SignatureScope,
+): string {
+  return createCompactSignatureFromCanonical(
+    stableStringify(payload),
+    requestedKid,
+    scope,
+  );
+}
+
+/**
+ * Verifies a compact signature against a pre-canonicalized payload string.
+ *
+ * Unlike {@link verifyCompactSignature}, this accepts an already-serialized
+ * canonical payload string and compares it directly against the payload
+ * embedded in the signature.
+ */
+function verifyCompactSignatureFromCanonical(
+  signature: string,
+  canonicalPayload: string,
+  scope?: SignatureScope,
 ): boolean {
   const parts = signature.split(".");
   if (parts.length !== 3) {
@@ -336,7 +493,9 @@ function verifyCompactSignature(
   const [encodedHeader, encodedPayload, providedSignature] = parts;
   let parsedHeader: SigningHeader | undefined;
   try {
-    parsedHeader = JSON.parse(Buffer.from(encodedHeader, "base64url").toString("utf8")) as SigningHeader;
+    parsedHeader = JSON.parse(
+      Buffer.from(encodedHeader, "base64url").toString("utf8"),
+    ) as SigningHeader;
   } catch {
     return false;
   }
@@ -348,14 +507,18 @@ function verifyCompactSignature(
     return false;
   }
   const signingKey = getSigningKeyByKid(parsedHeader.kid);
-  if (!signingKey || signingKey.status === "revoked" || signingKey.alg !== parsedHeader.alg) {
+  if (
+    !signingKey ||
+    signingKey.status === "revoked" ||
+    signingKey.alg !== parsedHeader.alg
+  ) {
     return false;
   }
   if (scope && !signingKey.scopes.includes(scope)) {
     return false;
   }
 
-  const expectedPayload = base64url(stableStringify(payload));
+  const expectedPayload = base64url(canonicalPayload);
   if (encodedPayload !== expectedPayload) {
     return false;
   }
@@ -369,13 +532,17 @@ function verifyCompactSignature(
     try {
       return timingSafeEqual(
         Buffer.from(providedSignature, "base64url"),
-        Buffer.from(expectedSignature, "base64url")
+        Buffer.from(expectedSignature, "base64url"),
       );
     } catch {
       // timingSafeEqual throws on length mismatch.
       // Perform a dummy constant-time comparison to avoid leaking length.
       const dummy = Buffer.from(expectedSignature, "base64url");
-      try { timingSafeEqual(dummy, dummy); } catch { /* never throws for equal-length */ }
+      try {
+        timingSafeEqual(dummy, dummy);
+      } catch {
+        /* never throws for equal-length */
+      }
       return false;
     }
   }
@@ -386,11 +553,23 @@ function verifyCompactSignature(
     verifier.end();
     return verifier.verify(
       createPublicKey(signingKey.material.public_key_pem),
-      Buffer.from(providedSignature, "base64url")
+      Buffer.from(providedSignature, "base64url"),
     );
   } catch {
     return false;
   }
+}
+
+function verifyCompactSignature(
+  signature: string,
+  payload: Record<string, unknown>,
+  scope?: SignatureScope,
+): boolean {
+  return verifyCompactSignatureFromCanonical(
+    signature,
+    stableStringify(payload),
+    scope,
+  );
 }
 
 export function getSignatureKeyId(signature: string): string | null {
@@ -400,7 +579,7 @@ export function getSignatureKeyId(signature: string): string | null {
   }
   try {
     const parsedHeader = JSON.parse(
-      Buffer.from(parts[0], "base64url").toString("utf8")
+      Buffer.from(parts[0], "base64url").toString("utf8"),
     ) as Partial<SigningHeader>;
     if (parsedHeader.typ !== "MAPSIG" || typeof parsedHeader.kid !== "string") {
       return null;
@@ -418,7 +597,7 @@ function getSignatureAlgorithm(signature: string): "HS256" | "RS256" | null {
   }
   try {
     const parsedHeader = JSON.parse(
-      Buffer.from(parts[0], "base64url").toString("utf8")
+      Buffer.from(parts[0], "base64url").toString("utf8"),
     ) as Partial<SigningHeader>;
     if (
       parsedHeader.typ !== "MAPSIG" ||
@@ -432,7 +611,9 @@ function getSignatureAlgorithm(signature: string): "HS256" | "RS256" | null {
   }
 }
 
-function tokenSigningPayload(token: Omit<DelegationToken, "signature">): Record<string, unknown> {
+function tokenSigningPayload(
+  token: Omit<DelegationToken, "signature">,
+): Record<string, unknown> {
   return {
     issuer: token.issuer,
     subject_agent: token.subject_agent,
@@ -440,23 +621,34 @@ function tokenSigningPayload(token: Omit<DelegationToken, "signature">): Record<
     resource_scope: token.resource_scope,
     constraints: token.constraints,
     approval_reference: token.approval_reference ?? null,
-    requester_identity: token.requester_identity ?? null
+    requester_identity: token.requester_identity ?? null,
   };
 }
 
+/**
+ * Returns the canonicalized JSON string for an AgentDescriptor payload.
+ *
+ * Uses RFC 8785 JCS (via {@link canonicalize}) to produce a deterministic
+ * serialization of the descriptor that is safe for hashing and signing.
+ * This matches the approach used by the A2A protocol.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc8785
+ */
 function descriptorSigningPayload(
   descriptor: Omit<
     AgentDescriptor,
     "descriptor_signature" | "descriptor_key_id" | "descriptor_signature_alg"
-  >
-): Record<string, unknown> {
-  return {
-    ...descriptor
+  >,
+): string {
+  // Build the raw payload object, then canonicalize per RFC 8785 JCS.
+  const raw: Record<string, unknown> = {
+    ...descriptor,
   };
+  return canonicalize(JSON.stringify(raw));
 }
 
 function receiptSigningPayload(
-  receipt: Omit<ExecutionReceipt, "signature">
+  receipt: Omit<ExecutionReceipt, "signature">,
 ): Record<string, unknown> {
   return {
     receipt_id: receipt.receipt_id,
@@ -472,38 +664,83 @@ function receiptSigningPayload(
     result_hash: receipt.result_hash,
     requested_schema_version: receipt.requested_schema_version ?? null,
     executed_schema_version: receipt.executed_schema_version ?? null,
-    negotiation: receipt.negotiation ?? null
+    negotiation: receipt.negotiation ?? null,
   };
 }
 
-export function signDelegationToken(token: Omit<DelegationToken, "signature">): string {
-  return createCompactSignature(tokenSigningPayload(token), undefined, "delegation_token");
+export function signDelegationToken(
+  token: Omit<DelegationToken, "signature">,
+): string {
+  return createCompactSignature(
+    tokenSigningPayload(token),
+    undefined,
+    "delegation_token",
+  );
 }
 
-export function verifyDelegationTokenSignature(token: DelegationToken): boolean {
+export function verifyDelegationTokenSignature(
+  token: DelegationToken,
+): boolean {
   const { signature, ...unsignedToken } = token;
-  return verifyCompactSignature(signature, tokenSigningPayload(unsignedToken), "delegation_token");
+  return verifyCompactSignature(
+    signature,
+    tokenSigningPayload(unsignedToken),
+    "delegation_token",
+  );
 }
 
-export function signReceipt(receipt: Omit<ExecutionReceipt, "signature">): string {
-  return createCompactSignature(receiptSigningPayload(receipt), undefined, "receipt");
+export function signReceipt(
+  receipt: Omit<ExecutionReceipt, "signature">,
+): string {
+  return createCompactSignature(
+    receiptSigningPayload(receipt),
+    undefined,
+    "receipt",
+  );
 }
 
+/**
+ * Signs an AgentDescriptor using RFC 8785 JCS canonicalization.
+ *
+ * The descriptor is first converted to a JSON string, then canonicalized
+ * per RFC 8785 before signing. This ensures the same logical descriptor
+ * always produces the same signature, regardless of JSON key order or
+ * whitespace in the input.
+ *
+ * This matches the approach used by the A2A protocol for descriptor signing.
+ */
 export function signAgentDescriptor(
   descriptor: Omit<
     AgentDescriptor,
     "descriptor_signature" | "descriptor_key_id" | "descriptor_signature_alg"
-  >
-): Pick<AgentDescriptor, "descriptor_signature" | "descriptor_key_id" | "descriptor_signature_alg"> {
-  const signature = createCompactSignature(descriptorSigningPayload(descriptor), undefined, "descriptor");
+  >,
+): Pick<
+  AgentDescriptor,
+  "descriptor_signature" | "descriptor_key_id" | "descriptor_signature_alg"
+> {
+  // Canonicalize the descriptor per RFC 8785 JCS before signing.
+  const canonicalPayload = descriptorSigningPayload(descriptor);
+  const signature = createCompactSignatureFromCanonical(
+    canonicalPayload,
+    undefined,
+    "descriptor",
+  );
   return {
     descriptor_signature: signature,
     descriptor_key_id: getSignatureKeyId(signature) ?? DEFAULT_KID,
-    descriptor_signature_alg: getSignatureAlgorithm(signature) ?? DEFAULT_ALG
+    descriptor_signature_alg: getSignatureAlgorithm(signature) ?? DEFAULT_ALG,
   };
 }
 
-export function verifyAgentDescriptorSignature(descriptor: AgentDescriptor): boolean {
+/**
+ * Verifies an AgentDescriptor signature using RFC 8785 JCS canonicalization.
+ *
+ * The descriptor is canonicalized per RFC 8785 before verifying the
+ * signature, matching the exact canonicalization performed during signing.
+ */
+export function verifyAgentDescriptorSignature(
+  descriptor: AgentDescriptor,
+): boolean {
   if (
     typeof descriptor.descriptor_signature !== "string" ||
     typeof descriptor.descriptor_key_id !== "string" ||
@@ -519,10 +756,13 @@ export function verifyAgentDescriptorSignature(descriptor: AgentDescriptor): boo
     ...unsignedDescriptor
   } = descriptor;
 
-  return verifyCompactSignature(
+  // Canonicalize the descriptor per RFC 8785 JCS before verifying.
+  // This must match the exact canonicalization performed during signing.
+  const canonicalPayload = descriptorSigningPayload(unsignedDescriptor);
+  return verifyCompactSignatureFromCanonical(
     descriptor_signature,
-    descriptorSigningPayload(unsignedDescriptor),
-    "descriptor"
+    canonicalPayload,
+    "descriptor",
   );
 }
 
@@ -534,25 +774,33 @@ interface SignedRequestPayload {
   body: string;
 }
 
-function signedRequestPayload(input: SignedRequestPayload): Record<string, unknown> {
+function signedRequestPayload(
+  input: SignedRequestPayload,
+): Record<string, unknown> {
   return {
     method: input.method.toUpperCase(),
     path: input.path,
     timestamp: input.timestamp,
     key_id: input.key_id,
-    body: input.body
+    body: input.body,
   };
 }
 
-export function signHttpRequest(input: SignedRequestPayload): MapSignedRequestHeaders {
-  const signature = createCompactSignature(signedRequestPayload(input), input.key_id, "http_request");
+export function signHttpRequest(
+  input: SignedRequestPayload,
+): MapSignedRequestHeaders {
+  const signature = createCompactSignature(
+    signedRequestPayload(input),
+    input.key_id,
+    "http_request",
+  );
   const nonce = generateNonce();
   return {
     "x-map-auth-scheme": "signed_request",
     "x-map-key-id": input.key_id,
     "x-map-timestamp": input.timestamp,
     "x-map-request-signature": signature,
-    "x-map-nonce": nonce
+    "x-map-nonce": nonce,
   };
 }
 
@@ -562,7 +810,7 @@ export function getVerificationKeys(): MapVerificationKey[] {
       let jwk: Record<string, unknown> | undefined;
       try {
         jwk = createPublicKey(key.material.public_key_pem).export({
-          format: "jwk"
+          format: "jwk",
         }) as Record<string, unknown>;
       } catch {
         jwk = undefined;
@@ -576,7 +824,7 @@ export function getVerificationKeys(): MapVerificationKey[] {
         demo_only: key.demo_only,
         kty: "RSA" as const,
         public_key_pem: key.material.public_key_pem,
-        ...(jwk ? { jwk } : {})
+        ...(jwk ? { jwk } : {}),
       };
     }
 
@@ -587,7 +835,7 @@ export function getVerificationKeys(): MapVerificationKey[] {
       status: key.status,
       scopes: key.scopes,
       demo_only: key.demo_only,
-      kty: "oct" as const
+      kty: "oct" as const,
     };
   });
 }
@@ -600,11 +848,16 @@ export function getActiveSignatureKeyId(): string | null {
   }
 }
 
-export function getSigningProviderStatus(): { provider: string; configured: boolean } {
+export function getSigningProviderStatus(): {
+  provider: string;
+  configured: boolean;
+} {
   return getKeyProviderInfo();
 }
 
-export function verifyHttpRequestSignature(input: SignedRequestPayload & { signature: string; nonce?: string }): boolean {
+export function verifyHttpRequestSignature(
+  input: SignedRequestPayload & { signature: string; nonce?: string },
+): boolean {
   const timestampMs = Date.parse(input.timestamp);
   if (Number.isNaN(timestampMs)) {
     return false;
@@ -619,7 +872,11 @@ export function verifyHttpRequestSignature(input: SignedRequestPayload & { signa
     return false;
   }
 
-  return verifyCompactSignature(input.signature, signedRequestPayload(input), "http_request");
+  return verifyCompactSignature(
+    input.signature,
+    signedRequestPayload(input),
+    "http_request",
+  );
 }
 
 interface AuditCheckpointPayload {
@@ -630,24 +887,32 @@ interface AuditCheckpointPayload {
 }
 
 export function signAuditCheckpoint(payload: AuditCheckpointPayload): string {
-  return createCompactSignature({
-    checkpoint_id: payload.checkpoint_id,
-    created_at: payload.created_at,
-    last_chain_index: payload.last_chain_index,
-    last_event_hash: payload.last_event_hash
-  }, undefined, "audit_checkpoint");
+  return createCompactSignature(
+    {
+      checkpoint_id: payload.checkpoint_id,
+      created_at: payload.created_at,
+      last_chain_index: payload.last_chain_index,
+      last_event_hash: payload.last_event_hash,
+    },
+    undefined,
+    "audit_checkpoint",
+  );
 }
 
 export function verifyAuditCheckpointSignature(
   payload: AuditCheckpointPayload,
-  signature: string
+  signature: string,
 ): boolean {
-  return verifyCompactSignature(signature, {
-    checkpoint_id: payload.checkpoint_id,
-    created_at: payload.created_at,
-    last_chain_index: payload.last_chain_index,
-    last_event_hash: payload.last_event_hash
-  }, "audit_checkpoint");
+  return verifyCompactSignature(
+    signature,
+    {
+      checkpoint_id: payload.checkpoint_id,
+      created_at: payload.created_at,
+      last_chain_index: payload.last_chain_index,
+      last_event_hash: payload.last_event_hash,
+    },
+    "audit_checkpoint",
+  );
 }
 
 interface AuditExportPayload {
@@ -660,28 +925,36 @@ interface AuditExportPayload {
 }
 
 export function signAuditExport(payload: AuditExportPayload): string {
-  return createCompactSignature({
-    export_id: payload.export_id,
-    created_at: payload.created_at,
-    events_count: payload.events_count,
-    checkpoints_count: payload.checkpoints_count,
-    latest_chain_index: payload.latest_chain_index,
-    latest_event_hash: payload.latest_event_hash
-  }, undefined, "audit_export");
+  return createCompactSignature(
+    {
+      export_id: payload.export_id,
+      created_at: payload.created_at,
+      events_count: payload.events_count,
+      checkpoints_count: payload.checkpoints_count,
+      latest_chain_index: payload.latest_chain_index,
+      latest_event_hash: payload.latest_event_hash,
+    },
+    undefined,
+    "audit_export",
+  );
 }
 
 export function verifyAuditExportSignature(
   payload: AuditExportPayload,
-  signature: string
+  signature: string,
 ): boolean {
-  return verifyCompactSignature(signature, {
-    export_id: payload.export_id,
-    created_at: payload.created_at,
-    events_count: payload.events_count,
-    checkpoints_count: payload.checkpoints_count,
-    latest_chain_index: payload.latest_chain_index,
-    latest_event_hash: payload.latest_event_hash
-  }, "audit_export");
+  return verifyCompactSignature(
+    signature,
+    {
+      export_id: payload.export_id,
+      created_at: payload.created_at,
+      events_count: payload.events_count,
+      checkpoints_count: payload.checkpoints_count,
+      latest_chain_index: payload.latest_chain_index,
+      latest_event_hash: payload.latest_event_hash,
+    },
+    "audit_export",
+  );
 }
 
 interface ConformanceExportPayload {
@@ -694,38 +967,50 @@ interface ConformanceExportPayload {
   artifact_hash: string;
 }
 
-export function signConformanceExport(payload: ConformanceExportPayload): string {
-  return createCompactSignature({
-    export_id: payload.export_id,
-    created_at: payload.created_at,
-    profile: payload.profile,
-    total_checks: payload.total_checks,
-    passed_checks: payload.passed_checks,
-    failed_checks: payload.failed_checks,
-    artifact_hash: payload.artifact_hash
-  }, undefined, "conformance_export");
+export function signConformanceExport(
+  payload: ConformanceExportPayload,
+): string {
+  return createCompactSignature(
+    {
+      export_id: payload.export_id,
+      created_at: payload.created_at,
+      profile: payload.profile,
+      total_checks: payload.total_checks,
+      passed_checks: payload.passed_checks,
+      failed_checks: payload.failed_checks,
+      artifact_hash: payload.artifact_hash,
+    },
+    undefined,
+    "conformance_export",
+  );
 }
 
 export function verifyConformanceExportSignature(
   payload: ConformanceExportPayload,
-  signature: string
+  signature: string,
 ): boolean {
-  return verifyCompactSignature(signature, {
-    export_id: payload.export_id,
-    created_at: payload.created_at,
-    profile: payload.profile,
-    total_checks: payload.total_checks,
-    passed_checks: payload.passed_checks,
-    failed_checks: payload.failed_checks,
-    artifact_hash: payload.artifact_hash
-  }, "conformance_export");
+  return verifyCompactSignature(
+    signature,
+    {
+      export_id: payload.export_id,
+      created_at: payload.created_at,
+      profile: payload.profile,
+      total_checks: payload.total_checks,
+      passed_checks: payload.passed_checks,
+      failed_checks: payload.failed_checks,
+      artifact_hash: payload.artifact_hash,
+    },
+    "conformance_export",
+  );
 }
 
-export function getTrustMetadata(profile: "open" | "verified" | "regulated"): TrustMetadata {
+export function getTrustMetadata(
+  profile: "open" | "verified" | "regulated",
+): TrustMetadata {
   return {
     trust_domain: process.env.MAP_TRUST_DOMAIN ?? "map.local",
     issuer: process.env.MAP_SIGNING_ISSUER ?? "map.reference",
-    profile
+    profile,
   };
 }
 
@@ -746,14 +1031,17 @@ export function signTrustBundle(payload: TrustBundlePayload): string {
       trust_domain: payload.trust_domain,
       issuer: payload.issuer,
       profile: payload.profile,
-      keys_hash: payload.keys_hash
+      keys_hash: payload.keys_hash,
     },
     undefined,
-    "trust_bundle"
+    "trust_bundle",
   );
 }
 
-export function verifyTrustBundleSignature(payload: TrustBundlePayload, signature: string): boolean {
+export function verifyTrustBundleSignature(
+  payload: TrustBundlePayload,
+  signature: string,
+): boolean {
   return verifyCompactSignature(
     signature,
     {
@@ -762,8 +1050,8 @@ export function verifyTrustBundleSignature(payload: TrustBundlePayload, signatur
       trust_domain: payload.trust_domain,
       issuer: payload.issuer,
       profile: payload.profile,
-      keys_hash: payload.keys_hash
+      keys_hash: payload.keys_hash,
     },
-    "trust_bundle"
+    "trust_bundle",
   );
 }

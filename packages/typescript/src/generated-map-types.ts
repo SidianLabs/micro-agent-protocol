@@ -33,7 +33,7 @@ export type TaskStatus =
   | "failed"
   | "revoked";
 
-export type AuthScheme = "none" | "bearer" | "mtls" | "signed_request";
+export type AuthScheme = "none" | "bearer" | "mtls" | "signed_request" | "oauth2";
 
 export type ErrorCode =
   | "agent_not_found"

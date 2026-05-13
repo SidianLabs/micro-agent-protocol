@@ -121,11 +121,17 @@ export class TaskStore {
     return record;
   }
 
-  get(taskId: string): TaskRecord | undefined {
-    return this.tasks.get(taskId);
+  get(taskId: string, historyLength?: number): TaskRecord | undefined {
+    const record = this.tasks.get(taskId);
+    if (!record) return undefined;
+    return this.applyHistoryLength(record, historyLength);
   }
 
-  getByTenant(taskId: string, tenantId: string): TaskRecord | undefined {
+  getByTenant(
+    taskId: string,
+    tenantId: string,
+    historyLength?: number,
+  ): TaskRecord | undefined {
     const record = this.tasks.get(taskId);
     if (!record) {
       return undefined;
@@ -134,7 +140,10 @@ export class TaskStore {
     const recordTenant = this.resolveTenantId(
       record.requester_identity.tenant_id,
     );
-    return recordTenant === this.resolveTenantId(tenantId) ? record : undefined;
+    const matched =
+      recordTenant === this.resolveTenantId(tenantId) ? record : undefined;
+    if (!matched) return undefined;
+    return this.applyHistoryLength(matched, historyLength);
   }
 
   update(
@@ -161,17 +170,20 @@ export class TaskStore {
     return next;
   }
 
-  list(): TaskRecord[] {
-    return [...this.tasks.values()];
+  list(historyLength?: number): TaskRecord[] {
+    const records = [...this.tasks.values()];
+    if (historyLength === undefined) return records;
+    return records.map((r) => this.applyHistoryLength(r, historyLength));
   }
 
-  listByTenant(tenantId: string): TaskRecord[] {
+  listByTenant(tenantId: string, historyLength?: number): TaskRecord[] {
     const normalizedTenantId = this.resolveTenantId(tenantId);
-    return this.list().filter(
+    const records = this.list(historyLength).filter(
       (record) =>
         this.resolveTenantId(record.requester_identity.tenant_id) ===
         normalizedTenantId,
     );
+    return records;
   }
 
   findByIdempotencyKey(idempotencyKey: string): TaskRecord | undefined {
@@ -343,6 +355,18 @@ export class TaskStore {
       JSON.stringify({ tasks: this.list() }, null, 2),
       "utf8",
     );
+  }
+
+  private applyHistoryLength(
+    record: TaskRecord,
+    historyLength?: number,
+  ): TaskRecord {
+    if (historyLength === undefined) return record;
+    if (historyLength === 0) {
+      const { result, receipt, ...rest } = record;
+      return rest as TaskRecord;
+    }
+    return record;
   }
 
   private resolveTenantId(tenantId: string | undefined): string {

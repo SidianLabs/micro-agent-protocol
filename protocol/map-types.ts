@@ -28,7 +28,12 @@ export type TaskStatus =
   | "failed"
   | "revoked";
 
-export type AuthScheme = "none" | "bearer" | "mtls" | "signed_request";
+export type AuthScheme =
+  | "none"
+  | "bearer"
+  | "mtls"
+  | "signed_request"
+  | "oauth2";
 
 export type ErrorCode =
   | "agent_not_found"
@@ -371,6 +376,8 @@ export interface TaskQueryParams {
   target_agent?: string;
   limit?: number;
   cursor?: string;
+  /** Maximum messages to include in task history. 0 = none, unset = server default, >0 = limit */
+  history_length?: number;
 }
 
 export interface AgentsQueryParams {

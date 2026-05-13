@@ -308,7 +308,7 @@ This repository currently contains the source implementation of MAP Protocol, in
 
 ## Security Notice
 
-⚠️ **This is alpha software. Do not use in production without proper security hardening.**
+⚠️ **This is a preview snapshot (2026.05.14). Do not use in production without proper security hardening.**
 
 - The reference server uses plain HTTP. In production, always deploy behind a TLS-terminating reverse proxy (nginx, Caddy, etc.) or enable HTTPS directly.
 - For mTLS authentication between assistants and MAP micro-agents, configure your reverse proxy to require client certificates.

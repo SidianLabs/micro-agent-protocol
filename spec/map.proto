@@ -1,0 +1,396 @@
+// This is the CANONICAL source of truth for MAP wire format.
+// All SDKs and JSON Schemas MUST be generated from this file.
+//
+// Micro Agent Protocol (MAP) — Open standard for AI assistant to micro-agent delegation.
+// Modeled after the A2A protocol's a2a.proto pattern with google.api.field_behavior annotations.
+
+syntax = "proto3";
+
+package map;
+
+option go_package = "github.com/SidianLabs/micro-agent-protocol/proto/map";
+option java_package = "com.sidianlabs.map.proto";
+option java_multiple_files = true;
+option csharp_namespace = "SidianLabs.MAP.Proto";
+
+import "google/api/field_behavior.proto";
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  RISK_LEVEL_LOW = 1;
+  RISK_LEVEL_MEDIUM = 2;
+  RISK_LEVEL_HIGH = 3;
+  RISK_LEVEL_CRITICAL = 4;
+}
+
+enum ExecutionMode {
+  EXECUTION_MODE_UNSPECIFIED = 0;
+  EXECUTION_MODE_READ = 1;
+  EXECUTION_MODE_ANALYZE = 2;
+  EXECUTION_MODE_PROPOSE = 3;
+  EXECUTION_MODE_COMMIT = 4;
+  EXECUTION_MODE_MONITOR = 5;
+  EXECUTION_MODE_BATCH = 6;
+}
+
+enum VisibilityMode {
+  VISIBILITY_MODE_UNSPECIFIED = 0;
+  VISIBILITY_MODE_FULL = 1;
+  VISIBILITY_MODE_SUMMARY = 2;
+  VISIBILITY_MODE_STRUCTURED_ONLY = 3;
+  VISIBILITY_MODE_RECEIPT_ONLY = 4;
+  VISIBILITY_MODE_REDACTED = 5;
+  VISIBILITY_MODE_DEBUG = 6;
+}
+
+enum DeliveryMode {
+  DELIVERY_MODE_UNSPECIFIED = 0;
+  DELIVERY_MODE_SYNC = 1;
+  DELIVERY_MODE_ASYNC = 2;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_ACCEPTED = 1;
+  TASK_STATUS_PROPOSED = 2;
+  TASK_STATUS_AWAITING_APPROVAL = 3;
+  TASK_STATUS_DENIED = 4;
+  TASK_STATUS_RUNNING = 5;
+  TASK_STATUS_COMPLETED = 6;
+  TASK_STATUS_FAILED = 7;
+  TASK_STATUS_REVOKED = 8;
+}
+
+enum AuthScheme {
+  AUTH_SCHEME_UNSPECIFIED = 0;
+  AUTH_SCHEME_NONE = 1;
+  AUTH_SCHEME_BEARER = 2;
+  AUTH_SCHEME_MTLS = 3;
+  AUTH_SCHEME_SIGNED_REQUEST = 4;
+  AUTH_SCHEME_OAUTH2 = 5;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_AGENT_NOT_FOUND = 1;
+  ERROR_CODE_AGENT_DISABLED = 2;
+  ERROR_CODE_CAPABILITY_NOT_FOUND = 3;
+  ERROR_CODE_CAPABILITY_DISABLED = 4;
+  ERROR_CODE_POLICY_DENIED = 5;
+  ERROR_CODE_APPROVAL_REQUIRED = 6;
+  ERROR_CODE_APPROVAL_DENIED = 7;
+  ERROR_CODE_APPROVAL_EXPIRED = 8;
+  ERROR_CODE_INVALID_DELEGATION_TOKEN = 9;
+  ERROR_CODE_TOKEN_EXPIRED = 10;
+  ERROR_CODE_TOKEN_INVALID_SIGNATURE = 11;
+  ERROR_CODE_TOKEN_MISSING_SCOPE = 12;
+  ERROR_CODE_SCHEMA_VALIDATION_FAILED = 13;
+  ERROR_CODE_SCHEMA_VERSION_UNSUPPORTED = 14;
+  ERROR_CODE_SCHEMA_NEGOTIATION_FAILED = 15;
+  ERROR_CODE_TENANT_MISMATCH = 16;
+  ERROR_CODE_RATE_LIMIT_EXCEEDED = 17;
+  ERROR_CODE_REQUEST_TIMEOUT = 18;
+  ERROR_CODE_INTERNAL_ERROR = 19;
+  ERROR_CODE_INVALID_REQUEST = 20;
+  ERROR_CODE_IDEMPOTENCY_CONFLICT = 21;
+  ERROR_CODE_RESOURCE_NOT_FOUND = 22;
+  ERROR_CODE_UNAUTHORIZED = 23;
+  ERROR_CODE_FORBIDDEN = 24;
+  ERROR_CODE_EXTENSION_SUPPORT_REQUIRED = 25;
+}
+
+// ─── Core Messages ─────────────────────────────────────────────────────────────
+
+// RequesterIdentity identifies who is making the request.
+message RequesterIdentity {
+  string type = 1 [(google.api.field_behavior) = REQUIRED]; // "user" | "service" | "agent"
+  string id = 2 [(google.api.field_behavior) = REQUIRED];
+  string tenant_id = 3;
+}
+
+// TimeWindow constrains an action to a specific time range.
+message TimeWindow {
+  string start = 1 [(google.api.field_behavior) = REQUIRED]; // ISO 8601 datetime
+  string end = 2 [(google.api.field_behavior) = REQUIRED];   // ISO 8601 datetime
+}
+
+// TaskConstraints specify operational guardrails for a task.
+message TaskConstraints {
+  message CommonConstraints {
+    string resource_id = 1;
+    repeated string resource_ids = 2;
+    string environment = 3; // "development" | "staging" | "production"
+    double max_amount = 4;
+    string currency = 5;
+    int32 limit = 6;
+    bool approval_required = 7;
+    TimeWindow time_window = 8;
+    string redaction_level = 9; // "none" | "basic" | "strict"
+  }
+  CommonConstraints common = 1;
+  google.protobuf.Struct domain = 2;
+}
+
+// ─── Agent Descriptor Messages ─────────────────────────────────────────────────
+
+// AgentExtension declares an extension capability for an agent.
+message AgentExtension {
+  string uri = 1 [(google.api.field_behavior) = REQUIRED];
+  string description = 2;
+  bool required = 3;
+  google.protobuf.Struct params = 4;
+}
+
+// CapabilityDescriptor defines a single capability exposed by an agent.
+message CapabilityDescriptor {
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  ExecutionMode execution_mode = 2 [(google.api.field_behavior) = REQUIRED];
+  string request_schema_ref = 3 [(google.api.field_behavior) = REQUIRED];
+  string response_schema_ref = 4 [(google.api.field_behavior) = REQUIRED];
+  string constraint_schema_ref = 5;
+  bool approval_required_by_default = 6;
+  repeated AuthScheme auth_schemes = 7;
+  string required_auth_scheme = 8; // subset of AuthScheme (excluding "none")
+  string schema_version = 9;
+  repeated string supported_schema_versions = 10;
+  string preferred_schema_version = 11;
+  message TranslationTarget {
+    string from = 1;
+    string to = 2;
+    string mode = 3; // "provider_translation"
+  }
+  repeated TranslationTarget translation_targets = 12;
+  string compatibility = 13; // "backward_compatible" | "forward_compatible" | "breaking_change"
+  string status = 14; // "active" | "deprecated" | "disabled"
+}
+
+// AgentDescriptor is the self-describing manifest for a MAP agent.
+// It is the primary discovery document for the MAP ecosystem.
+message AgentDescriptor {
+  string agent_id = 1 [(google.api.field_behavior) = REQUIRED];
+  string organization = 2 [(google.api.field_behavior) = REQUIRED];
+  string version = 3 [(google.api.field_behavior) = REQUIRED]; // semantic version
+  string domain = 4 [(google.api.field_behavior) = REQUIRED];
+  repeated string capabilities = 5 [(google.api.field_behavior) = REQUIRED];
+  RiskLevel risk_level = 6 [(google.api.field_behavior) = REQUIRED];
+  string input_schema_ref = 7 [(google.api.field_behavior) = REQUIRED];
+  string output_schema_ref = 8 [(google.api.field_behavior) = REQUIRED];
+  repeated ExecutionMode supported_execution_modes = 9 [(google.api.field_behavior) = REQUIRED];
+  repeated VisibilityMode visibility_modes = 10 [(google.api.field_behavior) = REQUIRED];
+
+  // Optional fields
+  repeated string approval_requirements = 11;
+  repeated string policy_hooks = 12;
+  string display_name = 13;
+  string provider_url = 14;
+  string documentation_url = 15;
+  repeated AuthScheme auth_schemes = 16;
+  repeated CapabilityDescriptor capability_descriptors = 17;
+  message TransportBinding {
+    string kind = 1; // "http"
+    string endpoint = 2;
+  }
+  repeated TransportBinding transport_bindings = 18;
+  repeated string tags = 19;
+  string registry_status = 20; // "active" | "deprecated" | "disabled"
+  string description = 21;
+  repeated AgentExtension extensions = 22;
+
+  // Signature fields (set by signAgentDescriptor)
+  string descriptor_signature = 23;
+  string descriptor_key_id = 24;
+  string descriptor_signature_alg = 25; // "HS256" | "RS256"
+}
+
+// ─── Delegation & Execution Messages ───────────────────────────────────────────
+
+// DelegationToken authorizes a specific micro-agent to act on behalf of a principal.
+message DelegationToken {
+  string issuer = 1 [(google.api.field_behavior) = REQUIRED];
+  string subject_agent = 2 [(google.api.field_behavior) = REQUIRED];
+  repeated string allowed_actions = 3 [(google.api.field_behavior) = REQUIRED];
+  google.protobuf.Struct resource_scope = 4 [(google.api.field_behavior) = REQUIRED];
+  message Constraints {
+    google.protobuf.Struct common = 1;
+    google.protobuf.Struct domain = 2;
+    string expires_at = 3 [(google.api.field_behavior) = REQUIRED]; // ISO 8601 datetime
+  }
+  Constraints constraints = 5 [(google.api.field_behavior) = REQUIRED];
+  string approval_reference = 6;
+  RequesterIdentity requester_identity = 7;
+  string signature = 8 [(google.api.field_behavior) = REQUIRED];
+}
+
+// TaskEnvelope wraps a task request with all necessary context for dispatch.
+message TaskEnvelope {
+  string task_id = 1 [(google.api.field_behavior) = REQUIRED];
+  string parent_task_id = 2;
+  RequesterIdentity requester_identity = 3 [(google.api.field_behavior) = REQUIRED];
+  string target_agent = 4 [(google.api.field_behavior) = REQUIRED];
+  string intent = 5 [(google.api.field_behavior) = REQUIRED];
+  TaskConstraints constraints = 6 [(google.api.field_behavior) = REQUIRED];
+  RiskLevel risk_class = 7 [(google.api.field_behavior) = REQUIRED];
+  string deadline = 8; // ISO 8601 datetime
+  string delegation_token = 9 [(google.api.field_behavior) = REQUIRED];
+  VisibilityMode requested_output_mode = 10 [(google.api.field_behavior) = REQUIRED];
+  google.protobuf.Struct metadata = 11;
+  repeated string extensions = 12;
+}
+
+// InvocationNegotiation captures the schema/delivery negotiation between client and server.
+message InvocationNegotiation {
+  message Requested {
+    string schema_version = 1;
+    VisibilityMode output_mode = 2;
+    DeliveryMode delivery_mode = 3;
+  }
+  Requested requested = 1;
+  message Selected {
+    string schema_version = 1;
+    VisibilityMode output_mode = 2;
+    DeliveryMode delivery_mode = 3;
+  }
+  Selected selected = 2;
+  repeated string provider_actions = 3; // e.g. "schema_translated"
+}
+
+// InvocationNegotiationRequest is the client's negotiation proposal.
+message InvocationNegotiationRequest {
+  string schema_version = 1;
+  DeliveryMode delivery_mode = 2;
+}
+
+// ResultPackage is the structured output from a completed (or failed) task.
+message ResultPackage {
+  string task_id = 1 [(google.api.field_behavior) = REQUIRED];
+  TaskStatus status = 2 [(google.api.field_behavior) = REQUIRED];
+  string summary = 3;
+  google.protobuf.Struct structured_output = 4 [(google.api.field_behavior) = REQUIRED];
+  string receipt_ref = 5;
+  string negotiated_schema_version = 6;
+  string requested_schema_version = 7;
+  string executed_schema_version = 8;
+  InvocationNegotiation negotiation = 9;
+  repeated string redactions_applied = 10;
+  bool followup_required = 11 [(google.api.field_behavior) = REQUIRED];
+  string escalation_reason = 12;
+  repeated string extensions = 13;
+}
+
+// ExecutionReceipt is a signed, immutable record of an action taken by a micro-agent.
+message ExecutionReceipt {
+  string receipt_id = 1 [(google.api.field_behavior) = REQUIRED];
+  string task_id = 2 [(google.api.field_behavior) = REQUIRED];
+  string tenant_id = 3;
+  string request_id = 4;
+  string agent_id = 5 [(google.api.field_behavior) = REQUIRED];
+  string action_taken = 6 [(google.api.field_behavior) = REQUIRED];
+  string resource_touched = 7 [(google.api.field_behavior) = REQUIRED];
+  repeated string policy_checks = 8 [(google.api.field_behavior) = REQUIRED];
+  string approval_used = 9;
+  string timestamp = 10 [(google.api.field_behavior) = REQUIRED]; // ISO 8601 datetime
+  string result_hash = 11 [(google.api.field_behavior) = REQUIRED];
+  string requested_schema_version = 12;
+  string executed_schema_version = 13;
+  InvocationNegotiation negotiation = 14;
+  string signature = 15 [(google.api.field_behavior) = REQUIRED];
+  repeated string extensions = 16;
+}
+
+// PolicyDecision captures the outcome of a policy evaluation.
+message PolicyDecision {
+  bool allowed = 1 [(google.api.field_behavior) = REQUIRED];
+  string action = 2 [(google.api.field_behavior) = REQUIRED]; // "allow" | "deny" | "require_approval"
+  repeated string policy_checks = 3 [(google.api.field_behavior) = REQUIRED];
+  string reason = 4;
+  string approval_reference = 5;
+  google.protobuf.Struct scoped_constraints = 6;
+}
+
+// TaskRecord is the server-side record of a task for audit and status queries.
+message TaskRecord {
+  string task_id = 1 [(google.api.field_behavior) = REQUIRED];
+  RequesterIdentity requester_identity = 2 [(google.api.field_behavior) = REQUIRED];
+  string capability = 3 [(google.api.field_behavior) = REQUIRED];
+  string target_agent = 4 [(google.api.field_behavior) = REQUIRED];
+  TaskStatus status = 5 [(google.api.field_behavior) = REQUIRED];
+  string updated_at = 6 [(google.api.field_behavior) = REQUIRED]; // ISO 8601 datetime
+  string idempotency_key = 7;
+  ResultPackage result = 8;
+  ExecutionReceipt receipt = 9;
+}
+
+// InvokeResult bundles a ResultPackage with its ExecutionReceipt.
+message InvokeResult {
+  ResultPackage result = 1 [(google.api.field_behavior) = REQUIRED];
+  ExecutionReceipt receipt = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// ─── Request / Response Messages ───────────────────────────────────────────────
+
+// DispatchRequest is the top-level mutation to dispatch a task to a micro-agent.
+message DispatchRequest {
+  string capability = 1 [(google.api.field_behavior) = REQUIRED];
+  TaskEnvelope envelope = 2 [(google.api.field_behavior) = REQUIRED];
+  string requested_schema_version = 3;
+  InvocationNegotiationRequest negotiation = 4;
+}
+
+// ApprovalRequest is sent to authorize a task that requires human/institutional approval.
+message ApprovalRequest {
+  string task_id = 1 [(google.api.field_behavior) = REQUIRED];
+  string approval_reference = 2 [(google.api.field_behavior) = REQUIRED];
+  string capability = 3 [(google.api.field_behavior) = REQUIRED];
+  TaskEnvelope envelope = 4 [(google.api.field_behavior) = REQUIRED];
+  string requested_schema_version = 5;
+  InvocationNegotiationRequest negotiation = 6;
+}
+
+// DispatchResponse is the result of a dispatch operation.
+message DispatchResponse {
+  ResultPackage result = 1;
+  ExecutionReceipt receipt = 2;
+}
+
+// ApprovalResponse is the result of an approval operation.
+message ApprovalResponse {
+  ResultPackage result = 1;
+  ExecutionReceipt receipt = 2;
+}
+
+// ─── Error & Pagination Messages ──────────────────────────────────────────────
+
+// MapErrorResponse conveys a structured protocol error.
+message MapErrorResponse {
+  ErrorCode code = 1 [(google.api.field_behavior) = REQUIRED];
+  string message = 2 [(google.api.field_behavior) = REQUIRED];
+  bool retryable = 3 [(google.api.field_behavior) = REQUIRED];
+  int32 status = 4 [(google.api.field_behavior) = REQUIRED];
+  message ErrorDetails {
+    string category = 1; // "validation" | "authentication" | "authorization" | "not_found" | "conflict" | "rate_limit" | "server" | "client"
+    string field = 2;
+    string value = 3;
+    google.protobuf.Struct context = 4;
+  }
+  ErrorDetails details = 5;
+  string request_id = 6;
+}
+
+// PaginatedRequest is used for list/query endpoints.
+message PaginatedRequest {
+  int32 limit = 1;
+  string cursor = 2;
+}
+
+// PaginatedResult wraps a paginated collection response.
+message PaginatedResult {
+  google.protobuf.Any items = 1; // repeated, but using Any for flexibility
+  message Pagination {
+    int32 limit = 1;
+    string next_cursor = 2;
+    int32 total = 3;
+  }
+  Pagination pagination = 2;
+}

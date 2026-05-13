@@ -8,7 +8,7 @@ info:
     MAP enables organizations to deploy policy-aware micro-agents between
     external AI assistants and sensitive internal systems, so execution stays
     local, authority stays bounded, and context stays minimal.
-  version: "1.0.0-alpha.1"
+  version: "2026.05.14"
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -169,6 +169,12 @@ paths:
           description: Filter by order identifier (groups related tasks)
           schema:
             type: string
+        - name: history_length
+          in: query
+          description: Maximum messages to include in task history. 0 = none, unset = server default, >0 = limit
+          schema:
+            type: integer
+            minimum: 0
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
       responses:
@@ -212,6 +218,12 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TaskId"
         - $ref: "#/components/parameters/TenantId"
+        - name: history_length
+          in: query
+          description: Maximum messages to include in task history. 0 = none, unset = server default, >0 = limit
+          schema:
+            type: integer
+            minimum: 0
         - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":

@@ -1,6 +1,6 @@
 {
   "name": "micro-agent-protocol",
-  "version": "1.0.0-alpha.1",
+  "version": "2026.05.14",
   "private": true,
   "description": "Micro Agent Protocol (MAP) - Open standard for AI assistant to micro-agent delegation",
   "type": "module",

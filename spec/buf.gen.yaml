@@ -1,0 +1,33 @@
+# Buf code generation configuration for MAP Protocol Buffers.
+# Follows the A2A project's buf.gen.yaml pattern.
+version: v1
+managed:
+  enabled: true
+  go_package_prefix:
+    default: github.com/SidianLabs/micro-agent-protocol/gen/go
+    except:
+      - buf.build/googleapis/googleapis
+plugins:
+  # Go SDK
+  - plugin: buf.build/protocolbuffers/go
+    out: ../packages/go/proto
+    opt:
+      - paths=source_relative
+  - plugin: buf.build/grpc/go
+    out: ../packages/go/proto
+    opt:
+      - paths=source_relative
+
+  # TypeScript SDK
+  - plugin: buf.build/community/timostamm-protobuf-ts
+    out: ../packages/typescript/src/proto
+    opt:
+      - generate_dependencies
+      - long_type_string
+      - output_javascript
+
+  # Python SDK
+  - plugin: buf.build/protocolbuffers/python
+    out: ../packages/python/map/proto
+  - plugin: buf.build/grpc/python
+    out: ../packages/python/map/proto

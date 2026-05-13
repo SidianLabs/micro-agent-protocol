@@ -63,9 +63,13 @@ interface RouteContext {
       findByDomain(domain: string): any[];
     };
     taskStore: {
-      list(): any[];
-      listByTenant(tenantId: string): any[];
-      getByTenant(taskId: string, tenantId: string): any;
+      list(historyLength?: number): any[];
+      listByTenant(tenantId: string, historyLength?: number): any[];
+      getByTenant(
+        taskId: string,
+        tenantId: string,
+        historyLength?: number,
+      ): any;
     };
     receiptStore: {
       list(tenantId?: string): any[];
@@ -833,6 +837,11 @@ export async function handleReadRoutes(ctx: RouteContext): Promise<boolean> {
     if (requestUrl.pathname === "/tasks") {
       const tenantId = requestUrl.searchParams.get("tenant_id");
       const cursor = requestUrl.searchParams.get("cursor");
+      const historyLengthRaw = requestUrl.searchParams.get("history_length");
+      const historyLength =
+        historyLengthRaw !== null
+          ? parsePositiveIntOrDefault(historyLengthRaw, 0)
+          : undefined;
       const limit = Math.max(
         1,
         Math.min(
@@ -841,8 +850,8 @@ export async function handleReadRoutes(ctx: RouteContext): Promise<boolean> {
         ),
       );
       const allTasks = tenantId
-        ? ctx.app.taskStore.listByTenant(tenantId)
-        : ctx.app.taskStore.list();
+        ? ctx.app.taskStore.listByTenant(tenantId, historyLength)
+        : ctx.app.taskStore.list(historyLength);
       const orderId = requestUrl.searchParams.get("order_id");
       const contextId = requestUrl.searchParams.get("context_id");
       const filteredTasks = (() => {
@@ -1225,8 +1234,13 @@ export async function handleReadRoutes(ctx: RouteContext): Promise<boolean> {
     const pathParts = requestUrl.pathname.split("/");
     const taskId = decodeURIComponent(pathParts[2]);
     const tenantId = requestUrl.searchParams.get("tenant_id");
+    const historyLengthRaw = requestUrl.searchParams.get("history_length");
+    const historyLength =
+      historyLengthRaw !== null
+        ? parsePositiveIntOrDefault(historyLengthRaw, 0)
+        : undefined;
     const task = tenantId
-      ? ctx.app.taskStore.getByTenant(taskId, tenantId)
+      ? ctx.app.taskStore.getByTenant(taskId, tenantId, historyLength)
       : ctx.app.orchestrator.getTask(taskId);
     if (!task) {
       ctx.sendError(res, 404, requestId, {

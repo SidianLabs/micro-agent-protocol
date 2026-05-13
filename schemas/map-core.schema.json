@@ -15,7 +15,14 @@
     },
     "visibility_mode": {
       "type": "string",
-      "enum": ["full", "summary", "structured_only", "receipt_only", "redacted", "debug"]
+      "enum": [
+        "full",
+        "summary",
+        "structured_only",
+        "receipt_only",
+        "redacted",
+        "debug"
+      ]
     },
     "delivery_mode": {
       "type": "string",
@@ -36,7 +43,7 @@
     },
     "auth_scheme": {
       "type": "string",
-      "enum": ["none", "bearer", "mtls", "signed_request"]
+      "enum": ["none", "bearer", "mtls", "signed_request", "oauth2"]
     },
     "error_code": {
       "type": "string",
@@ -141,7 +148,12 @@
     "capability_descriptor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "execution_mode", "request_schema_ref", "response_schema_ref"],
+      "required": [
+        "name",
+        "execution_mode",
+        "request_schema_ref",
+        "response_schema_ref"
+      ],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "execution_mode": { "$ref": "#/definitions/execution_mode" },
@@ -163,7 +175,9 @@
           "type": "array",
           "items": { "$ref": "#/definitions/semantic_version" }
         },
-        "preferred_schema_version": { "$ref": "#/definitions/semantic_version" },
+        "preferred_schema_version": {
+          "$ref": "#/definitions/semantic_version"
+        },
         "translation_targets": {
           "type": "array",
           "items": {
@@ -180,7 +194,11 @@
         },
         "compatibility": {
           "type": "string",
-          "enum": ["backward_compatible", "forward_compatible", "breaking_change"]
+          "enum": [
+            "backward_compatible",
+            "forward_compatible",
+            "breaking_change"
+          ]
         },
         "status": {
           "type": "string",
@@ -357,10 +375,16 @@
         "summary": { "type": "string" },
         "structured_output": { "type": "object" },
         "receipt_ref": { "type": "string" },
-        "negotiated_schema_version": { "$ref": "#/definitions/semantic_version" },
-        "requested_schema_version": { "$ref": "#/definitions/semantic_version" },
+        "negotiated_schema_version": {
+          "$ref": "#/definitions/semantic_version"
+        },
+        "requested_schema_version": {
+          "$ref": "#/definitions/semantic_version"
+        },
         "executed_schema_version": { "$ref": "#/definitions/semantic_version" },
-        "negotiation": { "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json" },
+        "negotiation": {
+          "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json"
+        },
         "redactions_applied": {
           "type": "array",
           "items": { "type": "string" },
@@ -399,9 +423,13 @@
         "approval_used": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
         "result_hash": { "type": "string", "minLength": 1 },
-        "requested_schema_version": { "$ref": "#/definitions/semantic_version" },
+        "requested_schema_version": {
+          "$ref": "#/definitions/semantic_version"
+        },
         "executed_schema_version": { "$ref": "#/definitions/semantic_version" },
-        "negotiation": { "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json" },
+        "negotiation": {
+          "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/invocation-negotiation.schema.json"
+        },
         "signature": { "type": "string", "minLength": 1 }
       }
     },
@@ -411,7 +439,9 @@
       "required": ["capability", "envelope"],
       "properties": {
         "capability": { "type": "string", "minLength": 1 },
-        "requested_schema_version": { "$ref": "#/definitions/semantic_version" },
+        "requested_schema_version": {
+          "$ref": "#/definitions/semantic_version"
+        },
         "negotiation": {
           "type": "object",
           "additionalProperties": false,
@@ -431,7 +461,9 @@
         "task_id": { "type": "string", "minLength": 1 },
         "approval_reference": { "type": "string", "minLength": 1 },
         "capability": { "type": "string", "minLength": 1 },
-        "requested_schema_version": { "$ref": "#/definitions/semantic_version" },
+        "requested_schema_version": {
+          "$ref": "#/definitions/semantic_version"
+        },
         "negotiation": {
           "type": "object",
           "additionalProperties": false,
