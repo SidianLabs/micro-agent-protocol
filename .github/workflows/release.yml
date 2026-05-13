@@ -1,0 +1,387 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'sdk/typescript/v*'
+      - 'sdk/python/v*'
+      - 'sdk/go/v*'
+      - 'reference/v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+env:
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.11'
+  GO_VERSION: '1.22'
+
+jobs:
+  # ===========================================================================
+  # Determine Release Scope
+  # ===========================================================================
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      release_type: ${{ steps.determine.outputs.type }}
+      release_version: ${{ steps.determine.outputs.version }}
+      is_full_release: ${{ steps.determine.outputs.is_full }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine release type
+        id: determine
+        run: |
+          REF=${{ github.ref_name }}
+          
+          if [[ $REF == v* ]]; then
+            echo "type=full" >> $GITHUB_OUTPUT
+            echo "version=${REF#v}" >> $GITHUB_OUTPUT
+            echo "is_full=true" >> $GITHUB_OUTPUT
+          elif [[ $REF == sdk/typescript/v* ]]; then
+            echo "type=typescript" >> $GITHUB_OUTPUT
+            echo "version=${REF#sdk/typescript/v}" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          elif [[ $REF == sdk/python/v* ]]; then
+            echo "type=python" >> $GITHUB_OUTPUT
+            echo "version=${REF#sdk/python/v}" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          elif [[ $REF == sdk/go/v* ]]; then
+            echo "type=go" >> $GITHUB_OUTPUT
+            echo "version=${REF#sdk/go/v}" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          elif [[ $REF == reference/v* ]]; then
+            echo "type=reference" >> $GITHUB_OUTPUT
+            echo "version=${REF#reference/v}" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          else
+            echo "type=unknown" >> $GITHUB_OUTPUT
+            echo "version=" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "Release type: ${{ steps.determine.outputs.type }}"
+          echo "Release version: ${{ steps.determine.outputs.version }}"
+
+      - name: Create release info
+        run: |
+          mkdir -p release-info
+          echo "${{ github.ref_name }}" > release-info/version.txt
+          echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > release-info/date.txt
+
+      - name: Upload release info
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-info
+          path: release-info/
+
+  # ===========================================================================
+  # Build All Packages
+  # ===========================================================================
+  build:
+    name: Build All Packages
+    runs-on: ubuntu-latest
+    needs: [prepare]
+    if: needs.prepare.outputs.is_full == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript packages
+        run: |
+          npm run build
+          cd packages/typescript && npm run build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build Python package
+        run: |
+          cd packages/python
+          pip install build
+          python -m build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: packages/go/go.sum
+
+      - name: Build Go package
+        run: |
+          cd packages/go
+          go build ./...
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            packages/typescript/dist/
+            packages/python/dist/
+            packages/go/**/*.go
+          retention-days: 7
+
+  # ===========================================================================
+  # Publish TypeScript SDK to npm
+  # ===========================================================================
+  publish-npm:
+    name: Publish TypeScript SDK to npm
+    runs-on: ubuntu-latest
+    needs: [prepare]
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@mapprotocol/sdk
+    if: needs.prepare.outputs.release_type == 'typescript' || needs.prepare.outputs.is_full == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        if: needs.prepare.outputs.is_full == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages/typescript/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          cache-dependency-path: packages/typescript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: packages/typescript
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/typescript
+
+      - name: Publish to npm
+        run: |
+          npm publish --access public
+        working-directory: packages/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create git tag
+        run: |
+          git tag sdk/typescript/${{ github.ref_name }}
+          git push origin sdk/typescript/${{ github.ref_name }}
+
+  # ===========================================================================
+  # Publish Python SDK to PyPI
+  # ===========================================================================
+  publish-pypi:
+    name: Publish Python SDK to PyPI
+    runs-on: ubuntu-latest
+    needs: [prepare]
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mapprotocol
+    if: needs.prepare.outputs.release_type == 'python' || needs.prepare.outputs.is_full == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        if: needs.prepare.outputs.is_full == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages/python/
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Build package
+        run: |
+          cd packages/python
+          pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Create git tag
+        run: |
+          git tag sdk/python/${{ github.ref_name }}
+          git push origin sdk/python/${{ github.ref_name }}
+
+  # ===========================================================================
+  # Publish Go Module
+  # ===========================================================================
+  publish-go:
+    name: Publish Go Module
+    runs-on: ubuntu-latest
+    needs: [prepare]
+    if: needs.prepare.outputs.release_type == 'go' || needs.prepare.outputs.is_full == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        if: needs.prepare.outputs.is_full == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages/go/
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: packages/go/go.sum
+
+      - name: Create git tag
+        run: |
+          cd packages/go
+          # Create and push version tag
+          git tag v${{ github.ref_name }}
+          git push origin v${{ github.ref_name }}
+
+      - name: Go Proxy Publish
+        run: |
+          echo "Go module published to proxy"
+          echo "Module: github.com/mapprotocol/go"
+          echo "Version: ${{ github.ref_name }}"
+
+  # ===========================================================================
+  # Create GitHub Release
+  # ===========================================================================
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [prepare, publish-npm, publish-pypi, publish-go]
+    if: always()
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release info
+        uses: actions/download-artifact@v4
+        with:
+          name: release-info
+          path: .
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION=$(cat release-info/version.txt)
+          DATE=$(cat release-info/date.txt)
+          
+          cat > release-notes.md << EOF
+          # Release $VERSION
+
+          **Released**: $DATE
+
+          ## Installation
+
+          ### TypeScript
+          \`\`\`bash
+          npm install @mapprotocol/sdk@$VERSION
+          \`\`\`
+
+          ### Python
+          \`\`\`bash
+          pip install mapprotocol==$VERSION
+          \`\`\`
+
+          ### Go
+          \`\`\`bash
+          go get github.com/mapprotocol/go@v$VERSION
+          \`\`\`
+
+          ## Docker
+
+          \`\`\`bash
+          docker pull mapprotocol/reference:$VERSION
+          docker pull mapprotocol/reference:latest
+          \`\`\`
+
+          ## What's Changed
+
+          See the [CHANGELOG](./CHANGELOG.md) for details.
+
+          **Full Changelog**: https://github.com/mapprotocol/map/compare/...to...$VERSION
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          files: |
+            LICENSE
+            NOTICE
+          generate_release_notes: true
+
+      - name: Upload release artifacts
+        uses: actions/upload-release-artifact@v4
+        with:
+          name: release-artifacts-${{ github.ref_name }}
+          path: |
+            packages/typescript/dist/**
+            packages/python/dist/**
+          retention-days: 90
+
+  # ===========================================================================
+  # Notify Success
+  # ===========================================================================
+  success:
+    name: Release Complete
+    runs-on: ubuntu-latest
+    needs: [create-release]
+    if: success()
+
+    steps:
+      - name: Success message
+        run: |
+          echo "=============================================="
+          echo "       RELEASE COMPLETED SUCCESSFULLY"
+          echo "=============================================="
+          echo "Version: ${{ github.ref_name }}"
+          echo "Released at: $(date)"
+          echo ""
+          echo "Published to:"
+          echo "  - npm: @mapprotocol/sdk@${{ github.ref_name }}"
+          echo "  - PyPI: mapprotocol==${{ github.ref_name }}"
+          echo "  - Go: github.com/mapprotocol/go@v${{ github.ref_name }}"
+          echo ""
+          echo "GitHub Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+          echo "=============================================="

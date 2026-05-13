@@ -33,9 +33,6 @@ coverage/
 *.sublime-project
 
 # Project-specific
-docs/
-examples/
-.github/
 *.lock
 AGENTS.md
 ANTITRUST.md
@@ -47,4 +44,7 @@ NOTICE
 SECURITY.md
 copyright-header-template.txt
 references/
-conformance/
+
+# Runtime data
+.map/
+test-project/package-lock.json

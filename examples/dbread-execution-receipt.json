@@ -1,0 +1,14 @@
+{
+  "receipt_id": "receipt_db_001",
+  "task_id": "task_db_001",
+  "agent_id": "dbread-agent-v1",
+  "action_taken": "db.read.aggregate",
+  "resource_touched": "incident_metrics",
+  "policy_checks": [
+    "environment_allowed",
+    "dataset_allowed"
+  ],
+  "timestamp": "2026-03-19T17:55:10Z",
+  "result_hash": "sha256:dbread-result-demo",
+  "signature": "sig_demo_db_receipt"
+}

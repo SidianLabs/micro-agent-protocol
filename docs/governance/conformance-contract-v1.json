@@ -1,0 +1,28 @@
+{
+  "contract_version": "1.0.0-rc1",
+  "required_suites": [
+    "reference",
+    "profiles",
+    "trust",
+    "fixtures",
+    "errors",
+    "api_surface"
+  ],
+  "required_scripts": [
+    "conformance:reference",
+    "conformance:profiles",
+    "conformance:trust",
+    "conformance:fixtures",
+    "conformance:errors",
+    "conformance:api-surface",
+    "conformance:all"
+  ],
+  "minimum_expectations": {
+    "reference": { "failed_checks": 0 },
+    "profiles": { "failed_checks": 0 },
+    "trust": { "failed_checks": 0 },
+    "fixtures": { "failed_checks": 0 },
+    "errors": { "failed_checks": 0 },
+    "api_surface": { "failed_checks": 0 }
+  }
+}

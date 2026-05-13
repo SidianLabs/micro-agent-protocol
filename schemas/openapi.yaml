@@ -15,7 +15,7 @@ info:
   contact:
     name: MAP Protocol Authors
     url: https://github.com/mapprotocol/map
-    email: maintainers@map-protocol.dev
+    email: https://github.com/BHAWESHBHASKAR/micro-agent-protocol/issues
   x-protocol:
     domain: micro-agent-protocol
     specification: https://map-protocol.dev/spec

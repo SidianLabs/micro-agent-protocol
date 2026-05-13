@@ -19,8 +19,7 @@
     "directory": "packages/typescript"
   },
   "bugs": {
-    "url": "https://github.com/mapprotocol/map/issues",
-    "email": "support@mapprotocol.ai"
+    "url": "https://github.com/mapprotocol/map/issues"
   },
   "preview": "This is a preview release. API may change. See https://github.com/mapprotocol/map/blob/main/docs/preview-status.md",
   "engines": {

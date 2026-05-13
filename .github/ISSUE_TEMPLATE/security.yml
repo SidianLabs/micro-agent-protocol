@@ -1,0 +1,120 @@
+name: Security Vulnerability
+description: Report a security vulnerability in MAP Protocol
+labels: ["security"]
+notice: |
+  **STOP**: If this is a security vulnerability in YOUR code (not MAP Protocol itself),
+  please report it directly to the maintainers of that project.
+
+  For MAP Protocol vulnerabilities, please email security@map-protocol.dev
+  instead of using this form, or use GitHub's private vulnerability reporting.
+
+  See our full [Security Policy](./SECURITY.md).
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Security Vulnerability Report
+
+        Thank you for reporting a security issue. Please provide as much detail
+        as possible to help us assess and fix the vulnerability.
+
+        **Please do NOT** include any sensitive data (actual keys, passwords, tokens)
+        in this report. Use placeholder values instead.
+
+        For critical vulnerabilities, email us directly at security@map-protocol.dev.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Vulnerability Description
+      description: |
+        Describe the vulnerability in detail.
+        Include the type (e.g., XSS, injection, auth bypass) and affected component.
+    validations:
+      required: true
+
+  - type: input
+    id: severity
+    attributes:
+      label: Estimated Severity (CVSS 3.1)
+      description: |
+        If known, estimate the CVSS score (0.0-10.0).
+        - Critical (9.0-10.0): Emergency fix
+        - High (7.0-8.9): Fix within 7 days
+        - Medium (4.0-6.9): Fix within 30 days
+        - Low (0.1-3.9): Next release
+      placeholder: e.g., 7.5 (High)
+
+  - type: textarea
+    id: affected
+    attributes:
+      label: Affected Components
+      description: |
+        Which parts of MAP Protocol are affected?
+        - Protocol specification?
+        - Reference implementation?
+        - Specific SDK?
+        - Specific version(s)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: |
+        Step-by-step instructions to reproduce the vulnerability.
+        Use placeholder values for any sensitive data.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact Assessment
+      description: |
+        What is the security impact? What could an attacker do?
+        Who is at risk?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proof
+    attributes:
+      label: Proof of Concept
+      description: |
+        If available, provide a minimal proof of concept.
+        Use placeholder values for sensitive data.
+    validations:
+      required: false
+
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Suggested Remediation
+      description: |
+        If you have ideas on how to fix this, describe them here.
+    validations:
+      required: false
+
+  - type: input
+    id: contact
+    attributes:
+      label: Contact (for follow-up)
+      description: |
+        Email for us to contact you for more details.
+        (Optional - we can also use GitHub's private reporting)
+      placeholder: your.email@example.com
+
+  - type: checkboxes
+    id: disclosure
+    attributes:
+      label: Disclosure
+      options:
+        - label: |
+            I agree to responsible disclosure practices. I will keep
+            vulnerability details confidential until a fix is available.
+          required: true
+        - label: |
+            You may credit me in the security advisory (provide name/handle)
+          required: false

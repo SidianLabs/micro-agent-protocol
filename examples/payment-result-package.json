@@ -1,0 +1,19 @@
+{
+  "task_id": "task_123",
+  "status": "completed",
+  "summary": "Payment executed for approved vendor against matched invoice.",
+  "requested_schema_version": "1.0.0",
+  "executed_schema_version": "1.1.0",
+  "structured_output": {
+    "transaction_id": "txn_001",
+    "invoice_id": "INV-223",
+    "amount": 4500,
+    "currency": "INR"
+  },
+  "receipt_ref": "receipt_abc",
+  "redactions_applied": [
+    "credentials",
+    "internal_policy_trace"
+  ],
+  "followup_required": false
+}

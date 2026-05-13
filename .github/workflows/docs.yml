@@ -1,0 +1,156 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'schemas/openapi.yaml'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ===========================================================================
+  # Build Documentation
+  # ===========================================================================
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for OpenAPI spec
+        run: |
+          if [ -f ../schemas/openapi.yaml ]; then
+            echo "OpenAPI spec found"
+            cp ../schemas/openapi.yaml static/api/
+          else
+            echo "Warning: OpenAPI spec not found"
+          fi
+
+      - name: Build Docusaurus site
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build
+
+  # ===========================================================================
+  # Deploy to GitHub Pages
+  # ===========================================================================
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [build-docs]
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ===========================================================================
+  # Validate Deployed Site
+  # ===========================================================================
+  validate:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: success()
+
+    steps:
+      - name: Validate site is accessible
+        run: |
+          echo "Checking if documentation site is accessible..."
+          sleep 5
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/ || echo "000")
+          if [ "$HTTP_CODE" == "200" ]; then
+            echo "Documentation site is accessible (HTTP $HTTP_CODE)"
+          else
+            echo "Warning: Documentation site returned HTTP $HTTP_CODE"
+          fi
+
+  # ===========================================================================
+  # Build and Deploy PR Previews
+  # ===========================================================================
+  pr-preview:
+    name: Deploy PR Preview
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    environment:
+      name: pr-preview-${{ github.event.number }}
+      url: ${{ env.DEPLOYMENT_URL }}
+    env:
+      DEPLOYMENT_URL: https://pr-${{ github.event.number }}-map-${{ github.event.repository.name }}.pages.dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: docs
+
+      - name: Build preview
+        run: |
+          npm run build -- --config docusaurus.config.js --env branchName=${{ github.head_ref }}
+        working-directory: docs
+
+      - name: Deploy to Cloudflare Pages (example)
+        uses: nwtgck/actions-netlify@v3.0
+        with:
+          publish-dir: docs/build
+          production-deploy: false
+          deploy-message: "Deploy from PR #${{ github.event.number }}"
+          enable-commit-comment: false
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Documentation preview deployed to: ${{ env.DEPLOYMENT_URL }}'
+            })
