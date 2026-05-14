@@ -11,6 +11,17 @@ import {
   wantsSignedRequestAuth,
 } from "./utils.js";
 
+/**
+ * Deterministic overload backpressure thresholds.
+ * Gracefully degrades instead of crashing when the system is overloaded.
+ */
+const BACKPRESSURE = {
+  queue_warning: 0.7, // 70% queue full → warn
+  queue_critical: 0.9, // 90% queue full → reject new tasks
+  inflight_warning: 0.8, // 80% max concurrent → slow down
+  inflight_critical: 1.0, // 100% → reject
+};
+
 /** Helper to extract Bearer token from Authorization header. */
 function extractBearerToken(req: IncomingMessage): string | null {
   const authHeader = req.headers["authorization"];
@@ -83,6 +94,10 @@ interface MutationRouteContext {
     scope?: "global" | "tenant";
     retryAfterMs?: number;
   };
+  /** Deterministic overload backpressure thresholds. */
+  asyncQueueMaxQueueDepth: number;
+  /** Returns the current async queue depth. */
+  getAsyncQueueDepth(): number;
   recordAuditEvent(event: {
     timestamp: string;
     request_id: string;
@@ -131,6 +146,55 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
 
     // Track the authenticated subject for audit logging
     let authSubject: string | undefined;
+
+    // --- Deterministic overload backpressure ---
+    const queueDepth = ctx.getAsyncQueueDepth();
+    const maxDepth = ctx.asyncQueueMaxQueueDepth;
+    const queueRatio = maxDepth > 0 ? queueDepth / maxDepth : 0;
+    const queueDepthHeader = { "x-map-queue-depth": String(queueDepth) };
+
+    if (queueRatio >= BACKPRESSURE.queue_critical) {
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "queue_capacity_exceeded",
+        message: "Async queue capacity exceeded. Rejecting new task.",
+        method: req.method,
+        route: "/dispatch",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendJson(
+        res,
+        503,
+        {
+          error: {
+            code: "queue_capacity_exceeded",
+            message: "Async queue is at critical capacity. Please retry later.",
+            retryable: true,
+            status: 503,
+          },
+        },
+        requestId,
+        {
+          ok: false,
+          errorCode: "queue_capacity_exceeded",
+          targetAgent: routeTargetAgent,
+        },
+        {
+          "retry-after": "5",
+          ...queueDepthHeader,
+        },
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    const warningHeaders: Record<string, string> = { ...queueDepthHeader };
+    if (queueRatio >= BACKPRESSURE.queue_warning) {
+      warningHeaders["x-map-warning"] = "queue_nearing_capacity";
+    }
+    // --- End backpressure ---
 
     const dispatchRateLimit = ctx.checkMutationRateLimit(routeTenantId);
     if (!dispatchRateLimit.allowed) {
@@ -346,7 +410,7 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
       result.result.status === "running"
         ? 202
         : 200;
-    ctx.sendJson(res, statusCode, result, requestId);
+    ctx.sendJson(res, statusCode, result, requestId, undefined, warningHeaders);
     return { handled: true, routeTargetAgent, routeTenantId };
   }
 
@@ -357,6 +421,60 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
 
     // Track the authenticated subject for audit logging
     let authSubject: string | undefined;
+
+    // --- Deterministic overload backpressure ---
+    const approveQueueDepth = ctx.getAsyncQueueDepth();
+    const approveMaxDepth = ctx.asyncQueueMaxQueueDepth;
+    const approveQueueRatio =
+      approveMaxDepth > 0 ? approveQueueDepth / approveMaxDepth : 0;
+    const approveQueueDepthHeader = {
+      "x-map-queue-depth": String(approveQueueDepth),
+    };
+
+    if (approveQueueRatio >= BACKPRESSURE.queue_critical) {
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "queue_capacity_exceeded",
+        message: "Async queue capacity exceeded. Rejecting approval.",
+        method: req.method,
+        route: "/approve",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendJson(
+        res,
+        503,
+        {
+          error: {
+            code: "queue_capacity_exceeded",
+            message: "Async queue is at critical capacity. Please retry later.",
+            retryable: true,
+            status: 503,
+          },
+        },
+        requestId,
+        {
+          ok: false,
+          errorCode: "queue_capacity_exceeded",
+          targetAgent: routeTargetAgent,
+        },
+        {
+          "retry-after": "5",
+          ...approveQueueDepthHeader,
+        },
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    const approveWarningHeaders: Record<string, string> = {
+      ...approveQueueDepthHeader,
+    };
+    if (approveQueueRatio >= BACKPRESSURE.queue_warning) {
+      approveWarningHeaders["x-map-warning"] = "queue_nearing_capacity";
+    }
+    // --- End backpressure ---
 
     const approvalRateLimit = ctx.checkMutationRateLimit(routeTenantId);
     if (!approvalRateLimit.allowed) {
@@ -534,7 +652,7 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
     const startedAt = Date.now();
     const result = await ctx.app.orchestrator.approve(payloadWithRequestId);
     ctx.recordCapabilityLatency(payload.capability, Date.now() - startedAt);
-    ctx.sendJson(res, 200, result, requestId);
+    ctx.sendJson(res, 200, result, requestId, undefined, approveWarningHeaders);
     return { handled: true, routeTargetAgent, routeTenantId };
   }
 

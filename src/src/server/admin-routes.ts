@@ -1,5 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getActiveSignatureKeyId, getSigningProviderStatus, getTrustMetadata } from "../security/signing.js";
+import {
+  getActiveSignatureKeyId,
+  getSigningProviderStatus,
+  getTrustMetadata,
+  getSignatureMetrics,
+  detectAnomalies,
+} from "../security/signing.js";
 
 interface RouteContext {
   req: IncomingMessage;
@@ -12,19 +18,24 @@ interface RouteContext {
     body: unknown,
     requestId: string,
     tracking?: { ok: boolean; errorCode?: string; targetAgent?: string },
-    extraHeaders?: Record<string, string>
+    extraHeaders?: Record<string, string>,
   ): void;
   sendError(
     res: ServerResponse,
     statusCode: number,
     requestId: string,
-    error: { code: string; message: string; retryable: boolean; details?: Record<string, unknown> },
-    targetAgent?: string
+    error: {
+      code: string;
+      message: string;
+      retryable: boolean;
+      details?: Record<string, unknown>;
+    },
+    targetAgent?: string,
   ): void;
   readJsonBody(req: IncomingMessage): Promise<{ raw: string; parsed: unknown }>;
   getAdminTokenError(
     req: IncomingMessage,
-    rawBody: string
+    rawBody: string,
   ): Promise<{ statusCode: number; code: string; message: string } | null>;
   snapshotRuntimeControls(): {
     disabled_agents: Record<string, unknown>;
@@ -33,11 +44,20 @@ interface RouteContext {
   };
   getEffectiveVerificationKeys(): any[];
   getRuntimeRevocationMetadata(
-    keyId: string
+    keyId: string,
   ): { revoked_at: string; revoked_by: string; reason?: string } | null;
-  disabledAgents: Map<string, { disabled_at: string; disabled_by: string; reason?: string }>;
-  disabledCapabilities: Map<string, Map<string, { disabled_at: string; disabled_by: string; reason?: string }>>;
-  revokedSigningKeys: Map<string, { revoked_at: string; revoked_by: string; reason?: string }>;
+  disabledAgents: Map<
+    string,
+    { disabled_at: string; disabled_by: string; reason?: string }
+  >;
+  disabledCapabilities: Map<
+    string,
+    Map<string, { disabled_at: string; disabled_by: string; reason?: string }>
+  >;
+  revokedSigningKeys: Map<
+    string,
+    { revoked_at: string; revoked_by: string; reason?: string }
+  >;
   persistRuntimeControls(): void;
   recordAuditEvent(event: {
     timestamp: string;
@@ -51,20 +71,22 @@ interface RouteContext {
   }): void;
 }
 
-async function requireAdmin(ctx: RouteContext): Promise<{ parsed: unknown; pathname: string } | null> {
+async function requireAdmin(
+  ctx: RouteContext,
+): Promise<{ parsed: unknown; pathname: string } | null> {
   const body = await ctx.readJsonBody(ctx.req);
   const adminError = await ctx.getAdminTokenError(ctx.req, body.raw);
   if (adminError) {
     ctx.sendError(ctx.res, adminError.statusCode, ctx.requestId, {
       code: adminError.code,
       message: adminError.message,
-      retryable: false
+      retryable: false,
     });
     return null;
   }
   return {
     parsed: body.parsed,
-    pathname: new URL(ctx.req.url ?? "/", "http://localhost").pathname
+    pathname: new URL(ctx.req.url ?? "/", "http://localhost").pathname,
   };
 }
 
@@ -77,7 +99,7 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.sendError(res, adminError.statusCode, requestId, {
         code: adminError.code,
         message: adminError.message,
-        retryable: false
+        retryable: false,
       });
       return true;
     }
@@ -91,18 +113,17 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
         controls: {
           disabled_agents: controls.disabled_agents,
           disabled_capabilities: controls.disabled_capabilities,
-          ...(includeKeys ? { revoked_keys: controls.revoked_keys } : {})
+          ...(includeKeys ? { revoked_keys: controls.revoked_keys } : {}),
         },
         summary: {
           disabled_agents_count: Object.keys(controls.disabled_agents).length,
-          disabled_capabilities_count: Object.values(controls.disabled_capabilities).reduce(
-            (acc, item) => acc + Object.keys(item).length,
-            0
-          ),
-          revoked_keys_count: Object.keys(controls.revoked_keys).length
-        }
+          disabled_capabilities_count: Object.values(
+            controls.disabled_capabilities,
+          ).reduce((acc, item) => acc + Object.keys(item).length, 0),
+          revoked_keys_count: Object.keys(controls.revoked_keys).length,
+        },
       },
-      requestId
+      requestId,
     );
     return true;
   }
@@ -116,25 +137,32 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.sendError(res, 404, requestId, {
         code: "not_found",
         message: "Resource not found.",
-        retryable: false
+        retryable: false,
       });
       return true;
     }
     const requestUrl = new URL(req.url ?? "/", "http://localhost");
-    const includeRuntime = requestUrl.searchParams.get("include_runtime") !== "false";
-    const includeRevoked = requestUrl.searchParams.get("include_revoked") !== "false";
+    const includeRuntime =
+      requestUrl.searchParams.get("include_runtime") !== "false";
+    const includeRevoked =
+      requestUrl.searchParams.get("include_revoked") !== "false";
     const activeKid = getActiveSignatureKeyId();
-    const keys = ctx.getEffectiveVerificationKeys()
+    const keys = ctx
+      .getEffectiveVerificationKeys()
       .filter((key) => includeRevoked || key.status !== "revoked")
       .sort((a, b) => a.kid.localeCompare(b.kid))
       .map((key) => {
-        const runtimeRevocation = includeRuntime ? ctx.getRuntimeRevocationMetadata(key.kid) : null;
+        const runtimeRevocation = includeRuntime
+          ? ctx.getRuntimeRevocationMetadata(key.kid)
+          : null;
         return {
           ...key,
           is_active: key.kid === activeKid,
           signable: key.status !== "revoked",
           status_source: runtimeRevocation ? "runtime_revoked" : "configured",
-          ...(runtimeRevocation ? { runtime_revocation: runtimeRevocation } : {})
+          ...(runtimeRevocation
+            ? { runtime_revocation: runtimeRevocation }
+            : {}),
         };
       });
     const signableKeys = keys.filter((key) => key.signable);
@@ -148,28 +176,51 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
           signable_keys: signableKeys.length,
           revoked_keys: keys.length - signableKeys.length,
           active_kid: activeKid,
-          active_key_alg: activeKid ? keys.find((key) => key.kid === activeKid)?.alg ?? null : null,
-          all_signable_keys_asymmetric: signableKeys.every((key) => key.alg === "RS256")
+          active_key_alg: activeKid
+            ? (keys.find((key) => key.kid === activeKid)?.alg ?? null)
+            : null,
+          all_signable_keys_asymmetric: signableKeys.every(
+            (key) => key.alg === "RS256",
+          ),
         },
         trust: getTrustMetadata(ctx.deploymentProfile),
-        key_provider: getSigningProviderStatus()
+        key_provider: getSigningProviderStatus(),
       },
-      requestId
+      requestId,
     );
     return true;
   }
 
-  if (req.method === "POST" && req.url?.startsWith("/admin/agents/") && req.url.endsWith("/disable")) {
+  if (
+    req.method === "POST" &&
+    req.url?.startsWith("/admin/agents/") &&
+    req.url.endsWith("/disable")
+  ) {
     const admin = await requireAdmin(ctx);
     if (!admin) {
       return true;
     }
-    const agentId = decodeURIComponent(admin.pathname.slice("/admin/agents/".length, -"/disable".length));
-    const parsed = admin.parsed && typeof admin.parsed === "object" ? (admin.parsed as { actor?: unknown; reason?: unknown }) : {};
-    const actor = typeof parsed.actor === "string" && parsed.actor.trim().length > 0 ? parsed.actor.trim() : "admin";
-    const reason = typeof parsed.reason === "string" && parsed.reason.trim().length > 0 ? parsed.reason.trim() : undefined;
+    const agentId = decodeURIComponent(
+      admin.pathname.slice("/admin/agents/".length, -"/disable".length),
+    );
+    const parsed =
+      admin.parsed && typeof admin.parsed === "object"
+        ? (admin.parsed as { actor?: unknown; reason?: unknown })
+        : {};
+    const actor =
+      typeof parsed.actor === "string" && parsed.actor.trim().length > 0
+        ? parsed.actor.trim()
+        : "admin";
+    const reason =
+      typeof parsed.reason === "string" && parsed.reason.trim().length > 0
+        ? parsed.reason.trim()
+        : undefined;
     const disabledAt = new Date().toISOString();
-    ctx.disabledAgents.set(agentId, { disabled_at: disabledAt, disabled_by: actor, ...(reason ? { reason } : {}) });
+    ctx.disabledAgents.set(agentId, {
+      disabled_at: disabledAt,
+      disabled_by: actor,
+      ...(reason ? { reason } : {}),
+    });
     ctx.persistRuntimeControls();
     ctx.recordAuditEvent({
       timestamp: disabledAt,
@@ -177,20 +228,46 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
       code: "admin_agent_disabled",
       message: `Agent ${agentId} disabled by ${actor}${reason ? `: ${reason}` : ""}`,
       method: req.method,
-      route: admin.pathname
+      route: admin.pathname,
     });
-    ctx.sendJson(res, 200, { control: { type: "agent", action: "disable", agent_id: agentId, disabled_at: disabledAt, disabled_by: actor, ...(reason ? { reason } : {}) } }, requestId);
+    ctx.sendJson(
+      res,
+      200,
+      {
+        control: {
+          type: "agent",
+          action: "disable",
+          agent_id: agentId,
+          disabled_at: disabledAt,
+          disabled_by: actor,
+          ...(reason ? { reason } : {}),
+        },
+      },
+      requestId,
+    );
     return true;
   }
 
-  if (req.method === "POST" && req.url?.startsWith("/admin/agents/") && req.url.endsWith("/enable")) {
+  if (
+    req.method === "POST" &&
+    req.url?.startsWith("/admin/agents/") &&
+    req.url.endsWith("/enable")
+  ) {
     const admin = await requireAdmin(ctx);
     if (!admin) {
       return true;
     }
-    const agentId = decodeURIComponent(admin.pathname.slice("/admin/agents/".length, -"/enable".length));
-    const parsed = admin.parsed && typeof admin.parsed === "object" ? (admin.parsed as { actor?: unknown }) : {};
-    const actor = typeof parsed.actor === "string" && parsed.actor.trim().length > 0 ? parsed.actor.trim() : "admin";
+    const agentId = decodeURIComponent(
+      admin.pathname.slice("/admin/agents/".length, -"/enable".length),
+    );
+    const parsed =
+      admin.parsed && typeof admin.parsed === "object"
+        ? (admin.parsed as { actor?: unknown })
+        : {};
+    const actor =
+      typeof parsed.actor === "string" && parsed.actor.trim().length > 0
+        ? parsed.actor.trim()
+        : "admin";
     ctx.disabledAgents.delete(agentId);
     ctx.persistRuntimeControls();
     ctx.recordAuditEvent({
@@ -199,27 +276,56 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
       code: "admin_agent_enabled",
       message: `Agent ${agentId} enabled by ${actor}`,
       method: req.method,
-      route: admin.pathname
+      route: admin.pathname,
     });
-    ctx.sendJson(res, 200, { control: { type: "agent", action: "enable", agent_id: agentId, actor } }, requestId);
+    ctx.sendJson(
+      res,
+      200,
+      {
+        control: { type: "agent", action: "enable", agent_id: agentId, actor },
+      },
+      requestId,
+    );
     return true;
   }
 
-  if (req.method === "POST" && req.url?.startsWith("/admin/agents/") && req.url.includes("/capabilities/") && req.url.endsWith("/disable")) {
+  if (
+    req.method === "POST" &&
+    req.url?.startsWith("/admin/agents/") &&
+    req.url.includes("/capabilities/") &&
+    req.url.endsWith("/disable")
+  ) {
     const admin = await requireAdmin(ctx);
     if (!admin) {
       return true;
     }
-    const segment = admin.pathname.slice("/admin/agents/".length, -"/disable".length);
-    const [encodedAgentId, encodedCapability = ""] = segment.split("/capabilities/");
+    const segment = admin.pathname.slice(
+      "/admin/agents/".length,
+      -"/disable".length,
+    );
+    const [encodedAgentId, encodedCapability = ""] =
+      segment.split("/capabilities/");
     const agentId = decodeURIComponent(encodedAgentId);
     const capability = decodeURIComponent(encodedCapability);
-    const parsed = admin.parsed && typeof admin.parsed === "object" ? (admin.parsed as { actor?: unknown; reason?: unknown }) : {};
-    const actor = typeof parsed.actor === "string" && parsed.actor.trim().length > 0 ? parsed.actor.trim() : "admin";
-    const reason = typeof parsed.reason === "string" && parsed.reason.trim().length > 0 ? parsed.reason.trim() : undefined;
+    const parsed =
+      admin.parsed && typeof admin.parsed === "object"
+        ? (admin.parsed as { actor?: unknown; reason?: unknown })
+        : {};
+    const actor =
+      typeof parsed.actor === "string" && parsed.actor.trim().length > 0
+        ? parsed.actor.trim()
+        : "admin";
+    const reason =
+      typeof parsed.reason === "string" && parsed.reason.trim().length > 0
+        ? parsed.reason.trim()
+        : undefined;
     const disabledAt = new Date().toISOString();
     const capabilityMap = ctx.disabledCapabilities.get(agentId) ?? new Map();
-    capabilityMap.set(capability, { disabled_at: disabledAt, disabled_by: actor, ...(reason ? { reason } : {}) });
+    capabilityMap.set(capability, {
+      disabled_at: disabledAt,
+      disabled_by: actor,
+      ...(reason ? { reason } : {}),
+    });
     ctx.disabledCapabilities.set(agentId, capabilityMap);
     ctx.persistRuntimeControls();
     ctx.recordAuditEvent({
@@ -228,23 +334,53 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
       code: "admin_capability_disabled",
       message: `Capability ${capability} for ${agentId} disabled by ${actor}${reason ? `: ${reason}` : ""}`,
       method: req.method,
-      route: admin.pathname
+      route: admin.pathname,
     });
-    ctx.sendJson(res, 200, { control: { type: "capability", action: "disable", agent_id: agentId, capability, disabled_at: disabledAt, disabled_by: actor, ...(reason ? { reason } : {}) } }, requestId);
+    ctx.sendJson(
+      res,
+      200,
+      {
+        control: {
+          type: "capability",
+          action: "disable",
+          agent_id: agentId,
+          capability,
+          disabled_at: disabledAt,
+          disabled_by: actor,
+          ...(reason ? { reason } : {}),
+        },
+      },
+      requestId,
+    );
     return true;
   }
 
-  if (req.method === "POST" && req.url?.startsWith("/admin/agents/") && req.url.includes("/capabilities/") && req.url.endsWith("/enable")) {
+  if (
+    req.method === "POST" &&
+    req.url?.startsWith("/admin/agents/") &&
+    req.url.includes("/capabilities/") &&
+    req.url.endsWith("/enable")
+  ) {
     const admin = await requireAdmin(ctx);
     if (!admin) {
       return true;
     }
-    const segment = admin.pathname.slice("/admin/agents/".length, -"/enable".length);
-    const [encodedAgentId, encodedCapability = ""] = segment.split("/capabilities/");
+    const segment = admin.pathname.slice(
+      "/admin/agents/".length,
+      -"/enable".length,
+    );
+    const [encodedAgentId, encodedCapability = ""] =
+      segment.split("/capabilities/");
     const agentId = decodeURIComponent(encodedAgentId);
     const capability = decodeURIComponent(encodedCapability);
-    const parsed = admin.parsed && typeof admin.parsed === "object" ? (admin.parsed as { actor?: unknown }) : {};
-    const actor = typeof parsed.actor === "string" && parsed.actor.trim().length > 0 ? parsed.actor.trim() : "admin";
+    const parsed =
+      admin.parsed && typeof admin.parsed === "object"
+        ? (admin.parsed as { actor?: unknown })
+        : {};
+    const actor =
+      typeof parsed.actor === "string" && parsed.actor.trim().length > 0
+        ? parsed.actor.trim()
+        : "admin";
     const capabilityMap = ctx.disabledCapabilities.get(agentId);
     capabilityMap?.delete(capability);
     if (capabilityMap && capabilityMap.size === 0) {
@@ -257,23 +393,55 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
       code: "admin_capability_enabled",
       message: `Capability ${capability} for ${agentId} enabled by ${actor}`,
       method: req.method,
-      route: admin.pathname
+      route: admin.pathname,
     });
-    ctx.sendJson(res, 200, { control: { type: "capability", action: "enable", agent_id: agentId, capability, actor } }, requestId);
+    ctx.sendJson(
+      res,
+      200,
+      {
+        control: {
+          type: "capability",
+          action: "enable",
+          agent_id: agentId,
+          capability,
+          actor,
+        },
+      },
+      requestId,
+    );
     return true;
   }
 
-  if (req.method === "POST" && req.url?.startsWith("/admin/keys/") && req.url.endsWith("/revoke")) {
+  if (
+    req.method === "POST" &&
+    req.url?.startsWith("/admin/keys/") &&
+    req.url.endsWith("/revoke")
+  ) {
     const admin = await requireAdmin(ctx);
     if (!admin) {
       return true;
     }
-    const keyId = decodeURIComponent(admin.pathname.slice("/admin/keys/".length, -"/revoke".length));
-    const parsed = admin.parsed && typeof admin.parsed === "object" ? (admin.parsed as { actor?: unknown; reason?: unknown }) : {};
-    const actor = typeof parsed.actor === "string" && parsed.actor.trim().length > 0 ? parsed.actor.trim() : "admin";
-    const reason = typeof parsed.reason === "string" && parsed.reason.trim().length > 0 ? parsed.reason.trim() : undefined;
+    const keyId = decodeURIComponent(
+      admin.pathname.slice("/admin/keys/".length, -"/revoke".length),
+    );
+    const parsed =
+      admin.parsed && typeof admin.parsed === "object"
+        ? (admin.parsed as { actor?: unknown; reason?: unknown })
+        : {};
+    const actor =
+      typeof parsed.actor === "string" && parsed.actor.trim().length > 0
+        ? parsed.actor.trim()
+        : "admin";
+    const reason =
+      typeof parsed.reason === "string" && parsed.reason.trim().length > 0
+        ? parsed.reason.trim()
+        : undefined;
     const revokedAt = new Date().toISOString();
-    ctx.revokedSigningKeys.set(keyId, { revoked_at: revokedAt, revoked_by: actor, ...(reason ? { reason } : {}) });
+    ctx.revokedSigningKeys.set(keyId, {
+      revoked_at: revokedAt,
+      revoked_by: actor,
+      ...(reason ? { reason } : {}),
+    });
     ctx.persistRuntimeControls();
     ctx.recordAuditEvent({
       timestamp: revokedAt,
@@ -281,20 +449,46 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
       code: "admin_key_revoked",
       message: `Signing key ${keyId} revoked by ${actor}${reason ? `: ${reason}` : ""}`,
       method: req.method,
-      route: admin.pathname
+      route: admin.pathname,
     });
-    ctx.sendJson(res, 200, { control: { type: "key", action: "revoke", key_id: keyId, revoked_at: revokedAt, revoked_by: actor, ...(reason ? { reason } : {}) } }, requestId);
+    ctx.sendJson(
+      res,
+      200,
+      {
+        control: {
+          type: "key",
+          action: "revoke",
+          key_id: keyId,
+          revoked_at: revokedAt,
+          revoked_by: actor,
+          ...(reason ? { reason } : {}),
+        },
+      },
+      requestId,
+    );
     return true;
   }
 
-  if (req.method === "POST" && req.url?.startsWith("/admin/keys/") && req.url.endsWith("/unrevoke")) {
+  if (
+    req.method === "POST" &&
+    req.url?.startsWith("/admin/keys/") &&
+    req.url.endsWith("/unrevoke")
+  ) {
     const admin = await requireAdmin(ctx);
     if (!admin) {
       return true;
     }
-    const keyId = decodeURIComponent(admin.pathname.slice("/admin/keys/".length, -"/unrevoke".length));
-    const parsed = admin.parsed && typeof admin.parsed === "object" ? (admin.parsed as { actor?: unknown }) : {};
-    const actor = typeof parsed.actor === "string" && parsed.actor.trim().length > 0 ? parsed.actor.trim() : "admin";
+    const keyId = decodeURIComponent(
+      admin.pathname.slice("/admin/keys/".length, -"/unrevoke".length),
+    );
+    const parsed =
+      admin.parsed && typeof admin.parsed === "object"
+        ? (admin.parsed as { actor?: unknown })
+        : {};
+    const actor =
+      typeof parsed.actor === "string" && parsed.actor.trim().length > 0
+        ? parsed.actor.trim()
+        : "admin";
     ctx.revokedSigningKeys.delete(keyId);
     ctx.persistRuntimeControls();
     ctx.recordAuditEvent({
@@ -303,9 +497,43 @@ export async function handleAdminRoutes(ctx: RouteContext): Promise<boolean> {
       code: "admin_key_unrevoked",
       message: `Signing key ${keyId} unrevoked by ${actor}`,
       method: req.method,
-      route: admin.pathname
+      route: admin.pathname,
     });
-    ctx.sendJson(res, 200, { control: { type: "key", action: "unrevoke", key_id: keyId, actor } }, requestId);
+    ctx.sendJson(
+      res,
+      200,
+      { control: { type: "key", action: "unrevoke", key_id: keyId, actor } },
+      requestId,
+    );
+    return true;
+  }
+
+  if (req.method === "GET" && req.url === "/admin/anomalies") {
+    const adminError = await ctx.getAdminTokenError(req, "");
+    if (adminError) {
+      ctx.sendError(res, adminError.statusCode, requestId, {
+        code: adminError.code,
+        message: adminError.message,
+        retryable: false,
+      });
+      return true;
+    }
+    const anomalies = detectAnomalies();
+    const metrics = getSignatureMetrics();
+    ctx.sendJson(
+      res,
+      200,
+      {
+        anomalies,
+        metrics: {
+          total_signatures: metrics.totalSignatures,
+          failed_verifications: metrics.failedVerifications,
+          by_algorithm: Object.fromEntries(metrics.byAlgorithm),
+          last_signature: metrics.lastSignature,
+        },
+      },
+      requestId,
+    );
     return true;
   }
 

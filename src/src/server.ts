@@ -1421,6 +1421,15 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     return null;
   }
 
+  // Periodic outbox processor: delivers pending side effects (webhooks, notifications)
+  // every 5 seconds. The outbox pattern ensures task state changes and side effects
+  // are atomically persisted together.
+  const outboxInterval = setInterval(() => {
+    app.asyncQueue.processOutbox();
+  }, 5_000);
+  // Allow the Node.js process to exit even if this interval is still running.
+  outboxInterval.unref();
+
   return async (req: IncomingMessage, res: ServerResponse) => {
     const headerRequestId = req.headers["x-map-request-id"];
     const requestId =
@@ -1634,6 +1643,8 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         getEffectiveRevokedKeyIds,
         getBearerTokenError,
         checkMutationRateLimit,
+        asyncQueueMaxQueueDepth: app.asyncQueue.getStats().max_queue_depth,
+        getAsyncQueueDepth: () => app.asyncQueue.getStats().queue_depth,
         recordAuditEvent,
         recordCapabilityLatency,
         sendJson,

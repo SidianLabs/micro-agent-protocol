@@ -302,6 +302,7 @@ export class OrchestratorRuntime {
       const enqueueResult = this.asyncQueue.enqueue({
         taskId: envelope.task_id,
         tenantId: this.resolveTenantId(envelope.requester_identity.tenant_id),
+        idempotencyToken: envelope.idempotency_token,
         run: async () => {
           const completed = await runtime.invoke(
             {

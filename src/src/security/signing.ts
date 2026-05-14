@@ -8,6 +8,7 @@ import {
 } from "node:crypto";
 import type {
   AgentDescriptor,
+  AnomalyReport,
   DelegationToken,
   ExecutionReceipt,
   MapSignedRequestHeaders,
@@ -35,6 +36,21 @@ const DEFAULT_SCOPES = [
   "conformance_export",
   "trust_bundle",
 ];
+
+/**
+ * Crypto observability metrics for detecting key misuse and anomalous
+ * signing/verification patterns.
+ */
+export const signatureMetrics = {
+  totalSignatures: 0,
+  failedVerifications: 0,
+  byKeyId: new Map<
+    string,
+    { signed: number; verified: number; failed: number }
+  >(),
+  byAlgorithm: new Map<string, number>(),
+  lastSignature: null as string | null,
+};
 
 const KEY_USE_CONSTRAINTS: Record<string, SignatureScope[]> = {
   agent_descriptor: ["descriptor"],
@@ -482,6 +498,21 @@ function createCompactSignatureFromCanonical(
   const profile = getDeploymentProfile();
   assertAlgorithmAllowed(signingKey.alg, profile);
 
+  // Increment crypto observability metrics
+  signatureMetrics.totalSignatures += 1;
+  signatureMetrics.lastSignature = new Date().toISOString();
+  signatureMetrics.byAlgorithm.set(
+    signingKey.alg,
+    (signatureMetrics.byAlgorithm.get(signingKey.alg) ?? 0) + 1,
+  );
+  const keyStats = signatureMetrics.byKeyId.get(signingKey.kid) ?? {
+    signed: 0,
+    verified: 0,
+    failed: 0,
+  };
+  keyStats.signed += 1;
+  signatureMetrics.byKeyId.set(signingKey.kid, keyStats);
+
   const header: SigningHeader = {
     alg: signingKey.alg,
     kid: signingKey.kid,
@@ -570,6 +601,7 @@ function verifyCompactSignatureFromCanonical(
 
   const expectedPayload = base64url(canonicalPayload);
   if (encodedPayload !== expectedPayload) {
+    recordVerificationMetric(parsedHeader.kid, parsedHeader.alg, false);
     return false;
   }
 
@@ -580,10 +612,12 @@ function verifyCompactSignatureFromCanonical(
       .digest("base64url");
 
     try {
-      return timingSafeEqual(
+      const ok = timingSafeEqual(
         Buffer.from(providedSignature, "base64url"),
         Buffer.from(expectedSignature, "base64url"),
       );
+      recordVerificationMetric(parsedHeader.kid, parsedHeader.alg, ok);
+      return ok;
     } catch {
       // timingSafeEqual throws on length mismatch.
       // Perform a dummy constant-time comparison to avoid leaking length.
@@ -593,6 +627,7 @@ function verifyCompactSignatureFromCanonical(
       } catch {
         /* never throws for equal-length */
       }
+      recordVerificationMetric(parsedHeader.kid, parsedHeader.alg, false);
       return false;
     }
   }
@@ -601,11 +636,14 @@ function verifyCompactSignatureFromCanonical(
     const verifier = createVerify("RSA-SHA256");
     verifier.update(signingInput);
     verifier.end();
-    return verifier.verify(
+    const ok = verifier.verify(
       createPublicKey(signingKey.material.public_key_pem),
       Buffer.from(providedSignature, "base64url"),
     );
+    recordVerificationMetric(parsedHeader.kid, parsedHeader.alg, ok);
+    return ok;
   } catch {
+    recordVerificationMetric(parsedHeader.kid, parsedHeader.alg, false);
     return false;
   }
 }
@@ -620,6 +658,25 @@ function verifyCompactSignature(
     stableStringify(payload),
     scope,
   );
+}
+
+function recordVerificationMetric(
+  kid: string,
+  alg: "HS256" | "RS256",
+  ok: boolean,
+): void {
+  const keyStats = signatureMetrics.byKeyId.get(kid) ?? {
+    signed: 0,
+    verified: 0,
+    failed: 0,
+  };
+  if (ok) {
+    keyStats.verified += 1;
+  } else {
+    keyStats.failed += 1;
+    signatureMetrics.failedVerifications += 1;
+  }
+  signatureMetrics.byKeyId.set(kid, keyStats);
 }
 
 export function getSignatureKeyId(signature: string): string | null {
@@ -1168,4 +1225,96 @@ export function verifyTrustBundleSignature(
     },
     "trust_bundle",
   );
+}
+
+/**
+ * Returns a snapshot of the current signature metrics for observability.
+ */
+export function getSignatureMetrics(): {
+  totalSignatures: number;
+  failedVerifications: number;
+  byKeyId: Map<string, { signed: number; verified: number; failed: number }>;
+  byAlgorithm: Map<string, number>;
+  lastSignature: string | null;
+} {
+  return {
+    totalSignatures: signatureMetrics.totalSignatures,
+    failedVerifications: signatureMetrics.failedVerifications,
+    byKeyId: new Map(signatureMetrics.byKeyId),
+    byAlgorithm: new Map(signatureMetrics.byAlgorithm),
+    lastSignature: signatureMetrics.lastSignature,
+  };
+}
+
+/**
+ * Detects cryptographic anomalies including:
+ * - High failure rate (>50% of recent verifications)
+ * - Usage of revoked or retiring keys
+ * - Unknown keys being used for signing
+ */
+export function detectAnomalies(): AnomalyReport[] {
+  const reports: AnomalyReport[] = [];
+  const now = new Date().toISOString();
+
+  // Check for high failure rate
+  const totalVerifications =
+    signatureMetrics.totalSignatures + signatureMetrics.failedVerifications;
+  if (totalVerifications > 0) {
+    const failureRate =
+      signatureMetrics.failedVerifications / totalVerifications;
+    if (failureRate > 0.5) {
+      reports.push({
+        type: "high_failure_rate",
+        severity: "critical",
+        detail: `Signature verification failure rate is ${(failureRate * 100).toFixed(1)}% (${signatureMetrics.failedVerifications} failures out of ${totalVerifications} total verifications).`,
+        detected_at: now,
+        recommendation:
+          "Investigate potential key misuse or an active attack. Rotate signing keys immediately and audit recent signature activity.",
+      });
+    }
+  }
+
+  // Check for usage of revoked or retiring keys
+  const allKeys = getSigningKeys();
+  const revokedKids = new Set(
+    allKeys.filter((k) => k.status === "revoked").map((k) => k.kid),
+  );
+  const retiringKids = new Set(
+    allKeys.filter((k) => k.status === "retiring").map((k) => k.kid),
+  );
+
+  for (const [kid, stats] of signatureMetrics.byKeyId) {
+    if (revokedKids.has(kid) && stats.signed > 0) {
+      reports.push({
+        type: "revoked_key_usage",
+        severity: "critical",
+        detail: `Revoked key "${kid}" was used to sign ${stats.signed} payload(s).`,
+        detected_at: now,
+        recommendation: `Immediately investigate why revoked key "${kid}" is still being used. Revoke trust in this key and rotate to a new key.`,
+      });
+    }
+    if (retiringKids.has(kid) && stats.signed > 0) {
+      reports.push({
+        type: "retiring_key_usage",
+        severity: "warning",
+        detail: `Retiring key "${kid}" was used to sign ${stats.signed} payload(s). Key should be phased out.`,
+        detected_at: now,
+        recommendation: `Accelerate migration away from retiring key "${kid}". Ensure all clients have the replacement key.`,
+      });
+    }
+
+    // Check for unknown keys (keys in metrics but not in the key set)
+    const knownKids = new Set(allKeys.map((k) => k.kid));
+    if (!knownKids.has(kid) && stats.signed > 0) {
+      reports.push({
+        type: "unknown_key_usage",
+        severity: "critical",
+        detail: `Unknown key "${kid}" was used to sign ${stats.signed} payload(s). This key is not in the current key set.`,
+        detected_at: now,
+        recommendation: `Investigate the origin of unknown key "${kid}". This may indicate a compromised key or a configuration error.`,
+      });
+    }
+  }
+
+  return reports;
 }

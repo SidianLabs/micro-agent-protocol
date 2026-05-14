@@ -9,6 +9,11 @@ interface TaskStoreOptions {
 }
 
 /**
+ * MUST enforce tenant partitioning on ALL read operations —
+ * tasks from tenant_A must NEVER be visible to tenant_B.
+ * Every get/list/query operation MUST filter by tenant_id when a tenant
+ * context is active.
+ *
  * Terminal states are IMMUTABLE. Any attempt to transition from a terminal
  * state MUST be rejected.
  */

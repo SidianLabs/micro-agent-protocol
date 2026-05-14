@@ -61,7 +61,8 @@ export type ErrorCode =
   | "unauthorized"
   | "forbidden"
   | "extension_support_required"
-  | "invalid_state_transition";
+  | "invalid_state_transition"
+  | "queue_capacity_exceeded";
 
 export interface RequesterIdentity {
   type: "user" | "service" | "agent";
@@ -250,6 +251,11 @@ export interface TaskEnvelope {
    *  - `request_id`, `capability`, `tenant_id`, `schema_version`, etc.
    */
   metadata?: Record<string, unknown>;
+  /** Client-provided token for exactly-once effect deduplication.
+   *  Differs from `idempotency_key` (which is for request dedup).
+   *  `idempotency_token` is used to prevent duplicate side effects
+   *  even if the same task is re-delivered. */
+  idempotency_token?: string;
   extensions?: string[];
 }
 
@@ -448,6 +454,18 @@ export function createErrorResponse(
   details?: MapErrorResponse["details"],
 ): MapErrorResponse {
   return { code, message, retryable, status, details };
+}
+
+export interface AnomalyReport {
+  type:
+    | "high_failure_rate"
+    | "revoked_key_usage"
+    | "retiring_key_usage"
+    | "unknown_key_usage";
+  severity: "warning" | "critical";
+  detail: string;
+  detected_at: string;
+  recommendation: string;
 }
 
 export function isErrorResponse(response: {

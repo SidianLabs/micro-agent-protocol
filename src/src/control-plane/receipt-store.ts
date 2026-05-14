@@ -5,6 +5,10 @@ import type { ExecutionReceipt } from "../types.js";
 
 /**
  * Receipts are APPEND-ONLY. Once written, they MUST NEVER be modified or deleted.
+ *
+ * MUST enforce tenant partitioning — receipts from tenant_A must NEVER be
+ * visible to tenant_B. Every read operation MUST filter by tenant_id when a
+ * tenant context is active.
  */
 
 interface ReceiptStoreOptions {
@@ -69,6 +73,11 @@ export class ReceiptStore {
     return receipt;
   }
 
+  /**
+   * MUST enforce tenant partitioning — receipts from tenant_A must NEVER be
+   * visible to tenant_B. When tenantId is provided, results are strictly
+   * scoped to that tenant.
+   */
   list(tenantId?: string): ExecutionReceipt[] {
     const records = this.order
       .map((id) => this.receipts.get(id))
@@ -80,6 +89,14 @@ export class ReceiptStore {
     return records.filter(
       (receipt) => this.resolveTenantId(receipt.tenant_id) === normalizedTenant,
     );
+  }
+
+  /**
+   * Tenant-scoped listing alias. MUST enforce tenant partitioning —
+   * receipts from tenant_A must NEVER be visible to tenant_B.
+   */
+  listByTenant(tenantId: string): ExecutionReceipt[] {
+    return this.list(tenantId);
   }
 
   /**
