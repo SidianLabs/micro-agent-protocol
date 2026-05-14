@@ -1,5 +1,5 @@
-import { createMapServer } from "../src/src/server/index.js";
-import { resolveServerOptionsFromEnv } from "../src/src/server/config.js";
+import { createMapServer } from "../src/server/index.js";
+import { resolveServerOptionsFromEnv } from "../src/server/config.js";
 import { createExampleAgents } from "./agents/index.js";
 
 const { port, ...serverOptions } = resolveServerOptionsFromEnv();

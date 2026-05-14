@@ -1,6 +1,6 @@
 import { Readable } from "node:stream";
 import { createMapHandler } from "./server/index.js";
-import { createExampleAgents } from "../../demo/agents/index.js";
+import { createExampleAgents } from "../demo/agents/index.js";
 
 interface DispatchResponse {
   statusCode: number;

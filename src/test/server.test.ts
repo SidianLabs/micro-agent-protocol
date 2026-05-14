@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
-import type { DelegationToken, TaskEnvelope } from "../src/types.js";
-import type { MicroAgent } from "../src/runtime/micro-agent.js";
+import type { DelegationToken, TaskEnvelope } from "../types.js";
+import type { MicroAgent } from "../runtime/micro-agent.js";
 import { createExampleAgents } from "../../demo/agents/index.js";
 import {
   getSignatureKeyId,
@@ -17,8 +17,8 @@ import {
   verifyAuditExportSignature,
   verifyConformanceExportSignature,
   verifyTrustBundleSignature,
-} from "../src/security/signing.js";
-import { createMapHandler } from "../src/server.js";
+} from "../security/signing.js";
+import { createMapHandler } from "../server.js";
 
 class MockResponse {
   statusCode = 200;

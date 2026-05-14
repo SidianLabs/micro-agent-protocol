@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PaymentAgent } from "../../demo/agents/index.js";
-import { signDelegationToken } from "../src/security/signing.js";
+import { signDelegationToken } from "../security/signing.js";
 
 const agent = new PaymentAgent();
 

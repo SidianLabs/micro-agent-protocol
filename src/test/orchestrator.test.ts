@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
-import { createReferenceApp } from "../src/app.js";
+import { createReferenceApp } from "../app.js";
 import { createExampleAgents } from "../../demo/agents/index.js";
 
 const app = createReferenceApp({ agents: createExampleAgents() });

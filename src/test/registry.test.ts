@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AgentRegistry } from "../src/control-plane/registry.js";
+import { AgentRegistry } from "../control-plane/registry.js";
 import { PaymentAgent } from "../../demo/agents/index.js";
-import { verifyAgentDescriptorSignature } from "../src/security/signing.js";
+import { verifyAgentDescriptorSignature } from "../security/signing.js";
 
 test("registry signs descriptors when registering unsigned providers", () => {
   const registry = new AgentRegistry();

@@ -1,4 +1,4 @@
-import type { MicroAgent } from "../../src/src/runtime/micro-agent.js";
+import type { MicroAgent } from "../../src/runtime/micro-agent.js";
 import { DBReadAgent } from "./dbread-agent.js";
 import { PaymentAgent } from "./payment-agent.js";
 

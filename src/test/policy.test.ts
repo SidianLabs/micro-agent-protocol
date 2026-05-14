@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DefaultPolicyEngine } from "../src/control-plane/policy.js";
-import type { AgentDescriptor, TaskEnvelope } from "../src/types.js";
+import { DefaultPolicyEngine } from "../control-plane/policy.js";
+import type { AgentDescriptor, TaskEnvelope } from "../types.js";
 
 const engine = new DefaultPolicyEngine();
 
@@ -15,7 +15,7 @@ const paymentDescriptor: AgentDescriptor = {
   input_schema_ref: "schema://payment/input",
   output_schema_ref: "schema://payment/output",
   supported_execution_modes: ["commit"],
-  visibility_modes: ["summary"]
+  visibility_modes: ["summary"],
 };
 
 const dbDescriptor: AgentDescriptor = {
@@ -28,7 +28,7 @@ const dbDescriptor: AgentDescriptor = {
   input_schema_ref: "schema://db/input",
   output_schema_ref: "schema://db/output",
   supported_execution_modes: ["read"],
-  visibility_modes: ["summary"]
+  visibility_modes: ["summary"],
 };
 
 function makeEnvelope(constraints: Record<string, unknown>): TaskEnvelope {
@@ -40,7 +40,7 @@ function makeEnvelope(constraints: Record<string, unknown>): TaskEnvelope {
     constraints,
     risk_class: "medium",
     delegation_token: "placeholder",
-    requested_output_mode: "summary"
+    requested_output_mode: "summary",
   };
 }
 
@@ -49,8 +49,8 @@ test("policy allows safe payment under threshold", () => {
     descriptor: paymentDescriptor,
     envelope: makeEnvelope({
       common: { max_amount: 100 },
-      domain: { approved_vendor_only: true }
-    })
+      domain: { approved_vendor_only: true },
+    }),
   });
 
   assert.equal(decision.action, "allow");
@@ -62,8 +62,8 @@ test("policy denies payment without approved vendor", () => {
     descriptor: paymentDescriptor,
     envelope: makeEnvelope({
       common: { max_amount: 100 },
-      domain: { approved_vendor_only: false }
-    })
+      domain: { approved_vendor_only: false },
+    }),
   });
 
   assert.equal(decision.action, "deny");
@@ -76,8 +76,8 @@ test("policy requires approval for payment above threshold", () => {
     descriptor: paymentDescriptor,
     envelope: makeEnvelope({
       common: { max_amount: 4500 },
-      domain: { approved_vendor_only: true }
-    })
+      domain: { approved_vendor_only: true },
+    }),
   });
 
   assert.equal(decision.action, "require_approval");
@@ -89,8 +89,8 @@ test("policy requires approval for production database reads", () => {
     descriptor: dbDescriptor,
     envelope: makeEnvelope({
       common: { environment: "production" },
-      domain: {}
-    })
+      domain: {},
+    }),
   });
 
   assert.equal(decision.action, "require_approval");
@@ -103,8 +103,8 @@ test("policy denies request when tenant is required but missing", () => {
     descriptor: dbDescriptor,
     envelope: makeEnvelope({
       common: { environment: "staging" },
-      domain: {}
-    })
+      domain: {},
+    }),
   });
 
   assert.equal(decision.action, "deny");
@@ -116,13 +116,13 @@ test("policy allows request when tenant is required and present", () => {
   const strictEngine = new DefaultPolicyEngine({ requireTenant: true });
   const envelope = makeEnvelope({
     common: { environment: "staging" },
-    domain: {}
+    domain: {},
   });
   envelope.requester_identity.tenant_id = "tenant_A";
 
   const decision = strictEngine.evaluate({
     descriptor: dbDescriptor,
-    envelope
+    envelope,
   });
 
   assert.equal(decision.action, "allow");

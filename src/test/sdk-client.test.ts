@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
-import { createMapHandler } from "../src/server.js";
+import { createMapHandler } from "../server.js";
 import {
   MapAssistantClient,
   type MapClientRequest,
   type MapClientTransport,
-} from "../src/sdk/client.js";
+} from "../sdk/client.js";
 import { createExampleAgents } from "../../demo/agents/index.js";
 
 class MockResponse {
