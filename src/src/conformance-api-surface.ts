@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import { createMapHandler } from "./server.js";
+import { createMapHandler } from "./server/index.js";
 import { createExampleAgents } from "../../demo/agents/index.js";
 
 interface DispatchResponse {

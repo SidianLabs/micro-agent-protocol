@@ -313,8 +313,10 @@ export class AsyncTaskQueue {
   }
 
   /**
-   * Processes undelivered outbox messages (webhooks, notifications).
-   * Called periodically (e.g. every 5 seconds) to deliver side effects.
+   * Crash-recovery replay guard for outbox messages.
+   * Side effects are executed immediately in startJob/requeue and marked
+   * delivered: true. This method only re-delivers messages that were
+   * persisted but not delivered due to a crash.
    */
   processOutbox(): void {
     for (const message of this.outbox) {
@@ -392,7 +394,10 @@ export class AsyncTaskQueue {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Async queue job failed.";
+        const effectId = job.idempotencyToken ?? `effect:${job.taskId}`;
         if (job.attempt < this.maxAttempts) {
+          // Clear the exactly-once guard so the retry can execute.
+          this.completedEffects.delete(effectId);
           this.requeue({
             ...job,
             attempt: job.attempt + 1,
@@ -415,16 +420,18 @@ export class AsyncTaskQueue {
             job.tenantId,
           );
 
-          // Outbox pattern: persist the intent to deliver the dead-letter
-          // side effect instead of calling onDeadLetter directly.
+          // Outbox records side effects for reliability.
+          // Side effects are still executed immediately.
+          job.onDeadLetter(record);
+
           const deadLetterMessage: OutboxMessage = {
             id: randomUUID(),
             task_id: job.taskId,
             event_type: "task_dead_lettered",
             payload: record as unknown as Record<string, unknown>,
             created_at: new Date().toISOString(),
-            delivered: false,
-            delivery_attempts: 0,
+            delivered: true,
+            delivery_attempts: 1,
           };
           this.outbox.push(deadLetterMessage);
           this.deadLetterCallbacks.set(deadLetterMessage.id, job.onDeadLetter);
@@ -492,15 +499,18 @@ export class AsyncTaskQueue {
         this.trimDeadLetters();
         this.persistDeadLetters();
 
-        // Outbox pattern: persist the intent instead of calling onDeadLetter directly.
+        // Outbox records side effects for reliability.
+        // Side effects are still executed immediately.
+        job.onDeadLetter(record);
+
         const deadLetterMessage: OutboxMessage = {
           id: randomUUID(),
           task_id: job.taskId,
           event_type: "task_dead_lettered",
           payload: record as unknown as Record<string, unknown>,
           created_at: new Date().toISOString(),
-          delivered: false,
-          delivery_attempts: 0,
+          delivered: true,
+          delivery_attempts: 1,
         };
         this.outbox.push(deadLetterMessage);
         this.deadLetterCallbacks.set(deadLetterMessage.id, job.onDeadLetter);

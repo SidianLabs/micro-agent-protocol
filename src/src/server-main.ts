@@ -1,5 +1,5 @@
-import { createMapServer } from "./server.js";
-import { resolveServerOptionsFromEnv } from "./server/env.js";
+import { createMapServer } from "./server/index.js";
+import { resolveServerOptionsFromEnv } from "./server/config.js";
 
 const { port, ...serverOptions } = resolveServerOptionsFromEnv();
 const server = createMapServer(serverOptions);

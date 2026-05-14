@@ -157,7 +157,7 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
       ctx.recordAuditEvent({
         timestamp: new Date().toISOString(),
         request_id: requestId,
-        code: "queue_capacity_exceeded",
+        code: "rate_limited",
         message: "Async queue capacity exceeded. Rejecting new task.",
         method: req.method,
         route: "/dispatch",
@@ -165,27 +165,21 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
         target_agent: routeTargetAgent,
         subject: authSubject,
       });
-      ctx.sendJson(
+      ctx.sendError(
         res,
-        503,
-        {
-          error: {
-            code: "queue_capacity_exceeded",
-            message: "Async queue is at critical capacity. Please retry later.",
-            retryable: true,
-            status: 503,
-          },
-        },
+        429,
         requestId,
         {
-          ok: false,
-          errorCode: "queue_capacity_exceeded",
-          targetAgent: routeTargetAgent,
+          code: "rate_limited",
+          message: "Async queue is at critical capacity. Please retry later.",
+          retryable: true,
+          details: {
+            category: "throttling",
+            scope: "global",
+            retry_after_ms: 5000,
+          },
         },
-        {
-          "retry-after": "5",
-          ...queueDepthHeader,
-        },
+        routeTargetAgent,
       );
       return { handled: true, routeTargetAgent, routeTenantId };
     }
@@ -435,7 +429,7 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
       ctx.recordAuditEvent({
         timestamp: new Date().toISOString(),
         request_id: requestId,
-        code: "queue_capacity_exceeded",
+        code: "rate_limited",
         message: "Async queue capacity exceeded. Rejecting approval.",
         method: req.method,
         route: "/approve",
@@ -443,27 +437,21 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
         target_agent: routeTargetAgent,
         subject: authSubject,
       });
-      ctx.sendJson(
+      ctx.sendError(
         res,
-        503,
-        {
-          error: {
-            code: "queue_capacity_exceeded",
-            message: "Async queue is at critical capacity. Please retry later.",
-            retryable: true,
-            status: 503,
-          },
-        },
+        429,
         requestId,
         {
-          ok: false,
-          errorCode: "queue_capacity_exceeded",
-          targetAgent: routeTargetAgent,
+          code: "rate_limited",
+          message: "Async queue is at critical capacity. Please retry later.",
+          retryable: true,
+          details: {
+            category: "throttling",
+            scope: "global",
+            retry_after_ms: 5000,
+          },
         },
-        {
-          "retry-after": "5",
-          ...approveQueueDepthHeader,
-        },
+        routeTargetAgent,
       );
       return { handled: true, routeTargetAgent, routeTenantId };
     }

@@ -39,7 +39,10 @@ const TERMINAL_TASK_STATUSES = new Set<TaskRecord["status"]>([
 const TASK_TRANSITIONS = new Map<TaskRecord["status"], TaskRecord["status"][]>([
   ["accepted", ["proposed", "denied", "revoked"]],
   ["proposed", ["awaiting_approval", "running", "denied", "revoked"]],
-  ["awaiting_approval", ["running", "denied", "revoked"]],
+  [
+    "awaiting_approval",
+    ["running", "completed", "failed", "denied", "revoked"],
+  ],
   ["running", ["completed", "failed", "revoked"]],
   ["completed", []],
   ["failed", []],
@@ -55,14 +58,12 @@ function assertValidTransition(
     return;
   }
   if (isTerminal(currentStatus)) {
-    throw new Error(
-      `Terminal states are IMMUTABLE. Cannot transition from ${currentStatus} to ${newStatus}.`,
-    );
+    throw new Error(`Terminal task state transition is not allowed.`);
   }
   const allowed = TASK_TRANSITIONS.get(currentStatus);
   if (!allowed || !allowed.includes(newStatus)) {
     throw new Error(
-      `Invalid state transition: ${currentStatus} → ${newStatus}.`,
+      `Invalid task state transition: ${currentStatus} → ${newStatus}.`,
     );
   }
 }
@@ -124,7 +125,7 @@ export class TaskStore {
   }): TaskRecord {
     const existing = this.tasks.get(params.task_id);
     if (existing) {
-      throw new Error(`Task already exists: ${params.task_id}`);
+      assertValidTransition(existing.status, params.result.status);
     }
     if (params.idempotency_key) {
       const existingTaskId = this.idempotencyIndex.get(params.idempotency_key);
@@ -133,13 +134,6 @@ export class TaskStore {
           `Idempotency key already exists: ${params.idempotency_key}`,
         );
       }
-    }
-
-    // Reject creation of tasks in terminal state
-    if (isTerminal(params.result.status)) {
-      throw new Error(
-        `Cannot create task in terminal state: ${params.result.status}`,
-      );
     }
 
     const record: TaskRecord = {

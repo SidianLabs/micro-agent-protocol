@@ -1,5 +1,5 @@
 import { performance } from "node:perf_hooks";
-import { createMapServer } from "./server.js";
+import { createMapServer } from "./server/index.js";
 import { createExampleAgents } from "../../demo/agents/index.js";
 
 interface LoadResult {

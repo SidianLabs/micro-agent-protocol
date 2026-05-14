@@ -1,6 +1,6 @@
 import { Readable } from "node:stream";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
-import { createMapHandler } from "./server.js";
+import { createMapHandler } from "./server/index.js";
 import { signHttpRequest } from "./security/signing.js";
 import { createExampleAgents } from "../../demo/agents/index.js";
 

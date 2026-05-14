@@ -572,6 +572,7 @@ export async function handleReadRoutes(ctx: RouteContext): Promise<boolean> {
     const allAlerts = tenantId
       ? ctx.getActiveAlerts(tenantId)
       : ctx.getActiveAlerts();
+    ctx.persistAlertState();
     const startIndex = cursor
       ? Math.max(0, allAlerts.findIndex((alert) => alert.id === cursor) + 1)
       : 0;

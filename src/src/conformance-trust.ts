@@ -4,7 +4,7 @@ import {
   verifyConformanceExportSignature,
   verifyTrustBundleSignature,
 } from "./security/signing.js";
-import { createMapHandler } from "./server.js";
+import { createMapHandler } from "./server/index.js";
 import { createExampleAgents } from "../../demo/agents/index.js";
 
 interface DispatchResponse {
