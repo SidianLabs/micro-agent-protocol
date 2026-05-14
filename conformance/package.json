@@ -6,5 +6,8 @@
     "test": "node --test --test-concurrency=1 dist/*.test.js",
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sidianlabs/map-sdk": "*"
   }
 }

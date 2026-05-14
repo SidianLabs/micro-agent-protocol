@@ -8,6 +8,10 @@
 export {
   MapAssistantClient,
   type MapClientOptions,
+  type MapClientRequest,
+  type MapClientResponse,
+  type Middleware,
+  type TaskEvent,
   type DispatchOptions,
   type ListTasksOptions,
   type GetTaskOptions,

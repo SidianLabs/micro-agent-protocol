@@ -8,11 +8,13 @@
     "lib": ["ES2022", "DOM"],
     "types": ["node", "node/test"],
     "outDir": "dist",
-    "rootDir": "src",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@sidianlabs/map-sdk": ["../packages/typescript/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

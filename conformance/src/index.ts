@@ -9,6 +9,17 @@
 
 import { randomUUID } from "node:crypto";
 
+// Export the typed conformance client
+export {
+  ConformanceClient,
+  type ConformanceCheckResult,
+  type ConformanceResult,
+  type AuditVerificationResult,
+  type TenantIsolationResult,
+  type SchemaNegotiationResult,
+  type PolicyEvaluationResult,
+} from './client.js';
+
 const BASE_URL = "http://localhost:8787";
 
 interface DispatchResponse {

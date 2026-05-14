@@ -4,6 +4,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   getTrustMetadata,
   getSignatureKeyId,
@@ -14,6 +15,7 @@ import {
   verifyAuditExportSignature,
   verifyHttpRequestSignature,
   verifyTrustBundleSignature,
+  verifyNonce,
 } from "../security/signing.js";
 
 function withSigningEnv(
@@ -386,4 +388,149 @@ test("trust bundle signature verifies against exported payload", () => {
       assert.equal(trust.profile, "verified");
     },
   );
+});
+
+// ── Replay Hardening Tests Under Skew/Races (Step 29) ────────────────────
+
+const SKEW_SIGNING_KID = "kid_replay";
+
+function withReplayEnv(fn: () => void) {
+  return withSigningEnv(
+    {
+      MAP_SIGNING_KEYS: JSON.stringify([
+        {
+          kid: SKEW_SIGNING_KID,
+          secret: "replay_secret",
+          status: "active",
+          demo_only: false,
+          scopes: ["http_request"],
+        },
+      ]),
+      MAP_SIGNING_ACTIVE_KID: SKEW_SIGNING_KID,
+      MAP_REQUEST_MAX_AGE_MS: String(5 * 60 * 1000), // 5 min default
+    },
+    fn,
+  );
+}
+
+test("clock skew within tolerance: timestamp 4 min in the past should ACCEPT", () => {
+  withReplayEnv(() => {
+    const pastTimestamp = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+    const payload = {
+      method: "POST",
+      path: "/dispatch",
+      timestamp: pastTimestamp,
+      key_id: SKEW_SIGNING_KID,
+      body: JSON.stringify({ test: "skew_ok" }),
+    };
+    const headers = signHttpRequest(payload);
+    const valid = verifyHttpRequestSignature({
+      ...payload,
+      signature: headers["x-map-request-signature"],
+      nonce: headers["x-map-nonce"],
+    });
+    assert.equal(valid, true, "should accept within 5 min skew window");
+  });
+});
+
+test("clock skew outside tolerance: timestamp 6 min in the past should REJECT", () => {
+  withReplayEnv(() => {
+    const pastTimestamp = new Date(Date.now() - 6 * 60 * 1000).toISOString();
+    const payload = {
+      method: "POST",
+      path: "/dispatch",
+      timestamp: pastTimestamp,
+      key_id: SKEW_SIGNING_KID,
+      body: JSON.stringify({ test: "skew_bad" }),
+    };
+    const headers = signHttpRequest(payload);
+    const valid = verifyHttpRequestSignature({
+      ...payload,
+      signature: headers["x-map-request-signature"],
+      nonce: headers["x-map-nonce"],
+    });
+    assert.equal(valid, false, "should reject outside 5 min skew window");
+  });
+});
+
+test("future timestamp within tolerance: 1 min in the future should ACCEPT", () => {
+  withReplayEnv(() => {
+    const futureTimestamp = new Date(Date.now() + 1 * 60 * 1000).toISOString();
+    const payload = {
+      method: "POST",
+      path: "/dispatch",
+      timestamp: futureTimestamp,
+      key_id: SKEW_SIGNING_KID,
+      body: JSON.stringify({ test: "future_ok" }),
+    };
+    const headers = signHttpRequest(payload);
+    const valid = verifyHttpRequestSignature({
+      ...payload,
+      signature: headers["x-map-request-signature"],
+      nonce: headers["x-map-nonce"],
+    });
+    assert.equal(valid, true, "should accept 1 min future within abs window");
+  });
+});
+
+test("far future timestamp: 10 min in the future should REJECT", () => {
+  withReplayEnv(() => {
+    const futureTimestamp = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const payload = {
+      method: "POST",
+      path: "/dispatch",
+      timestamp: futureTimestamp,
+      key_id: SKEW_SIGNING_KID,
+      body: JSON.stringify({ test: "future_bad" }),
+    };
+    const headers = signHttpRequest(payload);
+    const valid = verifyHttpRequestSignature({
+      ...payload,
+      signature: headers["x-map-request-signature"],
+      nonce: headers["x-map-nonce"],
+    });
+    assert.equal(
+      valid,
+      false,
+      "should reject 10 min future outside abs window",
+    );
+  });
+});
+
+test("duplicate nonce: second use of same nonce should REJECT", () => {
+  const nonce = "test-nonce-dup-1";
+  const first = verifyNonce(nonce);
+  assert.equal(first, true, "first use should be accepted");
+  const second = verifyNonce(nonce);
+  assert.equal(second, false, "second use of same nonce should be rejected");
+});
+
+test("race condition: 10 concurrent requests with same nonce — only ONE succeeds", async () => {
+  const nonce = "test-nonce-race-1";
+  const results = await Promise.all(
+    Array.from({ length: 10 }, () => Promise.resolve(verifyNonce(nonce))),
+  );
+  const accepted = results.filter(Boolean).length;
+  const rejected = results.filter((r) => !r).length;
+  assert.equal(accepted, 1, "exactly one should be accepted");
+  assert.equal(rejected, 9, "nine should be rejected as replays");
+});
+
+test("nonce cache expiry: nonce accepted again after expiry", async () => {
+  const nonce = "test-nonce-expiry-1";
+  // Use a very short maxAge so we can test expiry without waiting 5 minutes
+  const shortMaxAgeMs = 50;
+  const first = verifyNonce(nonce, shortMaxAgeMs);
+  assert.equal(first, true, "first use should be accepted");
+
+  // Within expiry window — should still be rejected
+  const second = verifyNonce(nonce, shortMaxAgeMs);
+  assert.equal(second, false, "within expiry window should be rejected");
+
+  // Wait for the nonce to expire
+  await delay(shortMaxAgeMs + 20);
+
+  // After expiry — should be accepted again
+  const third = verifyNonce(nonce, shortMaxAgeMs);
+  assert.equal(third, true, "after expiry should be accepted again");
 });
