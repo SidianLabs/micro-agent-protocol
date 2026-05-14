@@ -1,5 +1,8 @@
 # Micro Agent Protocol (MAP) — by Sidian Labs © 2026
 
+> **Status**: Alpha (2026.05.14) — 50/60 master plan steps complete.
+> Ready for prototyping and integration. Not yet production-hardened.
+
 Micro Agent Protocol (MAP) is a framework and protocol standard for deploying small, company-owned micro-agents between external AI assistants and sensitive systems.
 
 **Primary Maintainer**: Bhawesh Bhaskar (bhawesh@sidian.dev)
@@ -319,12 +322,21 @@ This repository currently contains the source implementation of MAP Protocol, in
 
 ### Quick Start
 
+See the [demo folder](./demo/README.md) for a complete walkthrough including the demo server, example agents, and how to build your own.
+
 ```bash
 git clone https://github.com/SidianLabs/micro-agent-protocol.git
 cd micro-agent-protocol
 npm install
-cd packages/typescript && npm install && npm test
+
+# Run the demo server
+npm run dev:demo-server
+
+# In another terminal, run a demo
+npm run demo:payment
 ```
+
+For SDK-specific quick starts, see the [TypeScript](./packages/typescript/README.md), [Python](./packages/python/README.md), or [Go](./packages/go/README.md) SDK READMEs.
 
 ### License
 
@@ -333,6 +345,10 @@ MAP Protocol is licensed under Apache 2.0. See [LICENSE](./LICENSE) for details.
 ## Working Definition
 
 Micro Agent Protocol is a framework and protocol standard that lets organizations deploy small, policy-controlled micro-agents between external AI assistants and sensitive systems, so execution stays local, authority stays bounded, and context stays minimal.
+
+## Project Status
+
+See the [v1 Candidate Checklist](./docs/v1-candidate-checklist.md) for a detailed breakdown of all 60 master plan steps and their completion status (50/60 complete, 83%). Scaling designs (sharding, regional topology, replication) are documented in [`docs/scaling/`](./docs/scaling/) and marked as design-complete with implementation deferred to the production hardening phase.
 
 ---
 

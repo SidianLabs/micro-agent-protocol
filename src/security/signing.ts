@@ -19,6 +19,12 @@ import {
   getKeyProviderInfo,
   getSigningKeyConfigsFromProvider,
 } from "./key-provider.js";
+import {
+  resolveKMSProvider,
+  resetKMSProvider,
+  setKMSKeyLoader,
+  type KMSProvider,
+} from "./kms-provider.js";
 
 const DEFAULT_KID = "map-dev-key-1";
 const DEFAULT_ALG = "HS256";
@@ -202,87 +208,102 @@ function getDefaultSigningKey(): SigningKey {
   };
 }
 
+/**
+ * Returns all signing keys, including those configured via environment
+ * variables, file-based key sets, and the default dev key.
+ *
+ * After keys are loaded, the KMS provider key loader is updated so that
+ * LocalKMSProvider stays in sync with the configured key material.
+ */
 function getSigningKeys(): SigningKey[] {
   const revokedKids = getRevokedKidsFromEnv();
   const providerKeys = getSigningKeyConfigsFromProvider();
+  let result: SigningKey[];
   if (providerKeys.length === 0) {
     const key = getDefaultSigningKey();
-    if (revokedKids.has(key.kid)) {
-      return [{ ...key, status: "revoked" }];
-    }
-    return [key];
-  }
+    result = revokedKids.has(key.kid) ? [{ ...key, status: "revoked" }] : [key];
+  } else {
+    try {
+      const keys = providerKeys
+        .filter(
+          (key) =>
+            key && typeof key.kid === "string" && key.kid.trim().length > 0,
+        )
+        .map((key): SigningKey | null => {
+          const alg: SigningKey["alg"] =
+            key.alg === "RS256" ? "RS256" : "HS256";
+          const status: SigningKey["status"] =
+            key.status === "revoked"
+              ? "revoked"
+              : key.status === "retiring"
+                ? "retiring"
+                : "active";
+          const base = {
+            kid: key.kid.trim(),
+            alg,
+            status,
+            scopes:
+              Array.isArray(key.scopes) && key.scopes.length > 0
+                ? key.scopes
+                : DEFAULT_SCOPES,
+            demo_only: key.demo_only ?? false,
+          };
 
-  try {
-    const keys = providerKeys
-      .filter(
-        (key) =>
-          key && typeof key.kid === "string" && key.kid.trim().length > 0,
-      )
-      .map((key): SigningKey | null => {
-        const alg: SigningKey["alg"] = key.alg === "RS256" ? "RS256" : "HS256";
-        const status: SigningKey["status"] =
-          key.status === "revoked"
-            ? "revoked"
-            : key.status === "retiring"
-              ? "retiring"
-              : "active";
-        const base = {
-          kid: key.kid.trim(),
-          alg,
-          status,
-          scopes:
-            Array.isArray(key.scopes) && key.scopes.length > 0
-              ? key.scopes
-              : DEFAULT_SCOPES,
-          demo_only: key.demo_only ?? false,
-        };
+          if (alg === "RS256") {
+            if (
+              typeof key.public_key_pem !== "string" ||
+              key.public_key_pem.trim().length === 0
+            ) {
+              return null;
+            }
+            return {
+              ...base,
+              material: {
+                type: "rsa",
+                public_key_pem: key.public_key_pem,
+                private_key_pem:
+                  typeof key.private_key_pem === "string" &&
+                  key.private_key_pem.trim().length > 0
+                    ? key.private_key_pem
+                    : undefined,
+              },
+            };
+          }
 
-        if (alg === "RS256") {
-          if (
-            typeof key.public_key_pem !== "string" ||
-            key.public_key_pem.trim().length === 0
-          ) {
+          if (typeof key.secret !== "string" || key.secret.length === 0) {
             return null;
           }
           return {
             ...base,
             material: {
-              type: "rsa",
-              public_key_pem: key.public_key_pem,
-              private_key_pem:
-                typeof key.private_key_pem === "string" &&
-                key.private_key_pem.trim().length > 0
-                  ? key.private_key_pem
-                  : undefined,
+              type: "hmac",
+              secret: key.secret,
             },
           };
-        }
+        })
+        .filter((key): key is SigningKey => Boolean(key));
 
-        if (typeof key.secret !== "string" || key.secret.length === 0) {
-          return null;
-        }
-        return {
-          ...base,
-          material: {
-            type: "hmac",
-            secret: key.secret,
-          },
-        };
-      })
-      .filter((key): key is SigningKey => Boolean(key));
-
-    const normalized = keys.length > 0 ? keys : [getDefaultSigningKey()];
-    return normalized.map((key) =>
-      revokedKids.has(key.kid) ? { ...key, status: "revoked" } : key,
-    );
-  } catch {
-    const key = getDefaultSigningKey();
-    if (revokedKids.has(key.kid)) {
-      return [{ ...key, status: "revoked" }];
+      const normalized = keys.length > 0 ? keys : [getDefaultSigningKey()];
+      result = normalized.map((key) =>
+        revokedKids.has(key.kid) ? { ...key, status: "revoked" } : key,
+      );
+    } catch {
+      const key = getDefaultSigningKey();
+      result = revokedKids.has(key.kid)
+        ? [{ ...key, status: "revoked" }]
+        : [key];
     }
-    return [key];
   }
+
+  // Bridge: keep the LocalKMSProvider in sync with the current key material.
+  // This is a no-op when another KMS provider (env, aws_kms, vault) is active.
+  try {
+    setKMSKeyLoader(() => result);
+  } catch {
+    // Silently ignore if the kms-provider module isn't fully initialized yet.
+  }
+
+  return result;
 }
 
 function getSigningKeyByKid(kid: string): SigningKey | undefined {
@@ -1318,3 +1339,31 @@ export function detectAnomalies(): AnomalyReport[] {
 
   return reports;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KMS Provider Integration (Step 23)
+//
+// The MAP KMS abstraction layer allows deployments to swap the signing
+// backend without changing the rest of the codebase.  When a KMS provider
+// is configured (via MAP_KMS_PROVIDER), callers can use the provider
+// directly for sign/verify/rotate/revoke operations while the existing
+// functions in this module continue to work for backward compatibility.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the currently resolved KMS provider instance.
+ *
+ * The provider is selected based on the MAP_KMS_PROVIDER environment
+ * variable and cached after first resolution.  Use `resetKMSProvider()`
+ * to force re-resolution (e.g., in tests).
+ */
+export function getActiveKMSProvider(): KMSProvider {
+  return resolveKMSProvider();
+}
+
+/**
+ * Resets the cached KMS provider so the next call to `getActiveKMSProvider()`
+ * re-evaluates MAP_KMS_PROVIDER.  Useful for tests that change environment
+ * variables between test cases.
+ */
+export { resetKMSProvider };

@@ -1,13 +1,30 @@
 {
-  "name": "@mapprotocol/conformance",
-  "version": "1.0.0-alpha.1",
+  "name": "@sidianlabs/map-conformance",
+  "version": "2026.05.14",
+  "description": "MAP Protocol Conformance Test Harness",
   "type": "module",
+  "bin": {
+    "map-conformance": "./dist/cli.js"
+  },
   "scripts": {
     "test": "node --test --test-concurrency=1 dist/*.test.js",
     "build": "tsc -p tsconfig.json",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "cli": "node dist/cli.js"
   },
   "dependencies": {
     "@sidianlabs/map-sdk": "*"
+  },
+  "keywords": [
+    "map-protocol",
+    "conformance",
+    "testing",
+    "micro-agent-protocol"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SidianLabs/micro-agent-protocol.git",
+    "directory": "conformance"
   }
 }
