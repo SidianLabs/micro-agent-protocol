@@ -41,7 +41,7 @@ export interface AuditCheckpoint {
 
 export interface AlertRecord {
   id: string;
-  source: "queue" | "requests" | "signing";
+  source: "queue" | "requests" | "signing" | "slo";
   code: string;
   severity: "warning" | "critical";
   message: string;
@@ -53,6 +53,8 @@ export interface AlertRecord {
   suppressed_until?: string;
   suppressed_by?: string;
   tenant_id?: string;
+  slo_name?: string;
+  budget_remaining_percent?: number;
 }
 
 export interface RuntimeControlState {
@@ -135,9 +137,18 @@ export interface AllRuntimeState {
 
 export function hydrateRuntimeControls(
   path: string | undefined,
-  disabledAgents: Map<string, { disabled_at: string; disabled_by: string; reason?: string }>,
-  disabledCapabilities: Map<string, Map<string, { disabled_at: string; disabled_by: string; reason?: string }>>,
-  revokedSigningKeys: Map<string, { revoked_at: string; revoked_by: string; reason?: string }>,
+  disabledAgents: Map<
+    string,
+    { disabled_at: string; disabled_by: string; reason?: string }
+  >,
+  disabledCapabilities: Map<
+    string,
+    Map<string, { disabled_at: string; disabled_by: string; reason?: string }>
+  >,
+  revokedSigningKeys: Map<
+    string,
+    { revoked_at: string; revoked_by: string; reason?: string }
+  >,
 ): void {
   if (!path || !existsSync(path)) return;
   try {
@@ -304,9 +315,7 @@ export function hydrateMetricsState(
           ? parsed.requests_succeeded
           : 0,
       requests_failed:
-        typeof parsed.requests_failed === "number"
-          ? parsed.requests_failed
-          : 0,
+        typeof parsed.requests_failed === "number" ? parsed.requests_failed : 0,
       request_events: Array.isArray(parsed.request_events)
         ? parsed.request_events
         : [],
@@ -349,9 +358,18 @@ export function hydrateMetricsState(
 
 export function persistRuntimeControls(
   path: string | undefined,
-  disabledAgents: Map<string, { disabled_at: string; disabled_by: string; reason?: string }>,
-  disabledCapabilities: Map<string, Map<string, { disabled_at: string; disabled_by: string; reason?: string }>>,
-  revokedSigningKeys: Map<string, { revoked_at: string; revoked_by: string; reason?: string }>,
+  disabledAgents: Map<
+    string,
+    { disabled_at: string; disabled_by: string; reason?: string }
+  >,
+  disabledCapabilities: Map<
+    string,
+    Map<string, { disabled_at: string; disabled_by: string; reason?: string }>
+  >,
+  revokedSigningKeys: Map<
+    string,
+    { revoked_at: string; revoked_by: string; reason?: string }
+  >,
 ): void {
   if (!path) return;
   const disabledCapabilitiesObj = Object.fromEntries(
@@ -433,7 +451,10 @@ export function persistMetricsState(
   // Prune before persisting
   const now = Date.now();
   const events = state.requestEvents;
-  while (events.length > 0 && now - events[0].timestamp > state.metricsWindowMs) {
+  while (
+    events.length > 0 &&
+    now - events[0].timestamp > state.metricsWindowMs
+  ) {
     events.shift();
   }
 
@@ -446,10 +467,7 @@ export function persistMetricsState(
     errors_by_agent: Object.fromEntries(state.errorsByAgent.entries()),
     errors_by_agent_by_code: Object.fromEntries(
       Array.from(state.errorsByAgentByCode.entries()).map(
-        ([agent, codeMap]) => [
-          agent,
-          Object.fromEntries(codeMap.entries()),
-        ],
+        ([agent, codeMap]) => [agent, Object.fromEntries(codeMap.entries())],
       ),
     ),
     capability_latency_samples: Object.fromEntries(
@@ -463,7 +481,9 @@ export function persistMetricsState(
 // Convenience: hydrate everything at once
 // ---------------------------------------------------------------------------
 
-export function hydrateAllState(opts: StatePersistenceOptions): AllRuntimeState {
+export function hydrateAllState(
+  opts: StatePersistenceOptions,
+): AllRuntimeState {
   const disabledAgents = new Map<
     string,
     { disabled_at: string; disabled_by: string; reason?: string }

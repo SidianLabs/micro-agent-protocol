@@ -61,11 +61,7 @@ export class MetricsService {
   // Recording
   // -----------------------------------------------------------------------
 
-  recordRequest(
-    ok: boolean,
-    errorCode?: string,
-    targetAgent?: string,
-  ): void {
+  recordRequest(ok: boolean, errorCode?: string, targetAgent?: string): void {
     const now = Date.now();
     this.requestsTotal += 1;
     if (ok) {
@@ -86,10 +82,7 @@ export class MetricsService {
           const agentCodes =
             this.errorsByAgentByCode.get(normalizedAgent) ??
             new Map<string, number>();
-          agentCodes.set(
-            errorCode,
-            (agentCodes.get(errorCode) ?? 0) + 1,
-          );
+          agentCodes.set(errorCode, (agentCodes.get(errorCode) ?? 0) + 1);
           this.errorsByAgentByCode.set(normalizedAgent, agentCodes);
         }
       }
@@ -122,8 +115,7 @@ export class MetricsService {
       0,
     );
     const windowSuccess = windowTotal - windowFailed;
-    const failureRateWindow =
-      windowTotal > 0 ? windowFailed / windowTotal : 0;
+    const failureRateWindow = windowTotal > 0 ? windowFailed / windowTotal : 0;
     return {
       total: this.requestsTotal,
       succeeded: this.requestsSucceeded,
@@ -146,10 +138,7 @@ export class MetricsService {
       by_agent: Object.fromEntries(this.errorsByAgent.entries()),
       by_agent_by_code: Object.fromEntries(
         Array.from(this.errorsByAgentByCode.entries()).map(
-          ([agent, codeMap]) => [
-            agent,
-            Object.fromEntries(codeMap.entries()),
-          ],
+          ([agent, codeMap]) => [agent, Object.fromEntries(codeMap.entries())],
         ),
       ),
     };
@@ -157,7 +146,10 @@ export class MetricsService {
 
   getCapabilityLatencyMetrics(): Record<string, CapabilityLatencyMetrics> {
     const result: Record<string, CapabilityLatencyMetrics> = {};
-    for (const [capability, samples] of this.capabilityLatencySamples.entries()) {
+    for (const [
+      capability,
+      samples,
+    ] of this.capabilityLatencySamples.entries()) {
       if (samples.length === 0) continue;
       const sorted = [...samples].sort((a, b) => a - b);
       const sum = sorted.reduce((acc, value) => acc + value, 0);
@@ -191,10 +183,7 @@ export class MetricsService {
       errors_by_agent: Object.fromEntries(this.errorsByAgent.entries()),
       errors_by_agent_by_code: Object.fromEntries(
         Array.from(this.errorsByAgentByCode.entries()).map(
-          ([agent, codeMap]) => [
-            agent,
-            Object.fromEntries(codeMap.entries()),
-          ],
+          ([agent, codeMap]) => [agent, Object.fromEntries(codeMap.entries())],
         ),
       ),
       capability_latency_samples: Object.fromEntries(
@@ -264,4 +253,24 @@ export function createMetricsService(opts: {
     service.fromJSON(opts.hydratedState);
   }
   return service;
+}
+
+/**
+ * Export a MetricsService snapshot to a portable JSON payload for backup.
+ * This captures all internal counters, event windows, error maps, and
+ * capability latency samples so they can be restored later via importMetrics.
+ */
+export function exportMetrics(service: MetricsService): PersistedMetricsState {
+  return service.toJSON();
+}
+
+/**
+ * Import a previously-exported MetricsService snapshot (e.g. from a backup).
+ * The service is mutated in-place; all prior state is replaced.
+ */
+export function importMetrics(
+  service: MetricsService,
+  state: PersistedMetricsState,
+): void {
+  service.fromJSON(state);
 }

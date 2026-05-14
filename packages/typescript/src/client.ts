@@ -44,6 +44,30 @@ export interface DispatchOptions {
 }
 
 /**
+ * Workflow options for the high-level workflow() method
+ */
+export interface WorkflowOptions {
+  /** If true, automatically approve tasks that return awaiting_approval */
+  autoApprove?: boolean;
+  /** If true, poll until the task reaches a terminal state */
+  pollUntilComplete?: boolean;
+  /** Polling interval in milliseconds (default: 1000) */
+  pollIntervalMs?: number;
+  /** Polling timeout in milliseconds (default: 30000) */
+  pollTimeoutMs?: number;
+}
+
+/**
+ * Result returned by the workflow() method
+ */
+export interface WorkflowResult {
+  result: ResultPackage;
+  receipt: ExecutionReceipt;
+  /** Set when polling was used to wait for completion */
+  polled?: boolean;
+}
+
+/**
  * List tasks options
  */
 export interface ListTasksOptions {
@@ -301,6 +325,98 @@ export class MapAssistantClient {
       result: response.result,
       receipt: response.receipt!,
     };
+  }
+
+  /**
+   * High-level workflow that chains dispatch → poll → approve automatically.
+   */
+  async workflow(
+    request: DispatchRequest,
+    options?: WorkflowOptions,
+  ): Promise<WorkflowResult> {
+    // 1. Dispatch
+    const dispatchResult = await this.dispatch(request);
+
+    // 2. If awaiting_approval, auto-approve (if autoApprove is true)
+    if (
+      dispatchResult.result.status === "awaiting_approval" &&
+      options?.autoApprove
+    ) {
+      const approvalRef =
+        (dispatchResult.result.structured_output?.approval_reference as string) ??
+        dispatchResult.result.task_id;
+      const approveResult = await this.approve({
+        task_id: request.envelope.task_id,
+        approval_reference: approvalRef,
+        capability: request.capability,
+        envelope: request.envelope,
+      });
+      return { result: approveResult.result, receipt: approveResult.receipt };
+    }
+
+    // 3. If running (async), poll until terminal
+    if (
+      dispatchResult.result.status === "running" &&
+      options?.pollUntilComplete
+    ) {
+      const pollResult = await this.pollUntilTerminal(
+        request.envelope.task_id,
+        options.pollIntervalMs ?? 1000,
+        options.pollTimeoutMs ?? 30000,
+      );
+      return {
+        result: pollResult.result,
+        receipt: pollResult.receipt ?? dispatchResult.receipt,
+        polled: true,
+      };
+    }
+
+    return { result: dispatchResult.result, receipt: dispatchResult.receipt };
+  }
+
+  /**
+   * Poll a task until it reaches a terminal state or times out.
+   */
+  async pollUntilTerminal(
+    taskId: string,
+    intervalMs: number = 1000,
+    timeoutMs: number = 30000,
+  ): Promise<{ result: ResultPackage; receipt?: ExecutionReceipt }> {
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+      const task = await this.getTask(taskId);
+
+      if (
+        task.status === "completed" ||
+        task.status === "failed" ||
+        task.status === "denied" ||
+        task.status === "revoked"
+      ) {
+        if (!task.result) {
+          throw new MapError(`Task ${taskId} reached terminal state ${task.status} without a result`);
+        }
+        return { result: task.result, receipt: task.receipt };
+      }
+
+      if (task.status === "awaiting_approval") {
+        return {
+          result: task.result ?? {
+            task_id: taskId,
+            status: "awaiting_approval",
+            structured_output: {},
+            followup_required: false,
+          },
+          receipt: task.receipt,
+        };
+      }
+
+      await this.sleep(intervalMs);
+    }
+
+    throw new MapError(
+      `Polling timed out after ${timeoutMs}ms for task ${taskId}`,
+    );
   }
 
   /**

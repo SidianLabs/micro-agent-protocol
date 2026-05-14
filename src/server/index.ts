@@ -15,7 +15,8 @@
 import { createServer as createHttpsServer } from "node:https";
 import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 
 import { createReferenceApp } from "../app.js";
@@ -73,6 +74,7 @@ import {
   AlertService,
   type AlertServiceDependencies,
 } from "./services/alerts.js";
+import { SLOMonitor } from "./services/slo-monitor.js";
 
 // ── Security ────────────────────────────────────────────────────────────────
 import {
@@ -216,6 +218,22 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     });
   }
 
+  // ── SLO Monitor ──────────────────────────────────────────────────────
+  const sloMonitor = new SLOMonitor();
+
+  function persistSLOMetrics(): void {
+    // SLO data is small and in-memory; persist alongside metrics if a metrics store path is set.
+    if (!options.metricsStorePath) return;
+    try {
+      const sloJson = sloMonitor.toJSON();
+      const sloPath = options.metricsStorePath.replace(/\.json$/, "-slo.json");
+      mkdirSync(dirname(sloPath), { recursive: true });
+      writeFileSync(sloPath, JSON.stringify(sloJson, null, 2), "utf8");
+    } catch {
+      // Non-critical – SLO persistence failure should not crash the server.
+    }
+  }
+
   // ── Alert service ──────────────────────────────────────────────────────
   const alertDeps: AlertServiceDependencies = {
     getQueueStats: () => app.asyncQueue.getStats() as any,
@@ -232,6 +250,17 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     healthMaxDeadLetters: options.healthMaxDeadLetters,
     healthMaxOldestDeadLetterAgeMs: options.healthMaxOldestDeadLetterAgeMs,
     metricsFailureRateThreshold: options.metricsFailureRateThreshold,
+    getSLOAlerts: () =>
+      sloMonitor.checkAlerts().map((a) => ({
+        id: a.id,
+        source: "slo" as const,
+        code: a.code,
+        severity: a.severity,
+        message: a.message,
+        recommended_action: a.recommended_action,
+        slo_name: a.slo_name,
+        budget_remaining_percent: a.budget_remaining_percent,
+      })),
   };
   const alertService = new AlertService(alertDeps, alertState);
 
@@ -736,8 +765,10 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       statusCode,
       body,
       requestId,
-      (ok, errorCode, targetAgent) =>
-        metrics.recordRequest(ok, errorCode, targetAgent),
+      (ok, errorCode, targetAgent) => {
+        metrics.recordRequest(ok, errorCode, targetAgent);
+        sloMonitor.recordMetric("dispatch.success_rate", ok ? 0 : 1);
+      },
       tracking,
       extraHeaders,
     );
@@ -760,8 +791,10 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       statusCode,
       requestId,
       error,
-      (ok, errorCode, targetAgent) =>
-        metrics.recordRequest(ok, errorCode, targetAgent),
+      (ok, errorCode, targetAgent) => {
+        metrics.recordRequest(ok, errorCode, targetAgent);
+        sloMonitor.recordMetric("dispatch.success_rate", ok ? 0 : 1);
+      },
       targetAgent,
     );
   }
@@ -859,6 +892,11 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   // ── Periodic outbox processor ──────────────────────────────────────────
   const outboxInterval = setInterval(() => {
     app.asyncQueue.processOutbox();
+    // Record dead letter rate for SLO tracking
+    const stats = app.asyncQueue.getStats();
+    const deadLetterRate =
+      stats.queue_depth > 0 ? stats.dead_letter_count / stats.queue_depth : 0;
+    sloMonitor.recordMetric("async_queue.dead_letter_rate", deadLetterRate);
   }, 5_000);
   outboxInterval.unref();
 
@@ -882,6 +920,26 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
           message: "Missing request metadata.",
           retryable: false,
         });
+        return;
+      }
+
+      // ── 0. SLO endpoint ──────────────────────────────────────────────
+      if (req.method === "GET" && req.url === "/slo") {
+        const budgets: Record<string, unknown> = {};
+        for (const [name, budget] of sloMonitor.getAllBudgets()) {
+          budgets[name] = budget;
+        }
+        const sloAlerts = sloMonitor.checkAlerts();
+        sendJson(
+          res,
+          200,
+          {
+            slos: budgets,
+            alerts: sloAlerts,
+            timestamp: new Date().toISOString(),
+          },
+          requestId,
+        );
         return;
       }
 
@@ -1034,8 +1092,10 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
         asyncQueueMaxQueueDepth: app.asyncQueue.getStats().max_queue_depth,
         getAsyncQueueDepth: () => app.asyncQueue.getStats().queue_depth,
         recordAuditEvent,
-        recordCapabilityLatency: (cap: string, dur: number) =>
-          metrics.recordCapabilityLatency(cap, dur),
+        recordCapabilityLatency: (cap: string, dur: number) => {
+          metrics.recordCapabilityLatency(cap, dur);
+          sloMonitor.recordMetric("dispatch.latency_p95_ms", dur);
+        },
         sendJson,
         sendError,
       });
@@ -1044,6 +1104,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       if (mutationRouteResult.handled) {
         persistMetrics();
         persistAlerts();
+        persistSLOMetrics();
         return;
       }
 
@@ -1191,6 +1252,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       );
       persistMetrics();
       persistAlerts();
+      persistSLOMetrics();
     }
   };
 }

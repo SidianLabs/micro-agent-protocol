@@ -13,7 +13,7 @@ import { checkWritableFilePath, parsePositiveIntOrDefault } from "./utils.js";
 
 interface AlertRecord {
   id: string;
-  source: "queue" | "requests" | "signing";
+  source: "queue" | "requests" | "signing" | "slo";
   code: string;
   severity: "warning" | "critical";
   message: string;
@@ -25,6 +25,8 @@ interface AlertRecord {
   suppressed_until?: string;
   suppressed_by?: string;
   tenant_id?: string;
+  slo_name?: string;
+  budget_remaining_percent?: number;
 }
 
 interface RouteContext {

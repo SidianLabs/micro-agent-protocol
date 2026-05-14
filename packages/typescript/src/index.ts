@@ -13,6 +13,8 @@ export {
   type Middleware,
   type TaskEvent,
   type DispatchOptions,
+  type WorkflowOptions,
+  type WorkflowResult,
   type ListTasksOptions,
   type GetTaskOptions,
   type ListAgentsOptions,

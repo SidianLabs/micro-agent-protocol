@@ -21,12 +21,14 @@ export interface AlertBreaches {
 
 export interface AlertCandidate {
   id: string;
-  source: "queue" | "requests" | "signing";
+  source: "queue" | "requests" | "signing" | "slo";
   code: string;
   severity: "warning" | "critical";
   message: string;
   recommended_action: string;
   tenant_id?: string;
+  slo_name?: string;
+  budget_remaining_percent?: number;
 }
 
 export interface SigningKeyUsage {
@@ -78,6 +80,8 @@ export interface AlertServiceDependencies {
   healthMaxDeadLetters?: number;
   healthMaxOldestDeadLetterAgeMs?: number;
   metricsFailureRateThreshold?: number;
+  /** Optional callback that returns SLO-based alert candidates. */
+  getSLOAlerts?: () => AlertCandidate[];
 }
 
 export class AlertService {
@@ -158,8 +162,7 @@ export class AlertService {
       receipts: tenantReceipts,
       checkpoints: this.deps.getAuditCheckpoints(),
     });
-    const signingAnomalies =
-      this.deps.collectSigningAnomalies(signingUsage);
+    const signingAnomalies = this.deps.collectSigningAnomalies(signingUsage);
     const scopeSuffix = tenantId ? `:${tenantId}` : ":global";
     const candidates: AlertCandidate[] = [];
 
@@ -231,6 +234,18 @@ export class AlertService {
       });
     }
 
+    // ── SLO-based alerts ───────────────────────────────────────────────
+    if (this.deps.getSLOAlerts) {
+      const sloAlerts = this.deps.getSLOAlerts();
+      for (const sloAlert of sloAlerts) {
+        candidates.push({
+          ...sloAlert,
+          id: `${sloAlert.id}${scopeSuffix}`,
+          ...(tenantId ? { tenant_id: tenantId } : {}),
+        });
+      }
+    }
+
     return candidates;
   }
 
@@ -288,10 +303,7 @@ export class AlertService {
   // Manual alert management
   // -----------------------------------------------------------------------
 
-  acknowledgeAlert(
-    id: string,
-    actor: string,
-  ): AlertRecord | undefined {
+  acknowledgeAlert(id: string, actor: string): AlertRecord | undefined {
     const existing = this.alertState.get(id);
     if (!existing) return undefined;
     const updated: AlertRecord = {
