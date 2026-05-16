@@ -2,7 +2,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   getRequiredAuthScheme,
   getSignedRequestError,
-  getBearerTokenError,
   validateOAuth2Token,
 } from "./auth.js";
 import {

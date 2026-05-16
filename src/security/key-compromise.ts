@@ -24,7 +24,7 @@
  * ```
  */
 
-import { randomBytes, generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync } from "node:crypto";
 import {
   getActiveKMSProvider,
   resetKMSProvider,

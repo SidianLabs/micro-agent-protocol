@@ -45,7 +45,7 @@ import { randomUUID } from "node:crypto";
  * See: https://map-protocol.dev/docs/getting-started
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { Executor } from "./core/execution/index.js";
 import { evaluate } from "./core/policy/index.js";
 import type {

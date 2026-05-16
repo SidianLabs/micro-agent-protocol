@@ -102,7 +102,7 @@ export async function handleApprove(ctx: ApproveContext): Promise<{
 
   const body = await ctx.readJsonBody(req);
   let routeTargetAgent = extractTargetAgent(body.parsed);
-  let routeTenantId = extractTenantId(body.parsed);
+  const routeTenantId = extractTenantId(body.parsed);
 
   // Track the authenticated subject for audit logging
   let authSubject: string | undefined;

@@ -1,6 +1,6 @@
 {
   "name": "micro-agent-protocol",
-  "version": "2026.05.14",
+  "version": "2026.5.14",
   "description": "Micro Agent Protocol (MAP) - Open standard for AI assistant to micro-agent delegation",
   "type": "module",
   "workspaces": [
@@ -10,6 +10,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src --ext .ts",
     "test": "node --test --test-concurrency=1 dist/src/test/*.test.js",
     "test:policy": "node --test dist/src/test/policy.test.js",
     "test:benchmark": "node --test dist/src/test/benchmark.test.js",
@@ -37,8 +38,12 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.14",
+    "@typescript-eslint/eslint-plugin": "^8.59.3",
+    "@typescript-eslint/parser": "^8.59.3",
     "ajv": "^8.17.1",
+    "eslint": "^10.4.0",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.59.3"
   }
 }

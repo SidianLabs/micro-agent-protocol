@@ -16,11 +16,9 @@ import type {
 import type { ExecutionReceipt as MapExecutionReceipt } from "../types.js";
 import type { ExecutionReceipt as ECPCoreExecutionReceipt } from "../core/types.js";
 import { validate as coreValidate, normalize as coreNormalize, evaluate as coreEvaluatePolicy } from "../core/index.js";
-import type { Executor, Intent, PolicyDocument, ExecutionAdapter, ExecutionResult } from "../core/index.js";
+import type { Executor, PolicyDocument, ExecutionResult } from "../core/index.js";
 import { mapEnvelopeToIntent } from "../integration/ecp-bridge.js";
 import {
-  validateDelegationToken,
-  validateExecutionReceipt,
   validateResultPackage,
   validateTaskEnvelope,
 } from "../validation/schema-validator.js";

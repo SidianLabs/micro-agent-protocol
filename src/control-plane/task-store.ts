@@ -399,6 +399,7 @@ export class TaskStore {
   ): TaskRecord {
     if (historyLength === undefined) return record;
     if (historyLength === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { result, receipt, ...rest } = record;
       return rest as TaskRecord;
     }

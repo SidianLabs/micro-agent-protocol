@@ -6,8 +6,6 @@ import type {
   ExecutionReceipt,
   PolicyDocument,
   ExecutionAdapter,
-  ExecutionContext,
-  ValidationResult,
 } from "./types.js";
 
 export interface ExecuteOptions {
