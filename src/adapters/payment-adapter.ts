@@ -1,4 +1,11 @@
 /**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Payment Adapter
  *
  * Executes payment operations as MAP capabilities.

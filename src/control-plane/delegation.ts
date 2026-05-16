@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { DelegationToken, PolicyDecision, RequesterIdentity } from "../types.js";
 import { signDelegationToken } from "../security/signing.js";
 

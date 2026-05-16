@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { randomUUID } from "node:crypto";
 import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";

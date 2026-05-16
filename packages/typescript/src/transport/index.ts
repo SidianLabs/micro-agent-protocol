@@ -1,7 +1,7 @@
 /**
- * MAP Protocol - Transport Module
+ * MAP Protocol - Micro Agent Protocol
  *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

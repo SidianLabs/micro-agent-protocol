@@ -1,8 +1,7 @@
 /**
- * MAP Protocol - Prometheus Metrics
+ * MAP Protocol - Micro Agent Protocol
  *
- * Metrics collection and export in Prometheus format
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

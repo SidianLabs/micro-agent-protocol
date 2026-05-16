@@ -1,3 +1,10 @@
+<!--
+MAP Protocol - Micro Agent Protocol
+
+Copyright © 2026 Sidian Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # MAP Protocol Conformance Test Suite
 
 This directory contains the conformance test suite for the MAP Protocol implementation. These tests verify that an implementation correctly implements the MAP Protocol specification across all defined interfaces and behaviors.

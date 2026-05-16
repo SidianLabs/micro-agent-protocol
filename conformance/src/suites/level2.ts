@@ -1,11 +1,7 @@
 /**
- * MAP Protocol - Conformance Suite: Level 2 (Security Verification)
+ * MAP Protocol - Micro Agent Protocol
  *
- * Tests security features: request signing, trust chain verification,
- * tenant isolation, policy enforcement, delegation tokens, and
- * audit chain integrity.
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

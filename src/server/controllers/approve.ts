@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   extractBearerToken,
@@ -102,7 +109,7 @@ export async function handleApprove(ctx: ApproveContext): Promise<{
 
   const body = await ctx.readJsonBody(req);
   let routeTargetAgent = extractTargetAgent(body.parsed);
-  let routeTenantId = extractTenantId(body.parsed);
+  const routeTenantId = extractTenantId(body.parsed);
 
   // Track the authenticated subject for audit logging
   let authSubject: string | undefined;
@@ -235,7 +242,6 @@ export async function handleApprove(ctx: ApproveContext): Promise<{
     return { handled: true, routeTargetAgent, routeTenantId };
   }
 
-  // Authentication
   const requiredAuthScheme = ctx.options.enforceSignedRequests
     ? "signed_request"
     : getRequiredAuthScheme(

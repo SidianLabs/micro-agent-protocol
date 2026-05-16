@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import AjvModule from "ajv";
 const Ajv = AjvModule.default || AjvModule;
 import intentSchema from "./intent.schema.json" with { type: "json" };

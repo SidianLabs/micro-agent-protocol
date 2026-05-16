@@ -1,4 +1,11 @@
 /**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Rate limiting middleware for MAP mutation endpoints.
  *
  * Supports both global and per-tenant rate limiting using sliding windows.

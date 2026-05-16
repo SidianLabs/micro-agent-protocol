@@ -1,4 +1,11 @@
 /**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * DR Drill + Failover Conformance Tests
  *
  * These tests exercise persistence failover for every stateful component:
@@ -28,10 +35,6 @@ import {
   type AuditEvent,
   type AuditCheckpoint,
 } from "../server/state.js";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeReceipt(taskId: string, receiptId?: string): any {
   return {
@@ -72,9 +75,7 @@ function makeTaskReceipt(taskId: string): any {
   };
 }
 
-// ---------------------------------------------------------------------------
 // 1. Task store failover
-// ---------------------------------------------------------------------------
 
 test("DR drill: task store failover — persist to file, simulate crash, verify all tasks readable", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "map-dr-task-"));
@@ -143,9 +144,7 @@ test("DR drill: task store failover with sqlite db — persist, crash, verify", 
   }
 });
 
-// ---------------------------------------------------------------------------
 // 2. Receipt store failover
-// ---------------------------------------------------------------------------
 
 test("DR drill: receipt store failover — create, persist, crash, verify all readable", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "map-dr-receipt-"));
@@ -193,9 +192,7 @@ test("DR drill: receipt store failover — verify integrity after recovery", () 
   }
 });
 
-// ---------------------------------------------------------------------------
 // 3. Rate limit state recovery
-// ---------------------------------------------------------------------------
 
 test("DR drill: rate limit state recovery — create events, persist, crash, verify limits restored", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "map-dr-rate-"));
@@ -254,9 +251,7 @@ test("DR drill: rate limit state recovery — expired events pruned on hydrate",
   }
 });
 
-// ---------------------------------------------------------------------------
 // 4. Audit chain recovery
-// ---------------------------------------------------------------------------
 
 test("DR drill: audit chain recovery — create events with checkpoints, crash, verify chain integrity", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "map-dr-audit-"));
@@ -348,9 +343,7 @@ test("DR drill: audit chain recovery — empty store yields empty events", () =>
   }
 });
 
-// ---------------------------------------------------------------------------
 // 5. Async queue recovery
-// ---------------------------------------------------------------------------
 
 test("DR drill: async queue recovery — enqueue jobs, persist state, crash, verify jobs still queued", async () => {
   const tempDir = mkdtempSync(join(tmpdir(), "map-dr-queue-"));

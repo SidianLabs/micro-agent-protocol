@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { randomUUID } from "node:crypto";
 import { AgentRegistry } from "./registry.js";
 import { AsyncTaskQueue } from "./async-queue.js";
@@ -16,11 +23,9 @@ import type {
 import type { ExecutionReceipt as MapExecutionReceipt } from "../types.js";
 import type { ExecutionReceipt as ECPCoreExecutionReceipt } from "../core/types.js";
 import { validate as coreValidate, normalize as coreNormalize, evaluate as coreEvaluatePolicy } from "../core/index.js";
-import type { Executor, Intent, PolicyDocument, ExecutionAdapter, ExecutionResult } from "../core/index.js";
+import type { Executor, PolicyDocument, ExecutionResult } from "../core/index.js";
 import { mapEnvelopeToIntent } from "../integration/ecp-bridge.js";
 import {
-  validateDelegationToken,
-  validateExecutionReceipt,
   validateResultPackage,
   validateTaskEnvelope,
 } from "../validation/schema-validator.js";

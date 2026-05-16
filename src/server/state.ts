@@ -1,9 +1,14 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { existsSync } from "node:fs";
 import { readJSON, writeJSON } from "./persistence.js";
 
-// ---------------------------------------------------------------------------
-// Interfaces (extracted from server.ts)
-// ---------------------------------------------------------------------------
+// Interfaces
 
 export interface PersistedMetricsState {
   requests_total: number;
@@ -86,9 +91,7 @@ export interface PersistedRateLimitState {
   tenants: Record<string, number[]>;
 }
 
-// ---------------------------------------------------------------------------
 // Options passed to the hydrate / persist helpers
-// ---------------------------------------------------------------------------
 
 export interface StatePersistenceOptions {
   runtimeControlStorePath?: string;
@@ -101,9 +104,7 @@ export interface StatePersistenceOptions {
   metricsWindowMs: number;
 }
 
-// ---------------------------------------------------------------------------
 // The aggregate in-memory state shape
-// ---------------------------------------------------------------------------
 
 export interface AllRuntimeState {
   // runtime controls
@@ -131,9 +132,7 @@ export interface AllRuntimeState {
   metricsState: PersistedMetricsState;
 }
 
-// ---------------------------------------------------------------------------
 // Individual hydrate helpers
-// ---------------------------------------------------------------------------
 
 export function hydrateRuntimeControls(
   path: string | undefined,
@@ -352,9 +351,7 @@ export function hydrateMetricsState(
   }
 }
 
-// ---------------------------------------------------------------------------
 // Individual persist helpers
-// ---------------------------------------------------------------------------
 
 export function persistRuntimeControls(
   path: string | undefined,
@@ -477,9 +474,7 @@ export function persistMetricsState(
   writeJSON(path, serialized);
 }
 
-// ---------------------------------------------------------------------------
 // Convenience: hydrate everything at once
-// ---------------------------------------------------------------------------
 
 export function hydrateAllState(
   opts: StatePersistenceOptions,
@@ -536,9 +531,7 @@ export function hydrateAllState(
   };
 }
 
-// ---------------------------------------------------------------------------
 // Convenience: persist everything at once
-// ---------------------------------------------------------------------------
 
 export function persistAllState(
   state: AllRuntimeState,

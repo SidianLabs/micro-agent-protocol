@@ -1,8 +1,7 @@
 /**
- * MAP Protocol - Observability Module
+ * MAP Protocol - Micro Agent Protocol
  *
- * Logging, metrics, tracing, and health checks
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

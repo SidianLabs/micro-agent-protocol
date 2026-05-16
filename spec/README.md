@@ -1,3 +1,10 @@
+<!--
+MAP Protocol - Micro Agent Protocol
+
+Copyright © 2026 Sidian Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # MAP Protocol Buffer Specification
 
 This directory contains the **canonical Protocol Buffer definition** for the Micro Agent Protocol (MAP).

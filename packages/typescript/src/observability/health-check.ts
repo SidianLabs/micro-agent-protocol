@@ -1,8 +1,7 @@
 /**
- * MAP Protocol - Health Checks
+ * MAP Protocol - Micro Agent Protocol
  *
- * Configurable health check implementations
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

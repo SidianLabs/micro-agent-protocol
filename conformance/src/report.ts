@@ -1,11 +1,7 @@
 /**
- * MAP Protocol - Conformance Report Generator
+ * MAP Protocol - Micro Agent Protocol
  *
- * Generates a signed JSON report for certification evidence.
- * Reports are structured for auditability and can be verified
- * independently using the conformance_export scope.
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

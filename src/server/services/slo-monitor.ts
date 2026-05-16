@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 // ---------------------------------------------------------------------------
 // SLOMonitor — tracks Service Level Objectives and error budgets.
 //
@@ -77,9 +84,7 @@ export class SLOMonitor {
     });
   }
 
-  // -----------------------------------------------------------------------
   // Recording
-  // -----------------------------------------------------------------------
 
   /**
    * Record a metric value against a named SLO.
@@ -113,9 +118,7 @@ export class SLOMonitor {
     }
   }
 
-  // -----------------------------------------------------------------------
   // Query
-  // -----------------------------------------------------------------------
 
   /**
    * Compute the error budget for a named SLO.

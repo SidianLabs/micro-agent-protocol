@@ -1,8 +1,7 @@
 /**
- * MAP Protocol - Storage Module
+ * MAP Protocol - Micro Agent Protocol
  *
- * Task and receipt storage with persistence
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

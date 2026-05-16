@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -399,6 +406,7 @@ export class TaskStore {
   ): TaskRecord {
     if (historyLength === undefined) return record;
     if (historyLength === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { result, receipt, ...rest } = record;
       return rest as TaskRecord;
     }

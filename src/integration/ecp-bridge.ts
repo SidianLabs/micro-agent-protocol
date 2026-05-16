@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { TaskEnvelope, TaskConstraints, RequesterIdentity as MapRequesterIdentity } from "../types.js";
 import type { Intent, RequesterIdentity, IntentConstraints } from "../core/types.js";
 

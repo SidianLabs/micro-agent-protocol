@@ -1,10 +1,7 @@
 /**
- * MAP Protocol - Conformance Client
+ * MAP Protocol - Micro Agent Protocol
  *
- * A typed client specifically for running conformance tests
- * against the MAP Protocol reference server.
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

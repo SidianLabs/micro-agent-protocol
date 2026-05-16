@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { readFileSync, existsSync } from "node:fs";
 import { AsyncTaskQueue } from "./control-plane/async-queue.js";
 import { AgentRegistry } from "./control-plane/registry.js";

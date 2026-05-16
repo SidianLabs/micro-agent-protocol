@@ -1,4 +1,17 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "dist", "test", "**/*.test.ts"]
+  "compilerOptions": {
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "dist/**",
+    "node_modules/**",
+    "test/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
 }

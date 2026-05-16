@@ -1,3 +1,10 @@
+<!--
+MAP Protocol - Micro Agent Protocol
+
+Copyright © 2026 Sidian Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # MAP Reference Scaffold
 
 This folder contains a minimal TypeScript scaffold for a MAP reference implementation.

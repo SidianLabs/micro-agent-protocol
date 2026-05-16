@@ -1,3 +1,10 @@
+<!--
+MAP Protocol - Micro Agent Protocol
+
+Copyright © 2026 Sidian Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Changelog - Python SDK
 
 All notable changes to the Python SDK will be documented in this file.

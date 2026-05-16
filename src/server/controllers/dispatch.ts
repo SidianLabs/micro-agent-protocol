@@ -1,11 +1,15 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
-  authMiddleware,
   extractBearerToken,
-  getBearerTokenError,
   getSignedRequestError,
   validateOAuth2Token,
-  type AuthMiddlewareOptions,
 } from "../middleware/auth.js";
 import { rateLimitMiddleware } from "../middleware/rate-limit.js";
 import { backpressureMiddleware } from "../middleware/backpressure.js";
@@ -117,7 +121,7 @@ export async function handleDispatch(ctx: DispatchContext): Promise<{
 
   const body = await ctx.readJsonBody(req);
   let routeTargetAgent = extractTargetAgent(body.parsed);
-  let routeTenantId = extractTenantId(body.parsed);
+  const routeTenantId = extractTenantId(body.parsed);
 
   // Track the authenticated subject for audit logging
   let authSubject: string | undefined;
@@ -274,7 +278,6 @@ export async function handleDispatch(ctx: DispatchContext): Promise<{
     return { handled: true, routeTargetAgent, routeTenantId };
   }
 
-  // Authentication
   const requiredAuthScheme = ctx.options.enforceSignedRequests
     ? "signed_request"
     : getRequiredAuthScheme(

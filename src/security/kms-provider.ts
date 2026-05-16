@@ -1,4 +1,11 @@
 /**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * KMS/HSM Abstraction Layer (Step 23)
  *
  * Pluggable key management service abstraction that allows MAP deployments
@@ -23,7 +30,7 @@
  * ```
  */
 
-import { createHmac, createSign, createVerify, createPrivateKey, createPublicKey, timingSafeEqual } from "node:crypto";
+import { createHmac, createSign, createVerify, createPrivateKey, createPublicKey, timingSafeEqual, randomBytes } from "node:crypto";
 import type { MapVerificationKey } from "../types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,7 +270,7 @@ export class LocalKMSProvider implements KMSProvider {
 
     if (oldKey.material.type === "hmac") {
       // Generate a fresh HMAC secret
-      const newSecret = require("node:crypto").randomBytes(32).toString("base64url");
+      const newSecret = randomBytes(32).toString("base64url");
       newKey = {
         kid: newKid,
         alg: "HS256",
