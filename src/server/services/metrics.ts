@@ -64,9 +64,7 @@ export class MetricsService {
     this.capabilityLatencySamples = new Map();
   }
 
-  // -----------------------------------------------------------------------
   // Recording
-  // -----------------------------------------------------------------------
 
   recordRequest(ok: boolean, errorCode?: string, targetAgent?: string): void {
     const now = Date.now();
@@ -109,9 +107,7 @@ export class MetricsService {
     this.capabilityLatencySamples.set(key, existing);
   }
 
-  // -----------------------------------------------------------------------
   // Query
-  // -----------------------------------------------------------------------
 
   getRequestMetrics(): RequestMetrics {
     const now = Date.now();
@@ -174,9 +170,7 @@ export class MetricsService {
     return this.getRequestMetrics().failure_rate_window;
   }
 
-  // -----------------------------------------------------------------------
   // Persistence
-  // -----------------------------------------------------------------------
 
   toJSON(): PersistedMetricsState {
     const now = Date.now();

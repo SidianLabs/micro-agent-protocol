@@ -341,9 +341,7 @@ export class AlertService {
     return updated;
   }
 
-  // -----------------------------------------------------------------------
   // Persistence
-  // -----------------------------------------------------------------------
 
   toJSON(): { alerts: AlertRecord[] } {
     return { alerts: [...this.alertState.values()] };

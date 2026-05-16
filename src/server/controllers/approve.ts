@@ -242,7 +242,6 @@ export async function handleApprove(ctx: ApproveContext): Promise<{
     return { handled: true, routeTargetAgent, routeTenantId };
   }
 
-  // Authentication
   const requiredAuthScheme = ctx.options.enforceSignedRequests
     ? "signed_request"
     : getRequiredAuthScheme(

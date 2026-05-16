@@ -122,10 +122,11 @@ function assertAlgorithmAllowed(alg: string, profile: string): void {
       `Algorithm "${alg}" is not allowed for deployment profile "${profile}". Allowed algorithms: ${allowed.join(", ")}`,
     );
   }
-  // For regulated profile, enforce minimum key length (2048+ bits for RSA)
+  // For regulated profile, RSA is required (key-length enforced at key-material validation).
   if (profile === "regulated" && alg === "RS256") {
-    // Key-length enforcement is handled at key-material validation time;
-    // here we simply assert the algorithm is RSA-based.
+    // assertion only — actual enforcement happens during key-material validation
+  } else if (profile === "regulated") {
+    throw new Error(`regulated profile requires RS256, got ${alg}`);
   }
 }
 

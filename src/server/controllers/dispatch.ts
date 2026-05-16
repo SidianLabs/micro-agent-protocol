@@ -278,7 +278,6 @@ export async function handleDispatch(ctx: DispatchContext): Promise<{
     return { handled: true, routeTargetAgent, routeTenantId };
   }
 
-  // Authentication
   const requiredAuthScheme = ctx.options.enforceSignedRequests
     ? "signed_request"
     : getRequiredAuthScheme(
