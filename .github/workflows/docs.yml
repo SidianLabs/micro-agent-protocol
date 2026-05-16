@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/**'
+      - 'documentation/internal/docs/**'
       - 'schemas/openapi.yaml'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: docs
+        working-directory: documentation/internal/docs
 
     steps:
       - name: Checkout
@@ -41,16 +41,16 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: docs/package-lock.json
+          cache-dependency-path: documentation/internal/docs/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Check for OpenAPI spec
         run: |
-          if [ -f ../schemas/openapi.yaml ]; then
+          if [ -f ../../schemas/openapi.yaml ]; then
             echo "OpenAPI spec found"
-            cp ../schemas/openapi.yaml static/api/
+            cp ../../schemas/openapi.yaml static/api/
           else
             echo "Warning: OpenAPI spec not found"
           fi
@@ -61,7 +61,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/build
+          path: documentation/internal/docs/build
 
   # ===========================================================================
   # Deploy to GitHub Pages
@@ -122,21 +122,21 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: docs/package-lock.json
+          cache-dependency-path: documentation/internal/docs/package-lock.json
 
       - name: Install dependencies
         run: npm ci
-        working-directory: docs
+        working-directory: documentation/internal/docs
 
       - name: Build preview
         run: |
           npm run build -- --config docusaurus.config.js --env branchName=${{ github.head_ref }}
-        working-directory: docs
+        working-directory: documentation/internal/docs
 
       - name: Deploy to Cloudflare Pages (example)
         uses: nwtgck/actions-netlify@v3.0
         with:
-          publish-dir: docs/build
+          publish-dir: documentation/internal/docs/build
           production-deploy: false
           deploy-message: "Deploy from PR #${{ github.event.number }}"
           enable-commit-comment: false
