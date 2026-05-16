@@ -1,11 +1,7 @@
 /**
- * MAP Protocol - Conformance Suite: Level 3 (Production Readiness)
+ * MAP Protocol - Micro Agent Protocol
  *
- * Tests production-grade features: async queue behavior, receipt integrity,
- * pagination, alert/dead-letter flows, audit event tracking,
- * schema negotiation, and rate limiting.
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

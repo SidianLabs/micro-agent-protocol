@@ -1,8 +1,7 @@
 /**
- * MAP Protocol - Policy Module
+ * MAP Protocol - Micro Agent Protocol
  *
- * Policy evaluation engine for task constraints
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

@@ -1,3 +1,10 @@
+<!--
+MAP Protocol - Micro Agent Protocol
+
+Copyright © 2026 Sidian Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # MAP Demo — Build & Run Guide
 
 This folder contains everything you need to run MAP locally and understand how to build your own micro-agents.

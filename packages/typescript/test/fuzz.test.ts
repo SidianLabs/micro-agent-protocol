@@ -1,10 +1,7 @@
 /**
- * MAP Protocol - Fuzz / Property-Based Tests (Step 56)
+ * MAP Protocol - Micro Agent Protocol
  *
- * These tests use simple fuzzing (no external library) to catch edge cases
- * in the MAP Protocol TypeScript SDK.
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

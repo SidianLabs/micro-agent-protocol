@@ -1,4 +1,11 @@
 /**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * KMS/HSM Abstraction Layer (Step 23)
  *
  * Pluggable key management service abstraction that allows MAP deployments

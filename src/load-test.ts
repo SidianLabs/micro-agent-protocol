@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { performance } from "node:perf_hooks";
 import { createMapServer } from "./server/index.js";
 import { createExampleAgents } from "./fixtures/agents.js";

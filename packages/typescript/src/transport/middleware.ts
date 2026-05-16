@@ -1,10 +1,7 @@
 /**
- * MAP Protocol - Built-in Middleware
+ * MAP Protocol - Micro Agent Protocol
  *
- * Provides standard middleware for authentication, retry,
- * idempotency, logging, and metrics collection.
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

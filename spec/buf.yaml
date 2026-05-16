@@ -1,3 +1,8 @@
+# MAP Protocol - Micro Agent Protocol
+#
+# Copyright © 2026 Sidian Labs
+# SPDX-License-Identifier: Apache-2.0
+
 # Buf configuration for MAP Protocol Buffers.
 # Follows the A2A project's buf.yaml pattern.
 version: v1

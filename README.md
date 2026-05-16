@@ -1,3 +1,10 @@
+<!--
+MAP Protocol - Micro Agent Protocol
+
+Copyright © 2026 Sidian Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # MAP — Micro Agent Protocol
 
 **Policy enforcement and audit trails for AI agents. Works for any action. Open standard.**

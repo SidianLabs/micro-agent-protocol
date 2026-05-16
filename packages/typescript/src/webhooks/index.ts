@@ -1,8 +1,7 @@
 /**
- * MAP Protocol - Webhooks Module
+ * MAP Protocol - Micro Agent Protocol
  *
- * Event notification system for task lifecycle events
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { Ajv } from "ajv";
 import agentDescriptorSchema from "../../schemas/agent-descriptor.schema.json" with { type: "json" };
 import approvalRequestSchema from "../../schemas/approval-request.schema.json" with { type: "json" };

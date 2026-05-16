@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { describe, it, mock, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { WebSocketTransport } from '../dist/transport/websocket.js';

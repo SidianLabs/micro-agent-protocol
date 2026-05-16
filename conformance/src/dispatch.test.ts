@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { randomUUID } from "node:crypto";
 import signatureFixtures from "./fixtures/signature-fixtures.json" with { type: "json" };
 import validDispatchRequests from "./fixtures/valid-dispatch-requests.json" with { type: "json" };

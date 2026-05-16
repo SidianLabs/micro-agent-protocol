@@ -1,4 +1,11 @@
 /**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Deterministic overload backpressure middleware.
  *
  * Gracefully degrades instead of crashing when the system is overloaded.

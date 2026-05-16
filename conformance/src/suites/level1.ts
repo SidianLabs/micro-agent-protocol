@@ -1,10 +1,7 @@
 /**
- * MAP Protocol - Conformance Suite: Level 1 (Basic Protocol Compliance)
+ * MAP Protocol - Micro Agent Protocol
  *
- * Tests basic protocol operations: dispatch, health check, agent listing,
- * task retrieval, idempotency, error codes, and schema validation.
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

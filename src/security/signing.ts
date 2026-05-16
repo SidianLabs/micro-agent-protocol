@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import {
   createHmac,
   createPrivateKey,
@@ -882,9 +889,7 @@ export function verifyAgentDescriptorSignature(
 
   const {
     descriptor_signature,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     descriptor_key_id: _descriptorKeyId,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     descriptor_signature_alg: _descriptorSignatureAlg,
     ...unsignedDescriptor
   } = descriptor;

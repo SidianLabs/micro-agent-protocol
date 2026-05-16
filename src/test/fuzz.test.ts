@@ -1,10 +1,7 @@
 /**
- * MAP Protocol - Fuzz / Property-Based Tests
+ * MAP Protocol - Micro Agent Protocol
  *
- * These tests use random data generation to find edge cases
- * in the MAP Protocol server implementation.
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

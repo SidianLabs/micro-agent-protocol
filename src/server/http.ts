@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { JsonBodyReadResult } from "./utils.js";
 

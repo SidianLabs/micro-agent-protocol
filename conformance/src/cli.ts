@@ -1,30 +1,11 @@
-#!/usr/bin/env node
 /**
- * MAP Protocol - Conformance CLI
+ * MAP Protocol - Micro Agent Protocol
  *
- * Command-line interface for running conformance tests against a MAP server.
- *
- * Usage:
- *   map-conformance [options]
- *
- * Options:
- *   --base-url <url>       MAP server URL (default: http://localhost:8787)
- *   --level <1|2|3>        Certification level to test (default: 1)
- *   --profile <profile>    Deployment profile (open|verified|regulated)
- *   --output <json|text>   Output format (default: text)
- *   --timeout <ms>         Test timeout in ms (default: 30000)
- *   --skip <test>          Skip specific test (can repeat)
- *   --only <test>          Run only specific test (can repeat)
- *   --help, -h             Show help
- *   --version, -v          Show version
- *
- * Exit codes:
- *   0 — all tests passed
- *   1 — one or more tests failed
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#!//usr/bin/env node
 
 import { run as runLevel1 } from "./suites/level1.js";
 import { run as runLevel2 } from "./suites/level2.js";

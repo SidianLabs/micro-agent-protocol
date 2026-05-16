@@ -1,4 +1,11 @@
 /**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Emergency Key Compromise Workflow (Step 24)
  *
  * Provides an emergency mechanism for revoking ALL signing keys in response

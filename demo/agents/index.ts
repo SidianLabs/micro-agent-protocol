@@ -1,3 +1,10 @@
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright © 2026 Sidian Labs
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { AgentDescriptor } from "../../src/types.js";
 import { PaymentAgent } from "./payment-agent.js";
 import { DBReadAgent } from "./dbread-agent.js";

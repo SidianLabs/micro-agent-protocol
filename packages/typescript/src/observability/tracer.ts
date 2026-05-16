@@ -1,8 +1,7 @@
 /**
- * MAP Protocol - OpenTelemetry Tracer
+ * MAP Protocol - Micro Agent Protocol
  *
- * Tracing support for distributed request tracking
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 

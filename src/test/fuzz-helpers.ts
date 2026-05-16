@@ -1,10 +1,7 @@
 /**
- * MAP Protocol - Fuzz Test Helpers
+ * MAP Protocol - Micro Agent Protocol
  *
- * Utility functions for generating random valid test data
- * for property-based and fuzz testing.
- *
- * Copyright MAP Protocol Authors
+ * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
 
