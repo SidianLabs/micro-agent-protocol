@@ -1,0 +1,90 @@
+# Copyright Header Templates
+
+Use these templates when adding Apache 2.0 license headers to source files.
+
+## TypeScript / JavaScript
+
+```typescript
+/**
+ * MAP Protocol - Micro Agent Protocol
+ *
+ * Copyright MAP Protocol Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+```
+
+## Python
+
+```python
+# MAP Protocol - Micro Agent Protocol
+#
+# Copyright MAP Protocol Authors
+# SPDX-License-Identifier: Apache-2.0
+```
+
+## Go
+
+```go
+// MAP Protocol - Micro Agent Protocol
+//
+// Copyright MAP Protocol Authors
+// SPDX-License-Identifier: Apache-2.0
+```
+
+## Shell Scripts
+
+```bash
+#!/bin/bash
+# MAP Protocol - Micro Agent Protocol
+#
+# Copyright MAP Protocol Authors
+# SPDX-License-Identifier: Apache-2.0
+```
+
+## YAML (CI/CD, configs)
+
+```yaml
+# MAP Protocol - Micro Agent Protocol
+#
+# Copyright MAP Protocol Authors
+# SPDX-License-Identifier: Apache-2.0
+```
+
+## Markdown (Documentation)
+
+```markdown
+<!--
+MAP Protocol - Micro Agent Protocol
+
+Copyright MAP Protocol Authors
+SPDX-License-Identifier: Apache-2.0
+-->
+```
+
+## Usage
+
+Add the appropriate header to the top of every source file. The header should
+appear after any shebang line (for scripts) but before any other content.
+
+### Automated Header Checking
+
+The CI pipeline includes a license header check. To run it locally:
+
+```bash
+# Check for missing headers
+./scripts/check-headers.sh
+
+# Add headers to files missing them
+./scripts/add-headers.sh
+```
+
+### Adding to New Files
+
+When creating new files, copy the appropriate template and fill in any
+file-specific details if needed (e.g., module name in the header).
+
+## Notes
+
+- The `SPDX-License-Identifier` tag is recommended for automated license detection
+- Keep headers consistent across all files in a project
+- Year is optional in the copyright line (MAP Protocol Authors - not "2024 MAP Protocol Authors")

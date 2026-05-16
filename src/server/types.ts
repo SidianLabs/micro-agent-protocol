@@ -1,4 +1,4 @@
-import type { MicroAgent } from "../runtime/micro-agent.js";
+import type { AgentDescriptor } from "../types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Server configuration options
@@ -40,7 +40,13 @@ export interface MapHttpServerOptions {
   signingUnknownKeyCriticalRatio?: number;
   alertStorePath?: string;
   runtimeControlStorePath?: string;
-  agents?: MicroAgent[];
+  agents?: AgentDescriptor[];
+  /** Path to a JSON policy file. Loaded at startup; updated on POST /policy. */
+  policyFilePath?: string;
+  /** Default webhook URL for approval notifications. Can be overridden per-request via envelope metadata. */
+  approvalWebhookUrl?: string;
+  /** Base URL of this MAP server instance (used in approval notification payloads). */
+  serverBaseUrl?: string;
   certPath?: string;
   keyPath?: string;
   mtls?: {

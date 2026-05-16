@@ -119,7 +119,8 @@
           "none",
           "bearer",
           "mtls",
-          "signed_request"
+          "signed_request",
+          "oauth2"
         ]
       },
       "default": []
@@ -173,7 +174,8 @@
                 "none",
                 "bearer",
                 "mtls",
-                "signed_request"
+                "signed_request",
+                "oauth2"
               ]
             },
             "default": []

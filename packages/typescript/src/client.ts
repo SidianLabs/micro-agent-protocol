@@ -509,6 +509,7 @@ export class MapAssistantClient {
         let abortController: AbortController | null = null;
         let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
         let stopped = false;
+        let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
         async function connect(): Promise<Response> {
           abortController = new AbortController();
@@ -585,6 +586,7 @@ export class MapAssistantClient {
           push: (event: TaskEvent) => void
         ): Promise<void> {
           const reader = response.body!.getReader();
+          activeReader = reader;
           const decoder = new TextDecoder();
 
           try {
@@ -599,6 +601,7 @@ export class MapAssistantClient {
               }
             }
           } finally {
+            activeReader = null;
             reader.releaseLock();
           }
         }
@@ -665,6 +668,9 @@ export class MapAssistantClient {
 
           async return(): Promise<IteratorResult<TaskEvent>> {
             stopped = true;
+            if (activeReader) {
+              await activeReader.cancel().catch(() => undefined);
+            }
             if (abortController) {
               abortController.abort();
             }
@@ -676,6 +682,9 @@ export class MapAssistantClient {
 
           async throw(e?: unknown): Promise<IteratorResult<TaskEvent>> {
             stopped = true;
+            if (activeReader) {
+              await activeReader.cancel().catch(() => undefined);
+            }
             if (abortController) {
               abortController.abort();
             }

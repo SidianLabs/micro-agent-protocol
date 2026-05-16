@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -38,7 +45,15 @@ export function writeJSON(
   const encoding = options?.encoding ?? "utf8";
   const mode = options?.mode ?? 0o600;
   ensureDir(path);
-  writeFileSync(path, JSON.stringify(data, null, 2), { encoding, mode });
+  const tempPath = `${path}.tmp.${randomUUID()}`;
+  try {
+    writeFileSync(tempPath, JSON.stringify(data, null, 2), { encoding, mode });
+    renameSync(tempPath, path);
+  } finally {
+    if (existsSync(tempPath)) {
+      unlinkSync(tempPath);
+    }
+  }
 }
 
 /**

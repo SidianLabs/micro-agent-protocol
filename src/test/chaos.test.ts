@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { TaskStore } from "../control-plane/task-store.js";
 import { createReferenceApp } from "../app.js";
-import { createExampleAgents } from "../../demo/agents/index.js";
+import { createExampleAgents } from "../fixtures/agents.js";
 import type { ExecutionReceipt, ResultPackage, TaskRecord } from "../types.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

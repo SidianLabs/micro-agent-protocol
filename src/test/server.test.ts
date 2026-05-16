@@ -6,9 +6,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
-import type { DelegationToken, TaskEnvelope } from "../types.js";
-import type { MicroAgent } from "../runtime/micro-agent.js";
-import { createExampleAgents } from "../../demo/agents/index.js";
+import type { AgentDescriptor, DelegationToken, TaskEnvelope } from "../types.js";
+import { createExampleAgents } from "../fixtures/agents.js";
 import {
   getSignatureKeyId,
   signHttpRequest,
@@ -2460,43 +2459,19 @@ test("server rejects direct /approve without pending approval state", async () =
 });
 
 test("server surfaces lifecycle transition invariant failures as invalid_request", async () => {
-  const mismatchedApprovalAgent: MicroAgent = {
-    descriptor: {
-      agent_id: "dbread-lifecycle-mismatch-v1",
-      organization: "map-reference",
-      version: "1.0.0",
-      domain: "database",
-      capabilities: ["db.read.lifecycle_mismatch"],
-      risk_level: "medium",
-      input_schema_ref:
-        "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json",
-      output_schema_ref:
-        "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/result-package.schema.json",
-      supported_execution_modes: ["read"],
-      visibility_modes: ["summary", "debug"],
-    },
-    async invoke(_envelope: TaskEnvelope, _token: DelegationToken) {
-      return {
-        result: {
-          task_id: "task_mismatch_other",
-          status: "completed",
-          summary: "completed",
-          structured_output: {},
-          followup_required: false,
-        },
-        receipt: {
-          receipt_id: "receipt:task_lifecycle_http:completed",
-          task_id: "task_mismatch_other",
-          agent_id: "dbread-lifecycle-mismatch-v1",
-          action_taken: "db.read.lifecycle_mismatch.completed",
-          resource_touched: "database",
-          policy_checks: ["policy_passed"],
-          timestamp: new Date().toISOString(),
-          result_hash: "sha256:task_lifecycle_http:completed",
-          signature: "sig",
-        },
-      };
-    },
+  const mismatchedApprovalAgent: AgentDescriptor = {
+    agent_id: "dbread-lifecycle-mismatch-v1",
+    organization: "map-reference",
+    version: "1.0.0",
+    domain: "database",
+    capabilities: ["db.read.lifecycle_mismatch"],
+    risk_level: "medium",
+    input_schema_ref:
+      "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json",
+    output_schema_ref:
+      "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/result-package.schema.json",
+    supported_execution_modes: ["read"],
+    visibility_modes: ["summary", "debug"],
   };
 
   const dispatch = createDispatcher({ agents: [mismatchedApprovalAgent] });
@@ -2612,24 +2587,19 @@ test("server returns running for async task and later exposes completed state", 
 });
 
 test("server does not persist task when async queue is at capacity", async () => {
-  const stalledAsyncAgent: MicroAgent = {
-    descriptor: {
-      agent_id: "dbread-stalled-async-v1",
-      organization: "map-reference",
-      version: "1.0.0",
-      domain: "database",
-      capabilities: ["db.read.slow_async"],
-      risk_level: "medium",
-      input_schema_ref:
-        "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json",
-      output_schema_ref:
-        "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/result-package.schema.json",
-      supported_execution_modes: ["read"],
-      visibility_modes: ["summary", "debug"],
-    },
-    async invoke(_envelope: TaskEnvelope, _token: DelegationToken) {
-      return new Promise(() => {});
-    },
+  const stalledAsyncAgent: AgentDescriptor = {
+    agent_id: "dbread-stalled-async-v1",
+    organization: "map-reference",
+    version: "1.0.0",
+    domain: "database",
+    capabilities: ["db.read.slow_async"],
+    risk_level: "medium",
+    input_schema_ref:
+      "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json",
+    output_schema_ref:
+      "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/result-package.schema.json",
+    supported_execution_modes: ["read"],
+    visibility_modes: ["summary", "debug"],
   };
 
   const dispatch = createDispatcher({

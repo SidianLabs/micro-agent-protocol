@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
 import { createMapServer } from "./server/index.js";
-import { createExampleAgents } from "../demo/agents/index.js";
+import { createExampleAgents } from "./fixtures/agents.js";
 
 interface LoadResult {
   total: number;

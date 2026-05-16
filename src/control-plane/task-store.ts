@@ -37,7 +37,7 @@ const TERMINAL_TASK_STATUSES = new Set<TaskRecord["status"]>([
  *   revoked           → [] (terminal — immutable)
  */
 const TASK_TRANSITIONS = new Map<TaskRecord["status"], TaskRecord["status"][]>([
-  ["accepted", ["proposed", "denied", "revoked"]],
+  ["accepted", ["proposed", "running", "completed", "failed", "denied", "revoked"]],
   ["proposed", ["awaiting_approval", "running", "denied", "revoked"]],
   [
     "awaiting_approval",

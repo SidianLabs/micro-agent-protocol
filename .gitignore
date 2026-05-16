@@ -35,22 +35,18 @@ coverage/
 # Project-specific
 *.lock
 package-lock.json
-AGENTS.md
-ANTITRUST.md
-CLAUDE.md
-CODE_OF_CONDUCT.md
-CONTRIBUTING.md
-GOVERNANCE.md
-NOTICE
-SECURITY.md
-copyright-header-template.txt
 references/
+session-update.md
+ECP-DESIGN.md
+documentation/
 
 # Runtime data
 .map/
-test-project/package-lock.json
+demo
 
-# Optional directories (not pushed)
-docs/
-examples/
-test-project/
+# ECP (do not ignore - these are primary)
+# ecp/
+
+# Legacy MAP (archived, do not modify)
+# map/
+map-test

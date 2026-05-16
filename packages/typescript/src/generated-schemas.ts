@@ -124,7 +124,8 @@ export const agentDescriptorSchema = {
           "none",
           "bearer",
           "mtls",
-          "signed_request"
+          "signed_request",
+          "oauth2"
         ]
       },
       "default": []
@@ -178,7 +179,8 @@ export const agentDescriptorSchema = {
                 "none",
                 "bearer",
                 "mtls",
-                "signed_request"
+                "signed_request",
+                "oauth2"
               ]
             },
             "default": []
@@ -1009,7 +1011,8 @@ export const mapCoreSchema = {
         "none",
         "bearer",
         "mtls",
-        "signed_request"
+        "signed_request",
+        "oauth2"
       ]
     },
     "error_code": {

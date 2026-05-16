@@ -1,1 +1,1 @@
-export * from "../protocol/map-types.js";
+export * from "./protocol/map-types.js";

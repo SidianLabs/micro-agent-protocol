@@ -12,6 +12,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createMapHandler } from "../server.js";
+import { createExampleAgents } from "../fixtures/agents.js";
 import { Readable } from "node:stream";
 import {
   randomTaskEnvelope,
@@ -64,7 +65,7 @@ function makeRequest(
 }
 
 function createHandler() {
-  return createMapHandler({ agents: [] });
+  return createMapHandler({ agents: createExampleAgents() });
 }
 
 async function dispatchThroughHandler(

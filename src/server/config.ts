@@ -63,5 +63,8 @@ export function resolveServerOptionsFromEnv(
     signingUnknownKeyCriticalRatio: parseOptionalNumber(
       env.MAP_SIGNING_UNKNOWN_KEY_CRITICAL_RATIO,
     ),
+    policyFilePath: env.MAP_POLICY_PATH,
+    approvalWebhookUrl: env.MAP_APPROVAL_WEBHOOK_URL,
+    serverBaseUrl: env.MAP_SERVER_BASE_URL,
   };
 }

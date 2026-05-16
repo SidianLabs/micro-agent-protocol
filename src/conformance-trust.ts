@@ -5,7 +5,7 @@ import {
   verifyTrustBundleSignature,
 } from "./security/signing.js";
 import { createMapHandler } from "./server/index.js";
-import { createExampleAgents } from "../demo/agents/index.js";
+import { createExampleAgents } from "./fixtures/agents.js";
 
 interface DispatchResponse {
   statusCode: number;

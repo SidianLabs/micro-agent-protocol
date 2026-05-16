@@ -1,5 +1,5 @@
 {
-  "name": "@sidianlabs/map-sdk",
+  "name": "@sidianlabs/map-client",
   "version": "2026.05.14",
   "description": "Official TypeScript/Node.js SDK for Micro Agent Protocol (MAP)",
   "license": "Apache-2.0",
@@ -38,8 +38,20 @@
       "types": "./dist/transport/index.d.ts"
     },
     "./signing": {
-      "import": "./dist/signing/index.js",
-      "types": "./dist/signing/index.d.ts"
+      "import": "./dist/signing.js",
+      "types": "./dist/signing.d.ts"
+    },
+    "./webhooks": {
+      "import": "./dist/webhooks/index.js",
+      "types": "./dist/webhooks/index.d.ts"
+    },
+    "./observability": {
+      "import": "./dist/observability/index.js",
+      "types": "./dist/observability/index.d.ts"
+    },
+    "./storage": {
+      "import": "./dist/storage/index.js",
+      "types": "./dist/storage/index.d.ts"
     }
   },
   "files": [
@@ -58,21 +70,6 @@
     "lint": "eslint src --ext .ts",
     "prepublishOnly": "npm run build"
   },
-  "keywords": [
-    "map",
-    "micro-agent-protocol",
-    "ai",
-    "agents",
-    "delegation",
-    "policy"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/SidianLabs/micro-agent-protocol.git"
-  },
-  "bugs": {
-    "url": "https://github.com/SidianLabs/micro-agent-protocol/issues"
-  },
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1"
@@ -84,10 +81,6 @@
     "eslint": "^9.0.0",
     "typescript": "^5.6.0"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "sideEffects": false,
-  "module": "./dist/index.js",
-  "type": "module"
+  "module": "./dist/index.js"
 }

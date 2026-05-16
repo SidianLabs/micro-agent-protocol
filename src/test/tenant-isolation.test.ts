@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { createMapHandler } from "../server.js";
-import { createExampleAgents } from "../../demo/agents/index.js";
+import { createExampleAgents } from "../fixtures/agents.js";
 import type { MapHttpServerOptions } from "../server.js";
 
 // ── HTTP Test Helpers (mirrors server.test.ts) ───────────────────────────────

@@ -7,9 +7,10 @@
  * Route dispatch order:
  *  1. Read routes   (handled by read-routes.ts)
  *  2. Admin routes  (handled by admin-routes.ts)
- *  3. Task cancel   (inline)
- *  4. Mutation routes (handled by mutation-routes.ts)
- *  5. 404 fallback
+ *  3. Policy routes (handled by policy-routes.ts)
+ *  4. Task cancel   (inline)
+ *  5. Mutation routes (handled by mutation-routes.ts)
+ *  6. 404 fallback
  */
 
 import { createServer as createHttpsServer } from "node:https";
@@ -20,7 +21,7 @@ import { dirname } from "node:path";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 
 import { createReferenceApp } from "../app.js";
-import type { MicroAgent } from "../runtime/micro-agent.js";
+import { createExampleAgents } from "../fixtures/agents.js";
 import { resolveServerOptionsFromEnv } from "./config.js";
 import type { MapHttpServerOptions } from "./types.js";
 
@@ -107,6 +108,7 @@ import {
 import { handleReadRoutes } from "./read-routes.js";
 import { handleMutationRoutes } from "./mutation-routes.js";
 import { handleAdminRoutes } from "./admin-routes.js";
+import { handlePolicyRoutes } from "./policy-routes.js";
 
 // Re-export checkWritableFilePath for backward-compat
 export { checkWritableFilePath } from "./persistence.js";
@@ -134,7 +136,10 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     asyncQueueMaxQueueDepth: options.asyncQueueMaxQueueDepth,
     deadLetterStorePath: options.deadLetterStorePath,
     asyncQueueMaxDeadLetters: options.asyncQueueMaxDeadLetters,
-    agents: options.agents,
+    agents: options.agents ?? createExampleAgents(),
+    policyFilePath: options.policyFilePath,
+    approvalWebhookUrl: options.approvalWebhookUrl,
+    serverBaseUrl: options.serverBaseUrl,
   });
 
   // ── Configuration ──────────────────────────────────────────────────────
@@ -704,12 +709,15 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     }
 
     events.push(now);
-    persistRateLimitState(
-      options.rateLimitStatePath,
-      rateLimitWindowMs,
-      globalRateLimitEvents,
-      tenantRateLimitEvents,
-    );
+    mutated = true;
+    if (mutated) {
+      persistRateLimitState(
+        options.rateLimitStatePath,
+        rateLimitWindowMs,
+        globalRateLimitEvents,
+        tenantRateLimitEvents,
+      );
+    }
     return { allowed: true, retryAfterMs: 0 };
   }
 
@@ -1009,7 +1017,21 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
       });
       if (adminRouteHandled) return;
 
-      // ── 3. Task cancellation ──────────────────────────────────────────
+      // ── 3. Policy routes ──────────────────────────────────────────────
+      const policyRouteHandled = await handlePolicyRoutes({
+        req,
+        res,
+        requestId,
+        app,
+        readJsonBody,
+        sendJson,
+        sendError,
+        recordAuditEvent,
+        policyFilePath: options.policyFilePath,
+      });
+      if (policyRouteHandled) return;
+
+      // ── 4. Task cancellation ──────────────────────────────────────────
       if (
         req.method === "POST" &&
         req.url?.startsWith("/tasks/") &&
@@ -1172,10 +1194,14 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
                                           "Task lifecycle invariant violated",
                                         )
                                       ? "invalid_request"
-                                      : originalMessage.includes(
-                                            "Negotiation delivery mode conflicts",
-                                          )
-                                        ? "invalid_request"
+                      : originalMessage.includes(
+                            "No adapter for capability",
+                          )
+                            ? "invalid_request"
+                            : originalMessage.includes(
+                                  "Negotiation delivery mode conflicts",
+                                )
+                              ? "invalid_request"
                                         : originalMessage.includes(
                                               "requires approval",
                                             )

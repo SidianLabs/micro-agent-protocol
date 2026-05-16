@@ -1,0 +1,18 @@
+{
+  "receipt_id": "receipt_abc",
+  "task_id": "task_123",
+  "agent_id": "payment-agent-v1",
+  "action_taken": "payment.execute",
+  "resource_touched": "vendor_abc",
+  "policy_checks": [
+    "vendor_approved",
+    "invoice_matched",
+    "amount_within_threshold"
+  ],
+  "approval_used": "approval_998",
+  "timestamp": "2026-03-19T17:55:10Z",
+  "result_hash": "sha256:payment-result-demo",
+  "requested_schema_version": "1.0.0",
+  "executed_schema_version": "1.1.0",
+  "signature": "sig_demo_receipt"
+}

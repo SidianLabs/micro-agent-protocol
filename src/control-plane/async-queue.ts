@@ -72,6 +72,7 @@ export interface AsyncQueueStats {
   max_queue_depth: number;
   dead_letter_count: number;
   oldest_dead_letter_age_ms: number | null;
+  pending_retry: number;
 }
 
 export class AsyncTaskQueue {
@@ -114,6 +115,7 @@ export class AsyncTaskQueue {
   private processing = false;
   private inflight = 0;
   private readonly inflightByTenant = new Map<string, number>();
+  private pendingRetry = 0;
   private readonly tenantQuota: Map<string, number> = new Map();
 
   constructor(options: AsyncTaskQueueOptions = {}) {
@@ -161,7 +163,7 @@ export class AsyncTaskQueue {
   }
 
   hasCapacity(): boolean {
-    return this.queue.length < this.maxQueueDepth;
+    return this.inflight + this.queue.length + this.pendingRetry < this.maxConcurrent + this.maxQueueDepth;
   }
 
   listDeadLetters(): DeadLetterRecord[] {
@@ -240,13 +242,14 @@ export class AsyncTaskQueue {
 
     return {
       queue_depth: this.queue.length,
-      processing: this.processing || this.inflight > 0 || this.queue.length > 0,
+      processing: this.processing || this.inflight > 0 || this.queue.length > 0 || this.pendingRetry > 0,
       inflight: this.inflight,
       max_concurrent: this.maxConcurrent,
       max_concurrent_per_tenant: this.maxConcurrentPerTenant ?? null,
       max_queue_depth: this.maxQueueDepth,
       dead_letter_count: this.deadLetters.length,
       oldest_dead_letter_age_ms: oldestAgeMs,
+      pending_retry: this.pendingRetry,
     };
   }
 
@@ -369,6 +372,7 @@ export class AsyncTaskQueue {
     this.leasedJobs.set(job.taskId, Date.now());
 
     void (async () => {
+      let shouldRetry = false;
       try {
         // Exactly-once guard: check if this effect has already been completed.
         const effectId = job.idempotencyToken ?? `effect:${job.taskId}`;
@@ -396,12 +400,42 @@ export class AsyncTaskQueue {
           error instanceof Error ? error.message : "Async queue job failed.";
         const effectId = job.idempotencyToken ?? `effect:${job.taskId}`;
         if (job.attempt < this.maxAttempts) {
+          shouldRetry = true;
           // Clear the exactly-once guard so the retry can execute.
           this.completedEffects.delete(effectId);
-          this.requeue({
-            ...job,
-            attempt: job.attempt + 1,
-          });
+          // Release inflight slot but track as pending retry (counts against capacity)
+          this.finishJob(tenantKey, job.taskId);
+          this.pendingRetry++;
+          const baseDelay = Math.min(
+            this.maxRetryDelayMs,
+            this.retryDelayMs * 2 ** (job.attempt - 1),
+          );
+          const jitterMultiplier = 1 + this.jitterDelta();
+          const retryDelay = Math.max(1, Math.round(baseDelay * jitterMultiplier));
+          setTimeout(() => {
+            this.pendingRetry--;
+            if (this.queue.length >= this.maxQueueDepth) {
+              const record: DeadLetterRecord = {
+                task_id: job.taskId,
+                tenant_id: job.tenantId,
+                attempts: job.attempt + 1,
+                error: "Queue capacity reached while retrying job.",
+                timestamp: new Date().toISOString(),
+              };
+              this.deadLetters.push(record);
+              this.trimDeadLetters();
+              this.persistDeadLetters();
+              job.onDeadLetter(record);
+              this.quarantineJob(
+                job.taskId,
+                `Queue full during retry: ${message}`,
+                job.tenantId,
+              );
+              return;
+            }
+            this.queue.push({ ...job, attempt: job.attempt + 1 });
+            this.kickoff();
+          }, retryDelay);
         } else {
           const record: DeadLetterRecord = {
             task_id: job.taskId,
@@ -437,7 +471,9 @@ export class AsyncTaskQueue {
           this.deadLetterCallbacks.set(deadLetterMessage.id, job.onDeadLetter);
         }
       } finally {
-        this.finishJob(tenantKey, job.taskId);
+        if (!shouldRetry) {
+          this.finishJob(tenantKey, job.taskId);
+        }
       }
     })();
   }

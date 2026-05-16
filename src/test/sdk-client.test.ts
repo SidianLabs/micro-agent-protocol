@@ -7,7 +7,7 @@ import {
   type MapClientRequest,
   type MapClientTransport,
 } from "../sdk/client.js";
-import { createExampleAgents } from "../../demo/agents/index.js";
+import { createExampleAgents } from "../fixtures/agents.js";
 
 class MockResponse {
   statusCode = 200;

@@ -41,6 +41,7 @@ interface MutationRouteContext {
   options: {
     enforceSignedRequests?: boolean;
     enforceBearerAuth?: boolean;
+    requireTenant?: boolean;
   };
   app: {
     orchestrator: {
@@ -95,7 +96,7 @@ interface MutationRouteContext {
     retryAfterMs?: number;
   };
   /** Deterministic overload backpressure thresholds. */
-  asyncQueueMaxQueueDepth: number;
+    asyncQueueMaxQueueDepth: number;
   /** Returns the current async queue depth. */
   getAsyncQueueDepth(): number;
   recordAuditEvent(event: {
@@ -224,6 +225,35 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
 
     const payload = ctx.validateDispatchRequest(body.parsed);
     routeTargetAgent = payload.envelope.target_agent;
+    routeTenantId = extractTenantId(payload);
+
+    if (ctx.options.requireTenant === true && !routeTenantId) {
+      const message = "tenant_id is required when strict tenant mode is enabled";
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "policy_denied",
+        message,
+        method: req.method,
+        route: "/dispatch",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        400,
+        requestId,
+        {
+          code: "policy_denied",
+          message,
+          retryable: false,
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
     if (ctx.isAgentDisabled(payload.envelope.target_agent)) {
       const disabledInfo = ctx.disabledAgents.get(
         payload.envelope.target_agent,
@@ -498,6 +528,35 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
 
     const payload = ctx.validateApprovalRequest(body.parsed);
     routeTargetAgent = payload.envelope.target_agent;
+    routeTenantId = extractTenantId(payload);
+
+    if (ctx.options.requireTenant === true && !routeTenantId) {
+      const message = "tenant_id is required when strict tenant mode is enabled";
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "policy_denied",
+        message,
+        method: req.method,
+        route: "/approve",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        400,
+        requestId,
+        {
+          code: "policy_denied",
+          message,
+          retryable: false,
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
     if (ctx.isAgentDisabled(payload.envelope.target_agent)) {
       const disabledInfo = ctx.disabledAgents.get(
         payload.envelope.target_agent,

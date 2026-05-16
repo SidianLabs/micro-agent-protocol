@@ -59,6 +59,13 @@ interface OAuth2TokenResult {
   scopes?: string[];
 }
 
+interface CachedJwksEntry {
+  keys: JsonWebKey[];
+  expiresAt: number;
+}
+
+const jwksCache = new Map<string, CachedJwksEntry>();
+
 // ─── Signed request auth ──────────────────────────────────────────────────────
 
 export function getSignedRequestError(
@@ -236,9 +243,11 @@ export function getBearerTokenError(
     return null;
   }
 
-  // No token validation method is configured — accept any Bearer token.
-  // In production, at least MAP_OAUTH_STATIC_TOKEN or MAP_OAUTH_JWKS_URL should be set.
-  return null;
+  return {
+    code: "invalid_auth",
+    message:
+      "OAuth 2.0 Bearer validation is not configured. Set MAP_OAUTH_STATIC_TOKEN or MAP_OAUTH_JWKS_URL.",
+  };
 }
 
 // ─── Admin token auth ─────────────────────────────────────────────────────────
@@ -308,6 +317,12 @@ export async function getAdminTokenError(
  * @returns The array of JSON Web Keys from the JWKS endpoint
  */
 export async function getOAuth2Jwks(url: string): Promise<JsonWebKey[]> {
+  const now = Date.now();
+  const cached = jwksCache.get(url);
+  if (cached && cached.expiresAt > now) {
+    return cached.keys;
+  }
+
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
@@ -318,6 +333,13 @@ export async function getOAuth2Jwks(url: string): Promise<JsonWebKey[]> {
   if (!jwks || !Array.isArray(jwks.keys)) {
     throw new Error(`Invalid JWKS response from ${url}: missing "keys" array`);
   }
+  const cacheControl = response.headers.get("cache-control") ?? "";
+  const maxAgeMatch = cacheControl.match(/max-age=(\d+)/i);
+  const ttlMs = maxAgeMatch ? Number(maxAgeMatch[1]) * 1000 : 5 * 60 * 1000;
+  jwksCache.set(url, {
+    keys: jwks.keys,
+    expiresAt: now + ttlMs,
+  });
   return jwks.keys;
 }
 
@@ -350,11 +372,15 @@ export async function validateOAuth2Token(
     return { valid: false };
   }
 
+  const jwksUrl = process.env.MAP_OAUTH_JWKS_URL;
+  if (!jwksUrl || jwksUrl.trim().length === 0) {
+    return { valid: false };
+  }
+
   // --- JWT validation mode ---
   const parts = token.split(".");
   if (parts.length !== 3) {
-    // Not a JWT — if no static token is configured, accept any opaque token
-    return { valid: true };
+    return { valid: false };
   }
 
   let header: Record<string, unknown>;
@@ -411,42 +437,28 @@ export async function validateOAuth2Token(
   }
 
   // If JWKS URL is configured, attempt signature verification
-  const jwksUrl = process.env.MAP_OAUTH_JWKS_URL;
-  if (jwksUrl) {
-    try {
-      const keys = await getOAuth2Jwks(jwksUrl);
-      const kid = typeof header.kid === "string" ? header.kid : undefined;
+  try {
+    const keys = await getOAuth2Jwks(jwksUrl);
+    const kid = typeof header.kid === "string" ? header.kid : undefined;
+    const matchingKey = kid
+      ? keys.find((key) => key.kid === kid)
+      : keys[0];
 
-      // Find the matching key
-      let matchingKey: JsonWebKey | undefined;
-      if (kid) {
-        matchingKey = keys.find((key) => key.kid === kid);
-      }
-      if (!matchingKey) {
-        matchingKey = keys[0];
-      }
-
-      if (matchingKey) {
-        // Use native Web Crypto API to verify the signature
-        // NOTE: For production use, consider using the `jose` library which
-        // handles JWKS fetching, caching, and JWT validation more robustly.
-        const isVerified = await verifyJwtSignature(
-          parts[0],
-          parts[1],
-          parts[2],
-          matchingKey,
-        );
-        if (!isVerified) {
-          return { valid: false };
-        }
-      }
-    } catch {
-      // If JWKS fetch fails and MAP_OAUTH_JWKS_REQUIRED is set, reject
-      if (process.env.MAP_OAUTH_JWKS_REQUIRED === "true") {
-        return { valid: false };
-      }
-      // Otherwise proceed without signature verification (claims-only validation)
+    if (!matchingKey) {
+      return { valid: false };
     }
+
+    const isVerified = await verifyJwtSignature(
+      parts[0],
+      parts[1],
+      parts[2],
+      matchingKey,
+    );
+    if (!isVerified) {
+      return { valid: false };
+    }
+  } catch {
+    return { valid: false };
   }
 
   // Extract subject and scopes
@@ -500,7 +512,7 @@ async function verifyJwtSignature(
     );
 
     return await crypto.subtle.verify(
-      algorithm.name,
+      algorithm,
       key,
       signature,
       new TextEncoder().encode(signingInput),
@@ -619,8 +631,7 @@ export async function authMiddleware(
 
     const bearerError = getBearerTokenError(req);
     if (bearerError) {
-      // If bearer was explicitly enforced, return error
-      if (enforceBearerAuth) {
+      if (enforceBearerAuth || bearerToken) {
         return {
           authenticated: false,
           error: {
@@ -630,9 +641,6 @@ export async function authMiddleware(
           },
         };
       }
-    } else if (bearerToken) {
-      // No error and we have a bearer token → authenticated
-      return { authenticated: true, subject: "bearer:authenticated" };
     }
   }
 
