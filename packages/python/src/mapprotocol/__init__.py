@@ -40,6 +40,7 @@ from mapprotocol.signing import (
     RSASigner,
     create_signer,
 )
+from mapprotocol.signing_http import HTTPSigner
 from mapprotocol.storage import (
     FileReceiptStoreAdapter,
     FileStorage,
@@ -142,6 +143,7 @@ __all__ = [
     # Signing
     "HMACSigner",
     "RSASigner",
+    "HTTPSigner",
     "create_signer",
     # Storage
     "InMemoryStorage",

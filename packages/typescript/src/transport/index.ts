@@ -14,3 +14,14 @@ export {
   type BatchDispatchError,
   createBatchDispatchResult,
 } from './websocket.js';
+
+export {
+  authMiddleware,
+  retryMiddleware,
+  idempotencyMiddleware,
+  loggingMiddleware,
+  metricsMiddleware,
+  type RetryMiddlewareOptions,
+  type IdempotencyMiddlewareOptions,
+  type MetricsMiddlewareOptions,
+} from './middleware.js';

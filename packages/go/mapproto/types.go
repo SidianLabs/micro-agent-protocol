@@ -503,6 +503,7 @@ type MapSignedRequestHeaders struct {
 	XMapKeyID            string `json:"x-map-key-id"`
 	XMapTimestamp        string `json:"x-map-timestamp"`
 	XMapRequestSignature string `json:"x-map-request-signature"`
+	XMapNonce            string `json:"x-map-nonce"`
 }
 
 // MapResponse represents a generic MAP response

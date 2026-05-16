@@ -1,0 +1,17 @@
+{
+  "task_id": "task_db_001",
+  "status": "completed",
+  "summary": "Returned summarized incident metrics for the payments service in staging.",
+  "structured_output": {
+    "service": "payments",
+    "environment": "staging",
+    "open_incidents": 2,
+    "highest_severity": "high"
+  },
+  "receipt_ref": "receipt_db_001",
+  "redactions_applied": [
+    "raw_rows",
+    "sensitive_columns"
+  ],
+  "followup_required": false
+}

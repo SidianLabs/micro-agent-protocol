@@ -1,0 +1,126 @@
+{
+  "policies": [
+    {
+      "policy_id": "policy_allow_all",
+      "description": "Allow all requests",
+      "effect": "allow",
+      "conditions": {}
+    },
+    {
+      "policy_id": "policy_deny_high_risk",
+      "description": "Deny high risk requests",
+      "effect": "deny",
+      "conditions": {
+        "risk_class": ["high", "critical"]
+      }
+    },
+    {
+      "policy_id": "policy_approval_for_audit",
+      "description": "Require approval for audit exports",
+      "effect": "approval_required",
+      "conditions": {
+        "capability": ["audit.export"]
+      }
+    },
+    {
+      "policy_id": "policy_allow_tenant_a",
+      "description": "Allow only tenant_A users",
+      "effect": "allow",
+      "conditions": {
+        "tenant_id": ["tenant_A"]
+      }
+    },
+    {
+      "policy_id": "policy_deny_production",
+      "description": "Deny production environment for staging agent",
+      "effect": "deny",
+      "conditions": {
+        "environment": "production",
+        "target_agent_pattern": ".*-staging$"
+      }
+    },
+    {
+      "policy_id": "policy_approval_for_notification",
+      "description": "Require approval for notification.send",
+      "effect": "approval_required",
+      "conditions": {
+        "capability": ["notification.send"]
+      }
+    },
+    {
+      "policy_id": "policy_allow_low_risk",
+      "description": "Allow only low risk operations",
+      "effect": "allow",
+      "conditions": {
+        "risk_class": ["low"]
+      }
+    },
+    {
+      "policy_id": "policy_deny_medium_risk",
+      "description": "Deny medium risk operations without approval",
+      "effect": "deny",
+      "conditions": {
+        "risk_class": ["medium"]
+      }
+    }
+  ],
+  "policy_evaluation_scenarios": [
+    {
+      "scenario": "low_risk_db_read_allowed",
+      "request": {
+        "capability": "db.read.aggregate",
+        "envelope": {
+          "risk_class": "low"
+        }
+      },
+      "policy_id": "policy_allow_low_risk",
+      "expected_effect": "allow"
+    },
+    {
+      "scenario": "high_risk_db_read_denied",
+      "request": {
+        "capability": "db.read.aggregate",
+        "envelope": {
+          "risk_class": "high"
+        }
+      },
+      "policy_id": "policy_allow_low_risk",
+      "expected_effect": "deny"
+    },
+    {
+      "scenario": "audit_export_requires_approval",
+      "request": {
+        "capability": "audit.export",
+        "envelope": {
+          "risk_class": "medium"
+        }
+      },
+      "policy_id": "policy_approval_for_audit",
+      "expected_effect": "approval_required"
+    },
+    {
+      "scenario": "tenant_a_allowed",
+      "request": {
+        "envelope": {
+          "requester_identity": {
+            "tenant_id": "tenant_A"
+          }
+        }
+      },
+      "policy_id": "policy_allow_tenant_a",
+      "expected_effect": "allow"
+    },
+    {
+      "scenario": "tenant_b_denied",
+      "request": {
+        "envelope": {
+          "requester_identity": {
+            "tenant_id": "tenant_B"
+          }
+        }
+      },
+      "policy_id": "policy_allow_tenant_a",
+      "expected_effect": "deny"
+    }
+  ]
+}

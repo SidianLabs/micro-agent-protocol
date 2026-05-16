@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ECP Intent Schema",
+  "type": "object",
+  "required": ["capability", "input", "requester"],
+  "properties": {
+    "capability": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)+(:[a-z0-9_-]+)?$",
+      "description": "The capability to execute. Format: 'domain.action[:version]' or multi-segment names like 'db.read.aggregate'."
+    },
+    "input": {
+      "type": "object",
+      "description": "Input parameters for the capability. Schema varies by capability."
+    },
+    "requester": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["user", "service"]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tenant_id": {
+          "type": "string"
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "environment": {
+          "type": "string",
+          "enum": ["development", "staging", "production"]
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_amount": {
+          "type": "number"
+        },
+        "resource_id": {
+          "type": "string"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "intent_id": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "webhook_url": {
+          "type": "string"
+        }
+      }
+    },
+    "risk_class": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    }
+  }
+}

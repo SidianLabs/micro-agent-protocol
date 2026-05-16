@@ -38,5 +38,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Key discovery with trust metadata
 - Signature verification for audit exports
 
-[Unreleased]: https://github.com/mapprotocol/map/compare/v1.0.0-rc1...HEAD
-[1.0.0-rc1]: https://github.com/mapprotocol/map/releases/tag/v1.0.0-rc1
+[Unreleased]: https://github.com/SidianLabs/micro-agent-protocol/compare/v1.0.0-rc1...HEAD
+[1.0.0-rc1]: https://github.com/SidianLabs/micro-agent-protocol/releases/tag/v1.0.0-rc1

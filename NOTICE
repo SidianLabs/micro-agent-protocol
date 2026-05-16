@@ -1,0 +1,62 @@
+MAP Protocol
+Copyright 2024 MAP Protocol Authors
+
+This product includes software developed by MAP Protocol Authors.
+
+This product includes code and libraries from the following open source projects:
+
+TypeScript/JavaScript:
+  - Node.js (https://nodejs.org/) - MIT License
+  - TypeScript (https://www.typescriptlang.org/) - Apache 2.0 License
+
+Python:
+  - Python (https://www.python.org/) - PSF License
+
+Go:
+  - Go (https://go.dev/) - BSD 3-Clause License
+
+Documentation:
+  - Docusaurus (https://docusaurus.io/) - MIT License
+
+For full licensing information regarding third-party dependencies, please refer
+to the respective project repositories and their license files.
+
+================================================================================
+
+Third-Party Licenses Summary:
+
+MIT License:
+  - Node.js core components
+  - Docusaurus
+  - Various npm packages (see package.json files)
+
+Apache 2.0 License:
+  - TypeScript compiler
+  - Various Apache 2.0 licensed libraries
+
+PSF License:
+  - Python standard library
+
+BSD 3-Clause License:
+  - Go standard library
+  - Various Go packages
+
+================================================================================
+
+Apache 2.0 License Terms:
+
+The full text of the Apache License Version 2.0 is included in the LICENSE file
+in the root directory of this project.
+
+================================================================================
+
+Contributions:
+
+Third-party contributions to this project are governed by the Apache License,
+Version 2.0. By submitting a contribution, you agree that your contribution
+will be licensed under the Apache License, Version 2.0.
+
+================================================================================
+
+For questions regarding this notice, please contact:
+notices@map-protocol.dev

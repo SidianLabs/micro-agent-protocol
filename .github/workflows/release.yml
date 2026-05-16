@@ -1,0 +1,491 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'                      # Full release: publish all SDKs
+      - 'sdk/typescript/v*'       # TypeScript SDK only
+      - 'sdk/python/v*'           # Python SDK only
+      - 'sdk/go/v*'               # Go SDK only
+      - 'docs/v*'                 # Documentation only
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+      scope:
+        description: 'Release scope'
+        required: true
+        type: choice
+        options:
+          - all
+          - typescript
+          - python
+          - go
+          - reference
+          - docs
+        default: 'all'
+
+env:
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.11'
+  GO_VERSION: '1.22'
+
+jobs:
+  # ===========================================================================
+  # Detect release scope from tag
+  # ===========================================================================
+  detect:
+    name: Detect Release Scope
+    runs-on: ubuntu-latest
+    outputs:
+      scope: ${{ steps.detect.outputs.scope }}
+      version: ${{ steps.detect.outputs.version }}
+      is_full: ${{ steps.detect.outputs.is_full }}
+    steps:
+      - name: Detect
+        id: detect
+        run: |
+          REF=${{ github.ref_name }}
+
+          if [[ "$REF" == v* ]]; then
+            echo "scope=all" >> $GITHUB_OUTPUT
+            echo "version=${REF#v}" >> $GITHUB_OUTPUT
+            echo "is_full=true" >> $GITHUB_OUTPUT
+          elif [[ "$REF" == sdk/typescript/v* ]]; then
+            echo "scope=typescript" >> $GITHUB_OUTPUT
+            echo "version=${REF#sdk/typescript/v}" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          elif [[ "$REF" == sdk/python/v* ]]; then
+            echo "scope=python" >> $GITHUB_OUTPUT
+            echo "version=${REF#sdk/python/v}" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          elif [[ "$REF" == sdk/go/v* ]]; then
+            echo "scope=go" >> $GITHUB_OUTPUT
+            echo "version=${REF#sdk/go/v}" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          elif [[ "$REF" == docs/v* ]]; then
+            echo "scope=docs" >> $GITHUB_OUTPUT
+            echo "version=${REF#docs/v}" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          else
+            echo "scope=manual" >> $GITHUB_OUTPUT
+            echo "version=${{ github.event.inputs.version || '0.0.0' }}" >> $GITHUB_OUTPUT
+            echo "is_full=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ===========================================================================
+  # Build All (only for full releases)
+  # ===========================================================================
+  build:
+    name: Build All Packages
+    runs-on: ubuntu-latest
+    needs: [detect]
+    if: needs.detect.outputs.is_full == 'true'
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build reference implementation
+        run: npm run build
+
+      - name: Build TypeScript SDK
+        run: |
+          cd packages/typescript
+          npm ci
+          npm run build
+        cache:
+          key: typescript-${{ runner.os }}-${{ hashFiles('packages/typescript/package-lock.json') }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: packages/python/pyproject.toml
+
+      - name: Build Python package
+        run: |
+          cd packages/python
+          pip install build
+          python -m build
+          ls dist/
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: packages/go/go.sum
+
+      - name: Build Go package
+        run: |
+          cd packages/go
+          go build ./...
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            packages/typescript/dist/
+            packages/python/dist/
+            packages/go/
+          retention-days: 2
+
+  # ===========================================================================
+  # TypeScript SDK — npm (@sidianlabs/map-client)
+  # ===========================================================================
+  publish-typescript:
+    name: Publish TypeScript SDK
+    runs-on: ubuntu-latest
+    needs: [detect]
+    if: needs.detect.outputs.scope == 'typescript' || needs.detect.outputs.scope == 'all'
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@sidianlabs/map-client
+    defaults:
+      run:
+        working-directory: packages/typescript
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        if: needs.detect.outputs.is_full == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages/typescript/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          cache-dependency-path: packages/typescript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create SDK tag
+        if: github.ref_name == 'v*'
+        run: |
+          TAG="sdk/typescript/${{ needs.detect.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+  # ===========================================================================
+  # Python SDK — PyPI (mapprotocol)
+  # ===========================================================================
+  publish-python:
+    name: Publish Python SDK
+    runs-on: ubuntu-latest
+    needs: [detect]
+    if: needs.detect.outputs.scope == 'python' || needs.detect.outputs.scope == 'all'
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mapprotocol/
+    defaults:
+      run:
+        working-directory: packages/python
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        if: needs.detect.outputs.is_full == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages/python/
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: packages/python/pyproject.toml
+
+      - name: Install build dependencies
+        run: pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Create SDK tag
+        if: github.ref_name == 'v*'
+        run: |
+          TAG="sdk/python/${{ needs.detect.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+  # ===========================================================================
+  # Go SDK — pkg.go.dev (github.com/SidianLabs/micro-agent-protocol)
+  # ===========================================================================
+  publish-go:
+    name: Publish Go SDK
+    runs-on: ubuntu-latest
+    needs: [detect]
+    if: needs.detect.outputs.scope == 'go' || needs.detect.outputs.scope == 'all'
+    defaults:
+      run:
+        working-directory: packages/go
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        if: needs.detect.outputs.is_full == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages/go/
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: packages/go/go.sum
+
+      - name: Run tests
+        run: go test -race ./...
+
+      - name: Create version tag
+        if: github.ref_name == 'v*'
+        run: |
+          TAG="v${{ needs.detect.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Verify module is proxy-friendly
+        run: |
+          go list -m github.com/SidianLabs/micro-agent-protocol@v${{ needs.detect.outputs.version }}
+          echo "Go module is available on proxy"
+
+  # ===========================================================================
+  # Documentation — GitHub Pages (via docs/ build)
+  # ===========================================================================
+  publish-docs:
+    name: Publish Documentation
+    runs-on: ubuntu-latest
+    needs: [detect]
+    if: needs.detect.outputs.scope == 'docs' || needs.detect.outputs.scope == 'all'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    defaults:
+      run:
+        working-directory: documentation/internal/docs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: documentation/internal/docs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Copy OpenAPI spec
+        run: |
+          if [ -f ../../schemas/openapi.yaml ]; then
+            cp ../../schemas/openapi.yaml static/api/openapi.yaml
+          fi
+
+      - name: Build Docusaurus
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: documentation/internal/docs/build
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Create docs tag
+        if: github.ref_name == 'v*'
+        run: |
+          TAG="docs/${{ needs.detect.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+  # ===========================================================================
+  # Reference Implementation — Docker Hub
+  # ===========================================================================
+  publish-docker:
+    name: Publish Docker Image
+    runs-on: ubuntu-latest
+    needs: [detect]
+    if: needs.detect.outputs.scope == 'reference' || needs.detect.outputs.scope == 'all'
+    environment:
+      name: docker
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: sidianlabs/map-reference
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref_name == 'v*' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ===========================================================================
+  # Create GitHub Release
+  # ===========================================================================
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [detect, publish-typescript, publish-python, publish-go, publish-docs]
+    if: github.ref_name == 'v*' || github.event.inputs.version != ''
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION=${{ needs.detect.outputs.version }}
+          DATE=$(date -u +%Y-%m-%d)
+
+          cat > release-notes.md << 'RELEASENOTES'
+          # Release $VERSION
+
+          **Released**: $DATE
+
+          ## Installation
+
+          ### TypeScript
+          ```bash
+          npm install @sidianlabs/map-client@$VERSION
+          ```
+
+          ### Python
+          ```bash
+          pip install mapprotocol==$VERSION
+          ```
+
+          ### Go
+          ```bash
+          go get github.com/SidianLabs/micro-agent-protocol@v$VERSION
+          ```
+
+          ### Docker
+          ```bash
+          docker pull sidianlabs/map-reference:$VERSION
+          docker pull sidianlabs/map-reference:latest
+          ```
+
+          ### Reference Server
+          ```bash
+          docker pull sidianlabs/map-reference:$VERSION
+          ```
+
+          See the [CHANGELOG](./CHANGELOG.md) for full details.
+          RELEASENOTES
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.detect.outputs.version }}
+          release_name: MAP v${{ needs.detect.outputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(needs.detect.outputs.version, 'alpha') || contains(needs.detect.outputs.version, 'beta') || contains(needs.detect.outputs.version, 'rc') }}
+          generate_release_notes: true
+
+  # ===========================================================================
+  # Success summary
+  # ===========================================================================
+  success:
+    name: Release Complete
+    runs-on: ubuntu-latest
+    needs: [create-release]
+    if: success()
+
+    steps:
+      - name: Summary
+        run: |
+          echo "=============================================="
+          echo "       RELEASE COMPLETED SUCCESSFULLY"
+          echo "=============================================="
+          echo "Version: ${{ needs.detect.outputs.version }}"
+          echo "Scope: ${{ needs.detect.outputs.scope }}"
+          echo ""
+          echo "Published:"
+          echo "  - npm:   @sidianlabs/map-client@${{ needs.detect.outputs.version }}"
+          echo "  - PyPI:  mapprotocol==${{ needs.detect.outputs.version }}"
+          echo "  - Go:    github.com/SidianLabs/micro-agent-protocol@v${{ needs.detect.outputs.version }}"
+          echo "  - Docker: sidianlabs/map-reference:${{ needs.detect.outputs.version }}"
+          echo "=============================================="

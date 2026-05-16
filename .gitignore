@@ -33,18 +33,20 @@ coverage/
 *.sublime-project
 
 # Project-specific
-docs/
-examples/
-.github/
 *.lock
-AGENTS.md
-ANTITRUST.md
-CLAUDE.md
-CODE_OF_CONDUCT.md
-CONTRIBUTING.md
-GOVERNANCE.md
-NOTICE
-SECURITY.md
-copyright-header-template.txt
+package-lock.json
 references/
-conformance/
+session-update.md
+ECP-DESIGN.md
+documentation/
+
+# Runtime data
+.map/
+demo
+
+# ECP (do not ignore - these are primary)
+# ecp/
+
+# Legacy MAP (archived, do not modify)
+# map/
+map-test

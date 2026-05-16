@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/paginated-result.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/paginated-result.schema.json",
   "title": "MAP Paginated Result",
   "type": "object",
   "additionalProperties": false,

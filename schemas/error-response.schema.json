@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/error-response.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/error-response.schema.json",
   "title": "MAP Error Response",
   "type": "object",
   "additionalProperties": false,

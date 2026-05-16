@@ -39,7 +39,7 @@ type ClientOption func(*ClientOptions)
 // NewClient creates a new MAP client with options
 func NewClient(opts ...ClientOption) (*Client, error) {
 	options := &ClientOptions{
-		BaseURL:   "https://api.mapprotocol.io",
+		BaseURL:   "http://localhost:8787",
 		Timeout:   30 * time.Second,
 		Transport: NewHTTPTransport(nil),
 	}
@@ -130,13 +130,19 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body inter
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "mapproto-go/"+Version)
 
-	if c.signer != nil && body != nil && bodyBytes != nil {
+	if c.signer != nil {
 		timestamp := GenerateTimestamp()
-		signature, err := c.signer.Sign(method, path, string(bodyBytes), timestamp)
+		bodyStr := ""
+		if bodyBytes != nil {
+			bodyStr = string(bodyBytes)
+		}
+		signature, err := c.signer.Sign(method, path, bodyStr, timestamp)
 		if err == nil {
-			req.Header.Set("X-Key-ID", c.signer.GetKeyID())
-			req.Header.Set("X-Timestamp", timestamp)
-			req.Header.Set("X-Request-Signature", signature)
+			req.Header.Set("X-Map-Auth-Scheme", "signed_request")
+			req.Header.Set("X-Map-Key-Id", c.signer.GetKeyID())
+			req.Header.Set("X-Map-Timestamp", timestamp)
+			req.Header.Set("X-Map-Request-Signature", signature)
+			req.Header.Set("X-Map-Nonce", GenerateNonce())
 		}
 	}
 
@@ -178,7 +184,7 @@ func (c *Client) parseResponse(resp *http.Response, result interface{}) error {
 
 // Dispatch submits a task for execution
 func (c *Client) Dispatch(ctx context.Context, req *DispatchRequest) (*InvokeResult, error) {
-	httpReq, err := c.newRequest(ctx, http.MethodPost, "/v1/tasks/dispatch", req)
+	httpReq, err := c.newRequest(ctx, http.MethodPost, "/dispatch", req)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +205,7 @@ func (c *Client) Dispatch(ctx context.Context, req *DispatchRequest) (*InvokeRes
 
 // Approve approves a task that requires approval
 func (c *Client) Approve(ctx context.Context, req *ApprovalRequest) (*InvokeResult, error) {
-	httpReq, err := c.newRequest(ctx, http.MethodPost, "/v1/tasks/approve", req)
+	httpReq, err := c.newRequest(ctx, http.MethodPost, "/approve", req)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +226,7 @@ func (c *Client) Approve(ctx context.Context, req *ApprovalRequest) (*InvokeResu
 
 // GetTask retrieves a task by ID
 func (c *Client) GetTask(ctx context.Context, taskID string, opts *GetTaskOptions) (*TaskRecord, error) {
-	path := "/v1/tasks/" + taskID
+	path := "/tasks/" + taskID
 
 	if opts != nil && opts.TenantID != "" {
 		path = path + "?tenant_id=" + url.QueryEscape(opts.TenantID)
@@ -251,7 +257,7 @@ func (c *Client) GetTask(ctx context.Context, taskID string, opts *GetTaskOption
 
 // ListTasks lists tasks with optional filters
 func (c *Client) ListTasks(ctx context.Context, opts *ListTasksOptions) (*PaginatedTasks, error) {
-	u := c.baseURL.JoinPath("/v1/tasks")
+	u := c.baseURL.JoinPath("/tasks")
 	q := u.Query()
 
 	if opts != nil {
@@ -298,7 +304,7 @@ func (c *Client) ListTasks(ctx context.Context, opts *ListTasksOptions) (*Pagina
 
 // ListAgents lists agents with optional filters
 func (c *Client) ListAgents(ctx context.Context, opts *ListAgentsOptions) (*PaginatedAgents, error) {
-	u := c.baseURL.JoinPath("/v1/agents")
+	u := c.baseURL.JoinPath("/agents")
 	q := u.Query()
 
 	if opts != nil {
@@ -342,7 +348,7 @@ func (c *Client) ListAgents(ctx context.Context, opts *ListAgentsOptions) (*Pagi
 
 // GetHealth retrieves the health status
 func (c *Client) GetHealth(ctx context.Context) (*HealthStatus, error) {
-	httpReq, err := c.newRequest(ctx, http.MethodGet, "/v1/health", nil)
+	httpReq, err := c.newRequest(ctx, http.MethodGet, "/health", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +369,7 @@ func (c *Client) GetHealth(ctx context.Context) (*HealthStatus, error) {
 
 // GetReceipt retrieves an execution receipt by ID
 func (c *Client) GetReceipt(ctx context.Context, receiptID string) (*ExecutionReceipt, error) {
-	httpReq, err := c.newRequest(ctx, http.MethodGet, "/v1/receipts/"+receiptID, nil)
+	httpReq, err := c.newRequest(ctx, http.MethodGet, "/receipts/"+receiptID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +394,7 @@ func (c *Client) GetReceipt(ctx context.Context, receiptID string) (*ExecutionRe
 
 // GetAgent retrieves an agent by ID
 func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentDescriptor, error) {
-	httpReq, err := c.newRequest(ctx, http.MethodGet, "/v1/agents/"+agentID, nil)
+	httpReq, err := c.newRequest(ctx, http.MethodGet, "/agents/"+agentID, nil)
 	if err != nil {
 		return nil, err
 	}

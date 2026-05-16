@@ -1,0 +1,31 @@
+{
+  "issuer": "map-policy-service",
+  "subject_agent": "payment-agent-v1",
+  "allowed_actions": [
+    "payment.execute"
+  ],
+  "resource_scope": {
+    "vendors": [
+      "vendor_abc"
+    ],
+    "currency": "INR"
+  },
+  "constraints": {
+    "common": {
+      "resource_id": "vendor_abc",
+      "max_amount": 4500,
+      "currency": "INR"
+    },
+    "domain": {
+      "invoice_id": "INV-223",
+      "approved_vendor_only": true
+    },
+    "expires_at": "2026-03-19T18:05:00Z"
+  },
+  "approval_reference": "approval_998",
+  "requester_identity": {
+    "type": "user",
+    "id": "user_42"
+  },
+  "signature": "sig_demo_token"
+}

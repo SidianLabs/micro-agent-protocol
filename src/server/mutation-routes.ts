@@ -1,0 +1,711 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+import {
+  getRequiredAuthScheme,
+  getSignedRequestError,
+  getBearerTokenError,
+  validateOAuth2Token,
+} from "./auth.js";
+import {
+  extractTargetAgent,
+  extractTenantId,
+  wantsSignedRequestAuth,
+} from "./utils.js";
+
+/**
+ * Deterministic overload backpressure thresholds.
+ * Gracefully degrades instead of crashing when the system is overloaded.
+ */
+const BACKPRESSURE = {
+  queue_warning: 0.7, // 70% queue full → warn
+  queue_critical: 0.9, // 90% queue full → reject new tasks
+  inflight_warning: 0.8, // 80% max concurrent → slow down
+  inflight_critical: 1.0, // 100% → reject
+};
+
+/** Helper to extract Bearer token from Authorization header. */
+function extractBearerToken(req: IncomingMessage): string | null {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader || typeof authHeader !== "string") return null;
+  const lowered = authHeader.toLowerCase();
+  if (!lowered.startsWith("bearer ")) return null;
+  const token = authHeader.slice(7).trim();
+  return token || null;
+}
+
+interface MutationRouteContext {
+  req: IncomingMessage;
+  res: ServerResponse;
+  requestId: string;
+  routeTargetAgent?: string;
+  routeTenantId?: string;
+  options: {
+    enforceSignedRequests?: boolean;
+    enforceBearerAuth?: boolean;
+    requireTenant?: boolean;
+  };
+  app: {
+    orchestrator: {
+      dispatch(
+        envelope: unknown,
+        capability: string,
+        requestedSchemaVersion?: string,
+        negotiation?: {
+          schema_version?: string;
+          delivery_mode?: "sync" | "async";
+        },
+      ): Promise<any>;
+      approve(payload: unknown): Promise<any>;
+    };
+  };
+  disabledAgents: Map<
+    string,
+    { disabled_at: string; disabled_by: string; reason?: string }
+  >;
+  disabledCapabilities: Map<
+    string,
+    Map<string, { disabled_at: string; disabled_by: string; reason?: string }>
+  >;
+  isAgentDisabled(agentId: string): boolean;
+  isCapabilityDisabled(agentId: string, capability: string): boolean;
+  readJsonBody(req: IncomingMessage): Promise<{ raw: string; parsed: unknown }>;
+  validateDispatchRequest(parsed: unknown): {
+    envelope: { target_agent: string; metadata?: Record<string, unknown> };
+    capability: string;
+    requested_schema_version?: string;
+    negotiation?: {
+      schema_version?: string;
+      delivery_mode?: "sync" | "async";
+    };
+  };
+  validateApprovalRequest(parsed: unknown): {
+    envelope: { target_agent: string; metadata?: Record<string, unknown> };
+    capability: string;
+    requested_schema_version?: string;
+    negotiation?: {
+      schema_version?: string;
+      delivery_mode?: "sync" | "async";
+    };
+  };
+  getEffectiveRevokedKeyIds(): Set<string>;
+  getBearerTokenError(
+    req: IncomingMessage,
+  ): { code: string; message: string } | null;
+  checkMutationRateLimit(tenantId?: string): {
+    allowed: boolean;
+    scope?: "global" | "tenant";
+    retryAfterMs?: number;
+  };
+  /** Deterministic overload backpressure thresholds. */
+    asyncQueueMaxQueueDepth: number;
+  /** Returns the current async queue depth. */
+  getAsyncQueueDepth(): number;
+  recordAuditEvent(event: {
+    timestamp: string;
+    request_id: string;
+    code: string;
+    message: string;
+    method: string;
+    route: string;
+    tenant_id?: string;
+    target_agent?: string;
+    subject?: string;
+  }): void;
+  recordCapabilityLatency(capability: string, durationMs: number): void;
+  sendJson(
+    res: ServerResponse,
+    statusCode: number,
+    body: unknown,
+    requestId: string,
+    tracking?: { ok: boolean; errorCode?: string; targetAgent?: string },
+    extraHeaders?: Record<string, string>,
+  ): void;
+  sendError(
+    res: ServerResponse,
+    statusCode: number,
+    requestId: string,
+    error: {
+      code: string;
+      message: string;
+      retryable: boolean;
+      details?: Record<string, unknown>;
+    },
+    targetAgent?: string,
+  ): void;
+}
+
+export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
+  handled: boolean;
+  routeTargetAgent?: string;
+  routeTenantId?: string;
+}> {
+  const { req, res, requestId } = ctx;
+
+  if (req.method === "POST" && req.url === "/dispatch") {
+    const body = await ctx.readJsonBody(req);
+    let routeTargetAgent = extractTargetAgent(body.parsed);
+    let routeTenantId = extractTenantId(body.parsed);
+
+    // Track the authenticated subject for audit logging
+    let authSubject: string | undefined;
+
+    // --- Deterministic overload backpressure ---
+    const queueDepth = ctx.getAsyncQueueDepth();
+    const maxDepth = ctx.asyncQueueMaxQueueDepth;
+    const queueRatio = maxDepth > 0 ? queueDepth / maxDepth : 0;
+    const queueDepthHeader = { "x-map-queue-depth": String(queueDepth) };
+
+    if (queueRatio >= BACKPRESSURE.queue_critical) {
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "rate_limited",
+        message: "Async queue capacity exceeded. Rejecting new task.",
+        method: req.method,
+        route: "/dispatch",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        429,
+        requestId,
+        {
+          code: "rate_limited",
+          message: "Async queue is at critical capacity. Please retry later.",
+          retryable: true,
+          details: {
+            category: "throttling",
+            scope: "global",
+            retry_after_ms: 5000,
+          },
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    const warningHeaders: Record<string, string> = { ...queueDepthHeader };
+    if (queueRatio >= BACKPRESSURE.queue_warning) {
+      warningHeaders["x-map-warning"] = "queue_nearing_capacity";
+    }
+    // --- End backpressure ---
+
+    const dispatchRateLimit = ctx.checkMutationRateLimit(routeTenantId);
+    if (!dispatchRateLimit.allowed) {
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "rate_limited",
+        message: "Rate limit exceeded for MAP mutating requests.",
+        method: req.method,
+        route: "/dispatch",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        429,
+        requestId,
+        {
+          code: "rate_limited",
+          message: "Rate limit exceeded for MAP mutating requests.",
+          retryable: true,
+          details: {
+            category: "throttling",
+            scope: dispatchRateLimit.scope,
+            retry_after_ms: dispatchRateLimit.retryAfterMs ?? 0,
+          },
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    const payload = ctx.validateDispatchRequest(body.parsed);
+    routeTargetAgent = payload.envelope.target_agent;
+    routeTenantId = extractTenantId(payload);
+
+    if (ctx.options.requireTenant === true && !routeTenantId) {
+      const message = "tenant_id is required when strict tenant mode is enabled";
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "policy_denied",
+        message,
+        method: req.method,
+        route: "/dispatch",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        400,
+        requestId,
+        {
+          code: "policy_denied",
+          message,
+          retryable: false,
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    if (ctx.isAgentDisabled(payload.envelope.target_agent)) {
+      const disabledInfo = ctx.disabledAgents.get(
+        payload.envelope.target_agent,
+      );
+      const message = `Target agent is disabled in runtime controls: ${payload.envelope.target_agent}`;
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "agent_disabled",
+        message,
+        method: req.method,
+        route: "/dispatch",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        403,
+        requestId,
+        {
+          code: "agent_disabled",
+          message,
+          retryable: false,
+          details: disabledInfo ? { disabled: disabledInfo } : undefined,
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    if (
+      ctx.isCapabilityDisabled(
+        payload.envelope.target_agent,
+        payload.capability,
+      )
+    ) {
+      const disabledInfo = ctx.disabledCapabilities
+        .get(payload.envelope.target_agent)
+        ?.get(payload.capability);
+      const message = `Capability is disabled in runtime controls: ${payload.capability}`;
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "capability_disabled",
+        message,
+        method: req.method,
+        route: "/dispatch",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        403,
+        requestId,
+        {
+          code: "capability_disabled",
+          message,
+          retryable: false,
+          details: disabledInfo ? { disabled: disabledInfo } : undefined,
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    const requiredAuthScheme = ctx.options.enforceSignedRequests
+      ? "signed_request"
+      : getRequiredAuthScheme(
+          ctx.app as never,
+          payload.envelope.target_agent,
+          payload.capability,
+        );
+    const requiresSignedRequest =
+      requiredAuthScheme === "signed_request" || wantsSignedRequestAuth(req);
+
+    // If enforceBearerAuth is true and signed_request is not present, fall back to bearer token
+    if (
+      ctx.options.enforceBearerAuth &&
+      !wantsSignedRequestAuth(req) &&
+      requiredAuthScheme !== "signed_request"
+    ) {
+      const bearerError = ctx.getBearerTokenError(req);
+      if (bearerError) {
+        ctx.recordAuditEvent({
+          timestamp: new Date().toISOString(),
+          request_id: requestId,
+          code: bearerError.code,
+          message: bearerError.message,
+          method: req.method,
+          route: "/dispatch",
+          tenant_id: routeTenantId,
+          target_agent: routeTargetAgent,
+          subject: authSubject,
+        });
+        ctx.sendError(
+          res,
+          bearerError.code === "auth_required" ? 401 : 403,
+          requestId,
+          { ...bearerError, retryable: false },
+          routeTargetAgent,
+        );
+        return { handled: true, routeTargetAgent, routeTenantId };
+      }
+
+      // When Bearer token is used, validate with OAuth 2.0 and log the subject
+      const bearerToken = extractBearerToken(req);
+      if (bearerToken) {
+        try {
+          const oauth2Result = await validateOAuth2Token(bearerToken);
+          if (oauth2Result.valid && oauth2Result.sub) {
+            authSubject = oauth2Result.sub;
+            console.log(
+              `[MAP] OAuth2 authenticated subject: ${authSubject}` +
+                (oauth2Result.scopes
+                  ? ` (scopes: ${oauth2Result.scopes.join(", ")})`
+                  : ""),
+            );
+          }
+        } catch {
+          // Non-fatal: proceed even if OAuth2 validation fails
+        }
+      }
+    } else if (requiresSignedRequest) {
+      const authError = getSignedRequestError(
+        req,
+        body.raw,
+        ctx.getEffectiveRevokedKeyIds(),
+      );
+      if (authError) {
+        ctx.recordAuditEvent({
+          timestamp: new Date().toISOString(),
+          request_id: requestId,
+          code: authError.code,
+          message: authError.message,
+          method: req.method,
+          route: "/dispatch",
+          tenant_id: routeTenantId,
+          target_agent: routeTargetAgent,
+          subject: authSubject,
+        });
+        ctx.sendError(
+          res,
+          authError.code === "auth_required" ? 401 : 403,
+          requestId,
+          { ...authError, retryable: false },
+          routeTargetAgent,
+        );
+        return { handled: true, routeTargetAgent, routeTenantId };
+      }
+    }
+
+    const headerIdempotencyKey = req.headers["x-map-idempotency-key"];
+    const idempotencyKey =
+      typeof headerIdempotencyKey === "string" &&
+      headerIdempotencyKey.trim().length > 0
+        ? headerIdempotencyKey
+        : undefined;
+    const envelopeWithRequestId = {
+      ...payload.envelope,
+      metadata: {
+        ...(payload.envelope.metadata ?? {}),
+        request_id: requestId,
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+      },
+    };
+    const startedAt = Date.now();
+    const result = await ctx.app.orchestrator.dispatch(
+      envelopeWithRequestId,
+      payload.capability,
+      payload.requested_schema_version,
+      payload.negotiation,
+    );
+    ctx.recordCapabilityLatency(payload.capability, Date.now() - startedAt);
+    const statusCode =
+      result.result.status === "awaiting_approval" ||
+      result.result.status === "running"
+        ? 202
+        : 200;
+    ctx.sendJson(res, statusCode, result, requestId, undefined, warningHeaders);
+    return { handled: true, routeTargetAgent, routeTenantId };
+  }
+
+  if (req.method === "POST" && req.url === "/approve") {
+    const body = await ctx.readJsonBody(req);
+    let routeTargetAgent = extractTargetAgent(body.parsed);
+    let routeTenantId = extractTenantId(body.parsed);
+
+    // Track the authenticated subject for audit logging
+    let authSubject: string | undefined;
+
+    // --- Deterministic overload backpressure ---
+    const approveQueueDepth = ctx.getAsyncQueueDepth();
+    const approveMaxDepth = ctx.asyncQueueMaxQueueDepth;
+    const approveQueueRatio =
+      approveMaxDepth > 0 ? approveQueueDepth / approveMaxDepth : 0;
+    const approveQueueDepthHeader = {
+      "x-map-queue-depth": String(approveQueueDepth),
+    };
+
+    if (approveQueueRatio >= BACKPRESSURE.queue_critical) {
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "rate_limited",
+        message: "Async queue capacity exceeded. Rejecting approval.",
+        method: req.method,
+        route: "/approve",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        429,
+        requestId,
+        {
+          code: "rate_limited",
+          message: "Async queue is at critical capacity. Please retry later.",
+          retryable: true,
+          details: {
+            category: "throttling",
+            scope: "global",
+            retry_after_ms: 5000,
+          },
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    const approveWarningHeaders: Record<string, string> = {
+      ...approveQueueDepthHeader,
+    };
+    if (approveQueueRatio >= BACKPRESSURE.queue_warning) {
+      approveWarningHeaders["x-map-warning"] = "queue_nearing_capacity";
+    }
+    // --- End backpressure ---
+
+    const approvalRateLimit = ctx.checkMutationRateLimit(routeTenantId);
+    if (!approvalRateLimit.allowed) {
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "rate_limited",
+        message: "Rate limit exceeded for MAP mutating requests.",
+        method: req.method,
+        route: "/approve",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        429,
+        requestId,
+        {
+          code: "rate_limited",
+          message: "Rate limit exceeded for MAP mutating requests.",
+          retryable: true,
+          details: {
+            category: "throttling",
+            scope: approvalRateLimit.scope,
+            retry_after_ms: approvalRateLimit.retryAfterMs ?? 0,
+          },
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    const payload = ctx.validateApprovalRequest(body.parsed);
+    routeTargetAgent = payload.envelope.target_agent;
+    routeTenantId = extractTenantId(payload);
+
+    if (ctx.options.requireTenant === true && !routeTenantId) {
+      const message = "tenant_id is required when strict tenant mode is enabled";
+      ctx.recordAuditEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        code: "policy_denied",
+        message,
+        method: req.method,
+        route: "/approve",
+        tenant_id: routeTenantId,
+        target_agent: routeTargetAgent,
+        subject: authSubject,
+      });
+      ctx.sendError(
+        res,
+        400,
+        requestId,
+        {
+          code: "policy_denied",
+          message,
+          retryable: false,
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    if (ctx.isAgentDisabled(payload.envelope.target_agent)) {
+      const disabledInfo = ctx.disabledAgents.get(
+        payload.envelope.target_agent,
+      );
+      ctx.sendError(
+        res,
+        403,
+        requestId,
+        {
+          code: "agent_disabled",
+          message: `Target agent is disabled in runtime controls: ${payload.envelope.target_agent}`,
+          retryable: false,
+          details: disabledInfo ? { disabled: disabledInfo } : undefined,
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    if (
+      ctx.isCapabilityDisabled(
+        payload.envelope.target_agent,
+        payload.capability,
+      )
+    ) {
+      const disabledInfo = ctx.disabledCapabilities
+        .get(payload.envelope.target_agent)
+        ?.get(payload.capability);
+      ctx.sendError(
+        res,
+        403,
+        requestId,
+        {
+          code: "capability_disabled",
+          message: `Capability is disabled in runtime controls: ${payload.capability}`,
+          retryable: false,
+          details: disabledInfo ? { disabled: disabledInfo } : undefined,
+        },
+        routeTargetAgent,
+      );
+      return { handled: true, routeTargetAgent, routeTenantId };
+    }
+
+    const requiredAuthScheme = ctx.options.enforceSignedRequests
+      ? "signed_request"
+      : getRequiredAuthScheme(
+          ctx.app as never,
+          payload.envelope.target_agent,
+          payload.capability,
+        );
+    const requiresSignedRequest =
+      requiredAuthScheme === "signed_request" || wantsSignedRequestAuth(req);
+
+    // If enforceBearerAuth is true and signed_request is not present, fall back to bearer token
+    if (
+      ctx.options.enforceBearerAuth &&
+      !wantsSignedRequestAuth(req) &&
+      requiredAuthScheme !== "signed_request"
+    ) {
+      const bearerError = ctx.getBearerTokenError(req);
+      if (bearerError) {
+        ctx.recordAuditEvent({
+          timestamp: new Date().toISOString(),
+          request_id: requestId,
+          code: bearerError.code,
+          message: bearerError.message,
+          method: req.method,
+          route: "/approve",
+          tenant_id: routeTenantId,
+          target_agent: routeTargetAgent,
+          subject: authSubject,
+        });
+        ctx.sendError(
+          res,
+          bearerError.code === "auth_required" ? 401 : 403,
+          requestId,
+          { ...bearerError, retryable: false },
+          routeTargetAgent,
+        );
+        return { handled: true, routeTargetAgent, routeTenantId };
+      }
+
+      // When Bearer token is used, validate with OAuth 2.0 and log the subject
+      const bearerToken = extractBearerToken(req);
+      if (bearerToken) {
+        try {
+          const oauth2Result = await validateOAuth2Token(bearerToken);
+          if (oauth2Result.valid && oauth2Result.sub) {
+            authSubject = oauth2Result.sub;
+            console.log(
+              `[MAP] OAuth2 authenticated subject: ${authSubject}` +
+                (oauth2Result.scopes
+                  ? ` (scopes: ${oauth2Result.scopes.join(", ")})`
+                  : ""),
+            );
+          }
+        } catch {
+          // Non-fatal: proceed even if OAuth2 validation fails
+        }
+      }
+    } else if (requiresSignedRequest) {
+      const authError = getSignedRequestError(
+        req,
+        body.raw,
+        ctx.getEffectiveRevokedKeyIds(),
+      );
+      if (authError) {
+        ctx.recordAuditEvent({
+          timestamp: new Date().toISOString(),
+          request_id: requestId,
+          code: authError.code,
+          message: authError.message,
+          method: req.method,
+          route: "/approve",
+          tenant_id: routeTenantId,
+          target_agent: routeTargetAgent,
+          subject: authSubject,
+        });
+        ctx.sendError(
+          res,
+          authError.code === "auth_required" ? 401 : 403,
+          requestId,
+          { ...authError, retryable: false },
+          routeTargetAgent,
+        );
+        return { handled: true, routeTargetAgent, routeTenantId };
+      }
+    }
+
+    const payloadWithRequestId = {
+      ...payload,
+      envelope: {
+        ...payload.envelope,
+        metadata: {
+          ...(payload.envelope.metadata ?? {}),
+          request_id: requestId,
+        },
+      },
+    };
+    const startedAt = Date.now();
+    const result = await ctx.app.orchestrator.approve(payloadWithRequestId);
+    ctx.recordCapabilityLatency(payload.capability, Date.now() - startedAt);
+    ctx.sendJson(res, 200, result, requestId, undefined, approveWarningHeaders);
+    return { handled: true, routeTargetAgent, routeTenantId };
+  }
+
+  return {
+    handled: false,
+    routeTargetAgent: ctx.routeTargetAgent,
+    routeTenantId: ctx.routeTenantId,
+  };
+}

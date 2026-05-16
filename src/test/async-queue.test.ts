@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { AsyncTaskQueue } from "../src/control-plane/async-queue.js";
+import { AsyncTaskQueue } from "../control-plane/async-queue.js";
 
 test("async queue retries and succeeds before dead-letter threshold", async () => {
   const queue = new AsyncTaskQueue({ maxAttempts: 3, retryDelayMs: 1 });
@@ -22,7 +22,7 @@ test("async queue retries and succeeds before dead-letter threshold", async () =
     },
     onDeadLetter: () => {
       throw new Error("should_not_dead_letter");
-    }
+    },
   });
 
   await delay(30);
@@ -47,7 +47,7 @@ test("async queue dead-letters after max attempts", async () => {
       assert.equal(record.tenant_id, "tenant_A");
       assert.equal(record.attempts, 2);
       assert.match(record.error, /permanent_failure/);
-    }
+    },
   });
 
   await delay(40);
@@ -65,7 +65,7 @@ test("async queue persists dead letters when store path is configured", async ()
     const queueA = new AsyncTaskQueue({
       maxAttempts: 1,
       retryDelayMs: 1,
-      deadLetterStorePath: storePath
+      deadLetterStorePath: storePath,
     });
     queueA.enqueue({
       taskId: "task_persist_dead_letter",
@@ -73,14 +73,14 @@ test("async queue persists dead letters when store path is configured", async ()
       run: async () => {
         throw new Error("persisted_failure");
       },
-      onDeadLetter: () => {}
+      onDeadLetter: () => {},
     });
 
     await delay(20);
     assert.equal(queueA.listDeadLetters().length, 1);
 
     const queueB = new AsyncTaskQueue({
-      deadLetterStorePath: storePath
+      deadLetterStorePath: storePath,
     });
     const restored = queueB.listDeadLetters();
     assert.equal(restored.length, 1);
@@ -94,7 +94,7 @@ test("async queue trims dead letters to retention limit", async () => {
   const queue = new AsyncTaskQueue({
     maxAttempts: 1,
     retryDelayMs: 1,
-    maxDeadLetters: 2
+    maxDeadLetters: 2,
   });
 
   for (const taskId of ["task_dlq_1", "task_dlq_2", "task_dlq_3"]) {
@@ -103,7 +103,7 @@ test("async queue trims dead letters to retention limit", async () => {
       run: async () => {
         throw new Error("always_fail");
       },
-      onDeadLetter: () => {}
+      onDeadLetter: () => {},
     });
   }
 
@@ -119,7 +119,7 @@ test("async queue applies deterministic retry delay when jitter is disabled", as
     maxAttempts: 2,
     retryDelayMs: 10,
     maxRetryDelayMs: 10,
-    retryJitterRatio: 0
+    retryJitterRatio: 0,
   });
   const attemptTimes: number[] = [];
 
@@ -133,7 +133,7 @@ test("async queue applies deterministic retry delay when jitter is disabled", as
     },
     onDeadLetter: () => {
       throw new Error("should_not_dead_letter");
-    }
+    },
   });
 
   await delay(50);
@@ -146,7 +146,7 @@ test("async queue caps exponential backoff at max retry delay", async () => {
     maxAttempts: 4,
     retryDelayMs: 2,
     maxRetryDelayMs: 3,
-    retryJitterRatio: 0
+    retryJitterRatio: 0,
   });
   const attemptTimes: number[] = [];
   let deadLettered = false;
@@ -159,7 +159,7 @@ test("async queue caps exponential backoff at max retry delay", async () => {
     },
     onDeadLetter: () => {
       deadLettered = true;
-    }
+    },
   });
 
   await delay(80);
@@ -172,19 +172,19 @@ test("async queue caps exponential backoff at max retry delay", async () => {
 test("async queue rejects enqueue when max queue depth is exceeded", () => {
   const queue = new AsyncTaskQueue({
     maxConcurrent: 1,
-    maxQueueDepth: 1
+    maxQueueDepth: 1,
   });
   const never = new Promise<void>(() => {});
 
   const first = queue.enqueue({
     taskId: "task_queue_cap_1",
     run: async () => never,
-    onDeadLetter: () => {}
+    onDeadLetter: () => {},
   });
   const second = queue.enqueue({
     taskId: "task_queue_cap_2",
     run: async () => never,
-    onDeadLetter: () => {}
+    onDeadLetter: () => {},
   });
 
   assert.equal(first.accepted, true);
@@ -196,7 +196,7 @@ test("async queue stats expose concurrency and capacity fields", () => {
   const queue = new AsyncTaskQueue({
     maxConcurrent: 3,
     maxConcurrentPerTenant: 2,
-    maxQueueDepth: 42
+    maxQueueDepth: 42,
   });
   const stats = queue.getStats();
   assert.equal(stats.max_concurrent, 3);

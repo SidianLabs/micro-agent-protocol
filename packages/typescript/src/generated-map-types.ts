@@ -33,7 +33,12 @@ export type TaskStatus =
   | "failed"
   | "revoked";
 
-export type AuthScheme = "none" | "bearer" | "mtls" | "signed_request";
+export type AuthScheme =
+  | "none"
+  | "bearer"
+  | "mtls"
+  | "signed_request"
+  | "oauth2";
 
 export type ErrorCode =
   | "agent_not_found"
@@ -59,7 +64,10 @@ export type ErrorCode =
   | "idempotency_conflict"
   | "resource_not_found"
   | "unauthorized"
-  | "forbidden";
+  | "forbidden"
+  | "extension_support_required"
+  | "invalid_state_transition"
+  | "queue_capacity_exceeded";
 
 export interface RequesterIdentity {
   type: "user" | "service" | "agent";
@@ -85,6 +93,13 @@ export interface TaskConstraints {
   };
   domain?: Record<string, unknown>;
   [key: string]: unknown;
+}
+
+export interface AgentExtension {
+  uri: string;
+  description?: string;
+  required?: boolean;
+  params?: Record<string, unknown>;
 }
 
 export interface AgentDescriptor {
@@ -115,6 +130,7 @@ export interface AgentDescriptor {
   descriptor_signature?: string;
   descriptor_key_id?: string;
   descriptor_signature_alg?: "HS256" | "RS256";
+  extensions?: AgentExtension[];
 }
 
 export interface MapSignedRequestHeaders {
@@ -122,6 +138,7 @@ export interface MapSignedRequestHeaders {
   "x-map-key-id": string;
   "x-map-timestamp": string;
   "x-map-request-signature": string;
+  "x-map-nonce": string;
 }
 
 export interface MapErrorResponse {
@@ -130,7 +147,15 @@ export interface MapErrorResponse {
   retryable: boolean;
   status: number;
   details?: {
-    category: "validation" | "authentication" | "authorization" | "not_found" | "conflict" | "rate_limit" | "server" | "client";
+    category:
+      | "validation"
+      | "authentication"
+      | "authorization"
+      | "not_found"
+      | "conflict"
+      | "rate_limit"
+      | "server"
+      | "client";
     field?: string;
     value?: unknown;
     context?: Record<string, unknown>;
@@ -190,7 +215,10 @@ export interface CapabilityDescriptor {
     to: string;
     mode: "provider_translation";
   }>;
-  compatibility?: "backward_compatible" | "forward_compatible" | "breaking_change";
+  compatibility?:
+    | "backward_compatible"
+    | "forward_compatible"
+    | "breaking_change";
   status?: "active" | "deprecated" | "disabled";
 }
 
@@ -211,7 +239,9 @@ export interface DelegationToken {
 
 export interface TaskEnvelope {
   task_id: string;
+  order_id?: string;
   parent_task_id?: string;
+  context_id?: string;
   requester_identity: RequesterIdentity;
   target_agent: string;
   intent: string;
@@ -220,7 +250,18 @@ export interface TaskEnvelope {
   deadline?: string;
   delegation_token: string;
   requested_output_mode: VisibilityMode;
+  /** Optional metadata bag. Known keys include:
+   *  - `webhook_url`: URL to POST task result to on terminal state transition (completed, failed, denied, revoked).
+   *  - `async`: Set to `true` for async delivery mode.
+   *  - `request_id`, `capability`, `tenant_id`, `schema_version`, etc.
+   */
   metadata?: Record<string, unknown>;
+  /** Client-provided token for exactly-once effect deduplication.
+   *  Differs from `idempotency_key` (which is for request dedup).
+   *  `idempotency_token` is used to prevent duplicate side effects
+   *  even if the same task is re-delivered. */
+  idempotency_token?: string;
+  extensions?: string[];
 }
 
 export interface InvocationNegotiationRequest {
@@ -244,6 +285,7 @@ export interface InvocationNegotiation {
 
 export interface ResultPackage {
   task_id: string;
+  context_id?: string;
   status: TaskStatus;
   summary?: string;
   structured_output: Record<string, unknown>;
@@ -255,11 +297,13 @@ export interface ResultPackage {
   redactions_applied?: string[];
   followup_required: boolean;
   escalation_reason?: string;
+  extensions?: string[];
 }
 
 export interface ExecutionReceipt {
   receipt_id: string;
   task_id: string;
+  order_id?: string;
   tenant_id?: string;
   request_id?: string;
   agent_id: string;
@@ -273,6 +317,7 @@ export interface ExecutionReceipt {
   executed_schema_version?: string;
   negotiation?: InvocationNegotiation;
   signature: string;
+  extensions?: string[];
 }
 
 export interface PolicyDecision {
@@ -291,6 +336,8 @@ export interface InvokeResult {
 
 export interface TaskRecord {
   task_id: string;
+  order_id?: string;
+  context_id?: string;
   requester_identity: RequesterIdentity;
   idempotency_key?: string;
   capability: string;
@@ -341,6 +388,8 @@ export interface TaskQueryParams {
   target_agent?: string;
   limit?: number;
   cursor?: string;
+  /** Maximum messages to include in task history. 0 = none, unset = server default, >0 = limit */
+  history_length?: number;
 }
 
 export interface AgentsQueryParams {
@@ -374,17 +423,60 @@ export interface SchemaValidationError extends MapErrorResponse {
   };
 }
 
+export interface MapVerificationKey {
+  kid: string;
+  alg: "HS256" | "RS256";
+  use: "sig";
+  status: "active" | "retiring" | "revoked";
+  scopes: string[];
+  demo_only: boolean;
+  kty?: "oct" | "RSA";
+  public_key_pem?: string;
+  jwk?: Record<string, unknown>;
+}
+
+export interface TrustAnchor {
+  trust_domain: string; // e.g., "payments.bank.com"
+  issuer: string; // e.g., "Bank Corp CA"
+  public_keys: MapVerificationKey[]; // Trusted keys for this domain
+  valid_from: string; // ISO timestamp
+  valid_until?: string; // Optional expiry
+}
+
+export interface TrustPolicy {
+  allowed_domains: string[]; // Whitelist of trust domains
+  allowed_algorithms: ("HS256" | "RS256" | "ES256")[];
+  require_signed_descriptors: boolean;
+  require_signed_receipts: boolean;
+  min_key_length?: number;
+}
+
 export function createErrorResponse(
   code: ErrorCode,
   message: string,
   status: number,
   retryable: boolean,
-  details?: MapErrorResponse["details"]
+  details?: MapErrorResponse["details"],
 ): MapErrorResponse {
   return { code, message, retryable, status, details };
 }
 
-export function isErrorResponse(response: { ok: unknown; error?: unknown }): response is { ok: "error"; error: MapErrorResponse } {
+export interface AnomalyReport {
+  type:
+    | "high_failure_rate"
+    | "revoked_key_usage"
+    | "retiring_key_usage"
+    | "unknown_key_usage";
+  severity: "warning" | "critical";
+  detail: string;
+  detected_at: string;
+  recommendation: string;
+}
+
+export function isErrorResponse(response: {
+  ok: unknown;
+  error?: unknown;
+}): response is { ok: "error"; error: MapErrorResponse } {
   return response.ok === "error" && response.error !== undefined;
 }
 
@@ -414,7 +506,10 @@ export function compareVersions(a: string, b: string): -1 | 0 | 1 {
 export function isVersionCompatible(
   clientVersion: string,
   serverVersion: string,
-  compatibilityMode: "backward_compatible" | "forward_compatible" | "breaking_change" = "backward_compatible"
+  compatibilityMode:
+    | "backward_compatible"
+    | "forward_compatible"
+    | "breaking_change" = "backward_compatible",
 ): boolean {
   const comparison = compareVersions(clientVersion, serverVersion);
   const [clientMajor] = clientVersion.split(".").map(Number);
@@ -435,10 +530,16 @@ export function isVersionCompatible(
 export function selectVersion(
   clientVersions: string[],
   serverVersions: string[],
-  compatibilityMode: "backward_compatible" | "forward_compatible" = "backward_compatible"
+  compatibilityMode:
+    | "backward_compatible"
+    | "forward_compatible" = "backward_compatible",
 ): string | null {
-  const sortedClient = [...clientVersions].sort((a, b) => compareVersions(b, a));
-  const sortedServer = [...serverVersions].sort((a, b) => compareVersions(b, a));
+  const sortedClient = [...clientVersions].sort((a, b) =>
+    compareVersions(b, a),
+  );
+  const sortedServer = [...serverVersions].sort((a, b) =>
+    compareVersions(b, a),
+  );
 
   for (const clientVer of sortedClient) {
     for (const serverVer of sortedServer) {

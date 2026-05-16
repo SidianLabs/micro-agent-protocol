@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/provider-discovery.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/provider-discovery.schema.json",
   "title": "MAP Provider Discovery Document",
   "description": "Bootstrap discovery document for a MAP provider trust domain.",
   "type": "object",

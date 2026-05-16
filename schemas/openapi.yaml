@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Micro Agent Protocol (MAP)
+  title: Micro Agent Protocol (MAP) — by Sidian Labs
   description: |
     Protocol for assistant-to-micro-agent delegation with policy enforcement,
     scoped authority tokens, and verifiable audit receipts.
@@ -8,26 +8,20 @@ info:
     MAP enables organizations to deploy policy-aware micro-agents between
     external AI assistants and sensitive internal systems, so execution stays
     local, authority stays bounded, and context stays minimal.
-  version: "1.0.0"
+  version: "2026.05.14"
   license:
     name: Apache-2.0
     identifier: Apache-2.0
   contact:
-    name: MAP Protocol Authors
-    url: https://github.com/mapprotocol/map
-    email: maintainers@map-protocol.dev
+    name: Sidian Labs
+    url: https://github.com/SidianLabs/micro-agent-protocol
   x-protocol:
     domain: micro-agent-protocol
-    specification: https://map-protocol.dev/spec
-    repository: https://github.com/mapprotocol/map
+    repository: https://github.com/SidianLabs/micro-agent-protocol
 
 servers:
-  - url: https://api.map-protocol.dev/v1
-    description: Production server
-  - url: https://staging.map-protocol.dev/v1
-    description: Staging server
   - url: http://localhost:8787
-    description: Local development
+    description: Local development server
 
 tags:
   - name: Dispatch
@@ -63,38 +57,38 @@ paths:
         - SignedRequest: []
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/XMapIdempotencyKey'
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/XMapIdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DispatchRequest'
+              $ref: "#/components/schemas/DispatchRequest"
       responses:
-        '200':
+        "200":
           description: Task executed or accepted for async processing
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
             ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DispatchResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/DispatchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /approve:
     post:
@@ -109,37 +103,37 @@ paths:
         - SignedRequest: []
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
+        - $ref: "#/components/parameters/TenantId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ApprovalRequest'
+              $ref: "#/components/schemas/ApprovalRequest"
       responses:
-        '200':
+        "200":
           description: Task approved and executed
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DispatchResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/DispatchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   # ===========================================================================
   # Tasks
@@ -154,12 +148,12 @@ paths:
         - SignedRequest: []
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
+        - $ref: "#/components/parameters/TenantId"
         - name: status
           in: query
           description: Filter by task status
           schema:
-            $ref: '#/components/schemas/TaskStatus'
+            $ref: "#/components/schemas/TaskStatus"
         - name: capability
           in: query
           description: Filter by capability
@@ -170,19 +164,30 @@ paths:
           description: Filter by target agent
           schema:
             type: string
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - name: order_id
+          in: query
+          description: Filter by order identifier (groups related tasks)
+          schema:
+            type: string
+        - name: history_length
+          in: query
+          description: Maximum messages to include in task history. 0 = none, unset = server default, >0 = limit
+          schema:
+            type: integer
+            minimum: 0
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: List of tasks
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -191,15 +196,15 @@ paths:
                           tasks:
                             type: array
                             items:
-                              $ref: '#/components/schemas/TaskRecord'
+                              $ref: "#/components/schemas/TaskRecord"
                           pagination:
-                            $ref: '#/components/schemas/Pagination'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '429':
-          $ref: '#/components/responses/RateLimited'
+                            $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
 
   /tasks/{task_id}:
     get:
@@ -211,36 +216,42 @@ paths:
         - SignedRequest: []
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/TaskId'
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/IfNoneMatch'
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/TenantId"
+        - name: history_length
+          in: query
+          description: Maximum messages to include in task history. 0 = none, unset = server default, >0 = limit
+          schema:
+            type: integer
+            minimum: 0
+        - $ref: "#/components/parameters/IfNoneMatch"
       responses:
-        '200':
+        "200":
           description: Task record
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
             ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
                         type: object
                         properties:
                           task:
-                            $ref: '#/components/schemas/TaskRecord'
-        '304':
+                            $ref: "#/components/schemas/TaskRecord"
+        "304":
           description: Not modified (ETag match)
           headers:
             ETag:
-              $ref: '#/components/headers/ETag'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              $ref: "#/components/headers/ETag"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /tasks/{task_id}/stream:
     get:
@@ -252,20 +263,57 @@ paths:
         - SignedRequest: []
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/TaskId'
-        - $ref: '#/components/parameters/TenantId'
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/TenantId"
       responses:
-        '200':
+        "200":
           description: SSE stream
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             text/event-stream:
               schema:
-                $ref: '#/components/schemas/SSERecord'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/SSERecord"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tasks/{task_id}/cancel:
+    post:
+      operationId: cancelTask
+      summary: Cancel a task
+      description: Cancels a task that is in a cancellable state (accepted, proposed, awaiting_approval, or running). Transitions the task to revoked status and returns a signed receipt.
+      tags: [Tasks]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: Task cancelled successfully
+          headers:
+            XMapRequestId:
+              $ref: "#/components/headers/XMapRequestId"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          result:
+                            $ref: "#/components/schemas/ResultPackage"
+                          receipt:
+                            $ref: "#/components/schemas/ExecutionReceipt"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   # ===========================================================================
   # Receipts
@@ -280,25 +328,25 @@ paths:
         - SignedRequest: []
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
+        - $ref: "#/components/parameters/TenantId"
         - name: task_id
           in: query
           description: Filter by task ID
           schema:
             type: string
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: List of receipts
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -307,15 +355,51 @@ paths:
                           receipts:
                             type: array
                             items:
-                              $ref: '#/components/schemas/ExecutionReceipt'
+                              $ref: "#/components/schemas/ExecutionReceipt"
                           pagination:
-                            $ref: '#/components/schemas/Pagination'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '429':
-          $ref: '#/components/responses/RateLimited'
+                            $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /receipts/verify:
+    get:
+      operationId: verifyReceipts
+      summary: Verify receipt integrity
+      description: Verifies the integrity of all execution receipts by checking signatures and chronological ordering. Returns a validation result.
+      tags: [Receipts]
+      security:
+        - SignedRequest: []
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Verification result
+          headers:
+            XMapRequestId:
+              $ref: "#/components/headers/XMapRequestId"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          valid:
+                            type: boolean
+                          total:
+                            type: integer
+                          errors:
+                            type: array
+                            items:
+                              type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /receipts/{receipt_id}:
     get:
@@ -327,28 +411,28 @@ paths:
         - SignedRequest: []
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/ReceiptId'
-        - $ref: '#/components/parameters/TenantId'
+        - $ref: "#/components/parameters/ReceiptId"
+        - $ref: "#/components/parameters/TenantId"
       responses:
-        '200':
+        "200":
           description: Receipt record
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
                         type: object
                         properties:
                           receipt:
-                            $ref: '#/components/schemas/ExecutionReceipt'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                            $ref: "#/components/schemas/ExecutionReceipt"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ===========================================================================
   # Agents
@@ -381,16 +465,16 @@ paths:
             type: string
             enum: [active, deprecated, disabled]
       responses:
-        '200':
+        "200":
           description: List of agent descriptors
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -399,11 +483,11 @@ paths:
                           agents:
                             type: array
                             items:
-                              $ref: '#/components/schemas/AgentDescriptor'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                              $ref: "#/components/schemas/AgentDescriptor"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /agents/{agent_id}:
     get:
@@ -421,32 +505,73 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Agent descriptor
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
             ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
                         type: object
                         properties:
                           agent:
-                            $ref: '#/components/schemas/AgentDescriptor'
-        '304':
+                            $ref: "#/components/schemas/AgentDescriptor"
+        "304":
           description: Not modified (ETag match)
           headers:
             ETag:
-              $ref: '#/components/headers/ETag'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              $ref: "#/components/headers/ETag"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /.well-known/map:
+    get:
+      operationId: getWellKnownMap
+      summary: Agent discovery endpoint
+      description: Returns the MAP agent discovery document with protocol version, deployment profile, and endpoint URLs. No authentication required.
+      tags: [Agents]
+      responses:
+        "200":
+          description: Discovery document
+          headers:
+            XMapRequestId:
+              $ref: "#/components/headers/XMapRequestId"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          protocol:
+                            type: string
+                          version:
+                            type: string
+                          deployment_profile:
+                            type: string
+                            enum: [open, verified, regulated]
+                          active_key_id:
+                            type: string
+                            nullable: true
+                          agents_url:
+                            type: string
+                          keys_url:
+                            type: string
+                          health_url:
+                            type: string
+                          documentation_url:
+                            type: string
 
   /.well-known/map-keys:
     get:
@@ -457,16 +582,16 @@ paths:
       security:
         - SignedRequest: []
       responses:
-        '200':
+        "200":
           description: Verification keys
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -475,7 +600,7 @@ paths:
                           keys:
                             type: array
                             items:
-                              $ref: '#/components/schemas/VerificationKey'
+                              $ref: "#/components/schemas/VerificationKey"
 
   # ===========================================================================
   # Health & Status
@@ -487,7 +612,7 @@ paths:
       description: Returns 200 if the server is running. Used for basic liveness probes.
       tags: [Health]
       responses:
-        '200':
+        "200":
           description: Server is alive
           content:
             application/json:
@@ -505,13 +630,13 @@ paths:
       description: Returns 200 if the server is ready to accept traffic. Returns 503 if still initializing.
       tags: [Health]
       responses:
-        '200':
+        "200":
           description: Server is ready
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -528,13 +653,13 @@ paths:
                                 type: string
                               queue:
                                 type: string
-        '503':
+        "503":
           description: Server is not ready
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
 
   /status:
     get:
@@ -545,20 +670,20 @@ paths:
       security:
         - SignedRequest: []
       responses:
-        '200':
+        "200":
           description: System status
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/SystemStatus'
+                        $ref: "#/components/schemas/SystemStatus"
 
   /metrics:
     get:
@@ -569,22 +694,22 @@ paths:
       security:
         - SignedRequest: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
+        - $ref: "#/components/parameters/TenantId"
       responses:
-        '200':
+        "200":
           description: Metrics data
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/Metrics'
+                        $ref: "#/components/schemas/Metrics"
 
   # ===========================================================================
   # Audit & Admin
@@ -598,7 +723,7 @@ paths:
       security:
         - SignedRequest: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
+        - $ref: "#/components/parameters/TenantId"
         - name: start_time
           in: query
           description: Filter events after this time
@@ -611,19 +736,19 @@ paths:
           schema:
             type: string
             format: date-time
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: List of audit events
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -632,19 +757,19 @@ paths:
                           events:
                             type: array
                             items:
-                              $ref: '#/components/schemas/AuditEvent'
+                              $ref: "#/components/schemas/AuditEvent"
                           checkpoints:
                             type: array
                             items:
-                              $ref: '#/components/schemas/AuditCheckpoint'
+                              $ref: "#/components/schemas/AuditCheckpoint"
                           pagination:
-                            $ref: '#/components/schemas/Pagination'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '429':
-          $ref: '#/components/responses/RateLimited'
+                            $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
 
   /audit-events/export:
     get:
@@ -655,7 +780,7 @@ paths:
       security:
         - SignedRequest: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
+        - $ref: "#/components/parameters/TenantId"
         - name: format
           in: query
           description: Export format
@@ -664,11 +789,11 @@ paths:
             enum: [json, csv]
             default: json
       responses:
-        '200':
+        "200":
           description: Exported audit log
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
             Content-Disposition:
               schema:
                 type: string
@@ -676,13 +801,13 @@ paths:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/AuditExport'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                        $ref: "#/components/schemas/AuditExport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /audit-events/verify:
     get:
@@ -693,18 +818,18 @@ paths:
       security:
         - SignedRequest: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
+        - $ref: "#/components/parameters/TenantId"
       responses:
-        '200':
+        "200":
           description: Verification result
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -713,11 +838,11 @@ paths:
                           valid:
                             type: boolean
                           last_checkpoint:
-                            $ref: '#/components/schemas/AuditCheckpoint'
+                            $ref: "#/components/schemas/AuditCheckpoint"
                           events_verified:
                             type: integer
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /conformance/export:
     get:
@@ -728,22 +853,22 @@ paths:
       security:
         - SignedRequest: []
       responses:
-        '200':
+        "200":
           description: Conformance report
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/ConformanceReport'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                        $ref: "#/components/schemas/ConformanceReport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /trust-bundle/export:
     get:
@@ -754,22 +879,22 @@ paths:
       security:
         - SignedRequest: []
       responses:
-        '200':
+        "200":
           description: Trust bundle
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/TrustBundle'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                        $ref: "#/components/schemas/TrustBundle"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /admin/keys:
     get:
@@ -793,16 +918,16 @@ paths:
             type: boolean
             default: false
       responses:
-        '200':
+        "200":
           description: Signing key information
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -811,15 +936,15 @@ paths:
                           keys:
                             type: array
                             items:
-                              $ref: '#/components/schemas/SigningKeyInfo'
+                              $ref: "#/components/schemas/SigningKeyInfo"
                           summary:
                             type: object
                           trust:
-                            $ref: '#/components/schemas/TrustMetadata'
+                            $ref: "#/components/schemas/TrustMetadata"
                           key_provider:
                             type: object
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   # ===========================================================================
   # Alerts
@@ -833,20 +958,20 @@ paths:
       security:
         - SignedRequest: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: List of alerts
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -855,9 +980,9 @@ paths:
                           alerts:
                             type: array
                             items:
-                              $ref: '#/components/schemas/Alert'
+                              $ref: "#/components/schemas/Alert"
                           pagination:
-                            $ref: '#/components/schemas/Pagination'
+                            $ref: "#/components/schemas/Pagination"
 
   /alerts/{alert_id}/ack:
     post:
@@ -868,7 +993,7 @@ paths:
       security:
         - SignedRequest: []
       parameters:
-        - $ref: '#/components/parameters/AlertId'
+        - $ref: "#/components/parameters/AlertId"
       requestBody:
         required: false
         content:
@@ -880,25 +1005,25 @@ paths:
                   type: string
                   description: Who is acknowledging the alert
       responses:
-        '200':
+        "200":
           description: Alert acknowledged
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
                         type: object
                         properties:
                           alert:
-                            $ref: '#/components/schemas/Alert'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                            $ref: "#/components/schemas/Alert"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /alerts/{alert_id}/suppress:
     post:
@@ -909,7 +1034,7 @@ paths:
       security:
         - SignedRequest: []
       parameters:
-        - $ref: '#/components/parameters/AlertId'
+        - $ref: "#/components/parameters/AlertId"
       requestBody:
         required: true
         content:
@@ -926,27 +1051,27 @@ paths:
                   type: string
                   format: date-time
       responses:
-        '200':
+        "200":
           description: Alert suppressed
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
                         type: object
                         properties:
                           alert:
-                            $ref: '#/components/schemas/Alert'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                            $ref: "#/components/schemas/Alert"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ===========================================================================
   # Dead Letters
@@ -960,20 +1085,20 @@ paths:
       security:
         - SignedRequest: []
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: List of dead letters
           headers:
             XMapRequestId:
-              $ref: '#/components/headers/XMapRequestId'
+              $ref: "#/components/headers/XMapRequestId"
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
@@ -982,9 +1107,9 @@ paths:
                           dead_letters:
                             type: array
                             items:
-                              $ref: '#/components/schemas/DeadLetterRecord'
+                              $ref: "#/components/schemas/DeadLetterRecord"
                           pagination:
-                            $ref: '#/components/schemas/Pagination'
+                            $ref: "#/components/schemas/Pagination"
 
 # ==============================================================================
 # Components
@@ -1100,11 +1225,11 @@ components:
         application/json:
           schema:
             allOf:
-              - $ref: '#/components/schemas/ApiResponse'
+              - $ref: "#/components/schemas/ApiResponse"
               - type: object
                 properties:
                   error:
-                    $ref: '#/components/schemas/ErrorDetail'
+                    $ref: "#/components/schemas/ErrorDetail"
 
     Unauthorized:
       description: Authentication required
@@ -1112,11 +1237,11 @@ components:
         application/json:
           schema:
             allOf:
-              - $ref: '#/components/schemas/ApiResponse'
+              - $ref: "#/components/schemas/ApiResponse"
               - type: object
                 properties:
                   error:
-                    $ref: '#/components/schemas/ErrorDetail'
+                    $ref: "#/components/schemas/ErrorDetail"
 
     Forbidden:
       description: Insufficient permissions
@@ -1124,11 +1249,11 @@ components:
         application/json:
           schema:
             allOf:
-              - $ref: '#/components/schemas/ApiResponse'
+              - $ref: "#/components/schemas/ApiResponse"
               - type: object
                 properties:
                   error:
-                    $ref: '#/components/schemas/ErrorDetail'
+                    $ref: "#/components/schemas/ErrorDetail"
 
     NotFound:
       description: Resource not found
@@ -1136,11 +1261,11 @@ components:
         application/json:
           schema:
             allOf:
-              - $ref: '#/components/schemas/ApiResponse'
+              - $ref: "#/components/schemas/ApiResponse"
               - type: object
                 properties:
                   error:
-                    $ref: '#/components/schemas/ErrorDetail'
+                    $ref: "#/components/schemas/ErrorDetail"
 
     Conflict:
       description: Resource conflict (e.g., idempotency key mismatch)
@@ -1148,11 +1273,11 @@ components:
         application/json:
           schema:
             allOf:
-              - $ref: '#/components/schemas/ApiResponse'
+              - $ref: "#/components/schemas/ApiResponse"
               - type: object
                 properties:
                   error:
-                    $ref: '#/components/schemas/ErrorDetail'
+                    $ref: "#/components/schemas/ErrorDetail"
 
     RateLimited:
       description: Rate limit exceeded
@@ -1160,11 +1285,11 @@ components:
         application/json:
           schema:
             allOf:
-              - $ref: '#/components/schemas/ApiResponse'
+              - $ref: "#/components/schemas/ApiResponse"
               - type: object
                 properties:
                   error:
-                    $ref: '#/components/schemas/ErrorDetail'
+                    $ref: "#/components/schemas/ErrorDetail"
 
     InternalError:
       description: Internal server error
@@ -1172,11 +1297,11 @@ components:
         application/json:
           schema:
             allOf:
-              - $ref: '#/components/schemas/ApiResponse'
+              - $ref: "#/components/schemas/ApiResponse"
               - type: object
                 properties:
                   error:
-                    $ref: '#/components/schemas/ErrorDetail'
+                    $ref: "#/components/schemas/ErrorDetail"
 
   # ===========================================================================
   # Schemas
@@ -1230,7 +1355,17 @@ components:
 
     TaskStatus:
       type: string
-      enum: [accepted, proposed, awaiting_approval, denied, running, completed, failed, revoked]
+      enum:
+        [
+          accepted,
+          proposed,
+          awaiting_approval,
+          denied,
+          running,
+          completed,
+          failed,
+          revoked,
+        ]
 
     VisibilityMode:
       type: string
@@ -1299,7 +1434,17 @@ components:
 
     TaskEnvelope:
       type: object
-      required: [task_id, requester_identity, target_agent, intent, constraints, risk_class, delegation_token, requested_output_mode]
+      required:
+        [
+          task_id,
+          requester_identity,
+          target_agent,
+          intent,
+          constraints,
+          risk_class,
+          delegation_token,
+          requested_output_mode,
+        ]
       properties:
         task_id:
           type: string
@@ -1307,7 +1452,7 @@ components:
         parent_task_id:
           type: string
         requester_identity:
-          $ref: '#/components/schemas/RequesterIdentity'
+          $ref: "#/components/schemas/RequesterIdentity"
         target_agent:
           type: string
           minLength: 1
@@ -1315,9 +1460,9 @@ components:
           type: string
           minLength: 1
         constraints:
-          $ref: '#/components/schemas/TaskConstraints'
+          $ref: "#/components/schemas/TaskConstraints"
         risk_class:
-          $ref: '#/components/schemas/RiskLevel'
+          $ref: "#/components/schemas/RiskLevel"
         deadline:
           type: string
           format: date-time
@@ -1325,14 +1470,22 @@ components:
           type: string
           minLength: 1
         requested_output_mode:
-          $ref: '#/components/schemas/VisibilityMode'
+          $ref: "#/components/schemas/VisibilityMode"
         metadata:
           type: object
           additionalProperties: true
 
     DelegationToken:
       type: object
-      required: [issuer, subject_agent, allowed_actions, resource_scope, constraints, signature]
+      required:
+        [
+          issuer,
+          subject_agent,
+          allowed_actions,
+          resource_scope,
+          constraints,
+          signature,
+        ]
       properties:
         issuer:
           type: string
@@ -1358,7 +1511,7 @@ components:
         approval_reference:
           type: string
         requester_identity:
-          $ref: '#/components/schemas/RequesterIdentity'
+          $ref: "#/components/schemas/RequesterIdentity"
         signature:
           type: string
 
@@ -1370,7 +1523,7 @@ components:
           type: string
           pattern: '^\d+\.\d+\.\d+$'
         delivery_mode:
-          $ref: '#/components/schemas/DeliveryMode'
+          $ref: "#/components/schemas/DeliveryMode"
 
     InvocationNegotiationState:
       type: object
@@ -1381,9 +1534,9 @@ components:
           type: string
           pattern: '^\d+\.\d+\.\d+$'
         output_mode:
-          $ref: '#/components/schemas/VisibilityMode'
+          $ref: "#/components/schemas/VisibilityMode"
         delivery_mode:
-          $ref: '#/components/schemas/DeliveryMode'
+          $ref: "#/components/schemas/DeliveryMode"
 
     InvocationNegotiation:
       type: object
@@ -1391,9 +1544,9 @@ components:
       additionalProperties: false
       properties:
         requested:
-          $ref: '#/components/schemas/InvocationNegotiationState'
+          $ref: "#/components/schemas/InvocationNegotiationState"
         selected:
-          $ref: '#/components/schemas/InvocationNegotiationState'
+          $ref: "#/components/schemas/InvocationNegotiationState"
         provider_actions:
           type: array
           items:
@@ -1407,7 +1560,7 @@ components:
         task_id:
           type: string
         status:
-          $ref: '#/components/schemas/TaskStatus'
+          $ref: "#/components/schemas/TaskStatus"
         summary:
           type: string
         structured_output:
@@ -1422,7 +1575,7 @@ components:
         executed_schema_version:
           type: string
         negotiation:
-          $ref: '#/components/schemas/InvocationNegotiation'
+          $ref: "#/components/schemas/InvocationNegotiation"
         redactions_applied:
           type: array
           items:
@@ -1434,7 +1587,18 @@ components:
 
     ExecutionReceipt:
       type: object
-      required: [receipt_id, task_id, agent_id, action_taken, resource_touched, policy_checks, timestamp, result_hash, signature]
+      required:
+        [
+          receipt_id,
+          task_id,
+          agent_id,
+          action_taken,
+          resource_touched,
+          policy_checks,
+          timestamp,
+          result_hash,
+          signature,
+        ]
       properties:
         receipt_id:
           type: string
@@ -1466,7 +1630,7 @@ components:
         executed_schema_version:
           type: string
         negotiation:
-          $ref: '#/components/schemas/InvocationNegotiation'
+          $ref: "#/components/schemas/InvocationNegotiation"
         signature:
           type: string
 
@@ -1484,9 +1648,9 @@ components:
           type: string
           pattern: '^\d+\.\d+\.\d+$'
         negotiation:
-          $ref: '#/components/schemas/InvocationNegotiationRequest'
+          $ref: "#/components/schemas/InvocationNegotiationRequest"
         envelope:
-          $ref: '#/components/schemas/TaskEnvelope'
+          $ref: "#/components/schemas/TaskEnvelope"
 
     ApprovalRequest:
       type: object
@@ -1502,9 +1666,9 @@ components:
           type: string
           pattern: '^\d+\.\d+\.\d+$'
         negotiation:
-          $ref: '#/components/schemas/InvocationNegotiationRequest'
+          $ref: "#/components/schemas/InvocationNegotiationRequest"
         envelope:
-          $ref: '#/components/schemas/TaskEnvelope'
+          $ref: "#/components/schemas/TaskEnvelope"
 
     DispatchResponse:
       type: object
@@ -1512,20 +1676,33 @@ components:
         request_id:
           type: string
         result:
-          $ref: '#/components/schemas/ResultPackage'
+          $ref: "#/components/schemas/ResultPackage"
         receipt:
-          $ref: '#/components/schemas/ExecutionReceipt'
+          $ref: "#/components/schemas/ExecutionReceipt"
 
     # ---------------------------------------------------------------------------
     # Agents
     # ---------------------------------------------------------------------------
     AgentDescriptor:
       type: object
-      required: [agent_id, organization, version, domain, capabilities, risk_level, input_schema_ref, output_schema_ref, supported_execution_modes, visibility_modes, registry_status]
+      required:
+        [
+          agent_id,
+          organization,
+          version,
+          domain,
+          capabilities,
+          risk_level,
+          input_schema_ref,
+          output_schema_ref,
+          supported_execution_modes,
+          visibility_modes,
+          registry_status,
+        ]
       properties:
         agent_id:
           type: string
-          pattern: '^[a-z][a-z0-9-]*$'
+          pattern: "^[a-z][a-z0-9-]*$"
         organization:
           type: string
         version:
@@ -1540,7 +1717,7 @@ components:
             type: string
           minItems: 1
         risk_level:
-          $ref: '#/components/schemas/RiskLevel'
+          $ref: "#/components/schemas/RiskLevel"
         input_schema_ref:
           type: string
           format: uri
@@ -1550,7 +1727,7 @@ components:
         supported_execution_modes:
           type: array
           items:
-            $ref: '#/components/schemas/ExecutionMode'
+            $ref: "#/components/schemas/ExecutionMode"
         approval_requirements:
           type: array
           items:
@@ -1558,7 +1735,7 @@ components:
         visibility_modes:
           type: array
           items:
-            $ref: '#/components/schemas/VisibilityMode'
+            $ref: "#/components/schemas/VisibilityMode"
         policy_hooks:
           type: array
           items:
@@ -1579,7 +1756,7 @@ components:
         capability_descriptors:
           type: array
           items:
-            $ref: '#/components/schemas/CapabilityDescriptor'
+            $ref: "#/components/schemas/CapabilityDescriptor"
         transport_bindings:
           type: array
           items:
@@ -1614,7 +1791,7 @@ components:
         name:
           type: string
         execution_mode:
-          $ref: '#/components/schemas/ExecutionMode'
+          $ref: "#/components/schemas/ExecutionMode"
         request_schema_ref:
           type: string
           format: uri
@@ -1664,12 +1841,20 @@ components:
     # ---------------------------------------------------------------------------
     TaskRecord:
       type: object
-      required: [task_id, requester_identity, capability, target_agent, status, updated_at]
+      required:
+        [
+          task_id,
+          requester_identity,
+          capability,
+          target_agent,
+          status,
+          updated_at,
+        ]
       properties:
         task_id:
           type: string
         requester_identity:
-          $ref: '#/components/schemas/RequesterIdentity'
+          $ref: "#/components/schemas/RequesterIdentity"
         idempotency_key:
           type: string
         capability:
@@ -1677,11 +1862,11 @@ components:
         target_agent:
           type: string
         status:
-          $ref: '#/components/schemas/TaskStatus'
+          $ref: "#/components/schemas/TaskStatus"
         result:
-          $ref: '#/components/schemas/ResultPackage'
+          $ref: "#/components/schemas/ResultPackage"
         receipt:
-          $ref: '#/components/schemas/ExecutionReceipt'
+          $ref: "#/components/schemas/ExecutionReceipt"
         updated_at:
           type: string
           format: date-time
@@ -1861,11 +2046,11 @@ components:
         events:
           type: array
           items:
-            $ref: '#/components/schemas/AuditEvent'
+            $ref: "#/components/schemas/AuditEvent"
         checkpoints:
           type: array
           items:
-            $ref: '#/components/schemas/AuditCheckpoint'
+            $ref: "#/components/schemas/AuditCheckpoint"
 
     VerificationKey:
       type: object

@@ -1,0 +1,50 @@
+{
+  "version": "v1",
+  "key_id": "fixture_hs_1",
+  "fixtures": {
+    "http_request": {
+      "payload": {
+        "method": "POST",
+        "path": "/dispatch",
+        "timestamp": "2026-03-22T00:00:00.000Z",
+        "key_id": "fixture_hs_1",
+        "body": "{\"action\":\"fixture\"}"
+      },
+      "signature": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImZpeHR1cmVfaHNfMSIsInR5cCI6Ik1BUFNJRyJ9.eyJib2R5Ijoie1wiYWN0aW9uXCI6XCJmaXh0dXJlXCJ9Iiwia2V5X2lkIjoiZml4dHVyZV9oc18xIiwibWV0aG9kIjoiUE9TVCIsInBhdGgiOiIvZGlzcGF0Y2giLCJ0aW1lc3RhbXAiOiIyMDI2LTAzLTIyVDAwOjAwOjAwLjAwMFoifQ.eZI60W_O4kq2-L-Fpb3cQj_JEDVh4_G6LfKqziweXsY"
+    },
+    "audit_export": {
+      "payload": {
+        "export_id": "audit-export:fixture",
+        "created_at": "2026-03-22T00:00:00.000Z",
+        "events_count": 1,
+        "checkpoints_count": 0,
+        "latest_chain_index": 1,
+        "latest_event_hash": "fixture_hash"
+      },
+      "signature": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImZpeHR1cmVfaHNfMSIsInR5cCI6Ik1BUFNJRyJ9.eyJjaGVja3BvaW50c19jb3VudCI6MCwiY3JlYXRlZF9hdCI6IjIwMjYtMDMtMjJUMDA6MDA6MDAuMDAwWiIsImV2ZW50c19jb3VudCI6MSwiZXhwb3J0X2lkIjoiYXVkaXQtZXhwb3J0OmZpeHR1cmUiLCJsYXRlc3RfY2hhaW5faW5kZXgiOjEsImxhdGVzdF9ldmVudF9oYXNoIjoiZml4dHVyZV9oYXNoIn0.goLWkWhK12J-AHwUjTj9-owhnQdNEebhFTxymnJg0_Q"
+    },
+    "conformance_export": {
+      "payload": {
+        "export_id": "conformance-export:fixture",
+        "created_at": "2026-03-22T00:00:00.000Z",
+        "profile": "verified",
+        "total_checks": 10,
+        "passed_checks": 10,
+        "failed_checks": 0,
+        "artifact_hash": "fixture_artifact_hash"
+      },
+      "signature": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImZpeHR1cmVfaHNfMSIsInR5cCI6Ik1BUFNJRyJ9.eyJhcnRpZmFjdF9oYXNoIjoiZml4dHVyZV9hcnRpZmFjdF9oYXNoIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDMtMjJUMDA6MDA6MDAuMDAwWiIsImV4cG9ydF9pZCI6ImNvbmZvcm1hbmNlLWV4cG9ydDpmaXh0dXJlIiwiZmFpbGVkX2NoZWNrcyI6MCwicGFzc2VkX2NoZWNrcyI6MTAsInByb2ZpbGUiOiJ2ZXJpZmllZCIsInRvdGFsX2NoZWNrcyI6MTB9.qnEOlq4kF9LZ_7plEopobfu1mk2WM5gg3m4oeLyDjpU"
+    },
+    "trust_bundle": {
+      "payload": {
+        "bundle_id": "trust-bundle:fixture",
+        "created_at": "2026-03-22T00:00:00.000Z",
+        "trust_domain": "fixture.map.local",
+        "issuer": "fixture.issuer",
+        "profile": "verified",
+        "keys_hash": "fixture_keys_hash"
+      },
+      "signature": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImZpeHR1cmVfaHNfMSIsInR5cCI6Ik1BUFNJRyJ9.eyJidW5kbGVfaWQiOiJ0cnVzdC1idW5kbGU6Zml4dHVyZSIsImNyZWF0ZWRfYXQiOiIyMDI2LTAzLTIyVDAwOjAwOjAwLjAwMFoiLCJpc3N1ZXIiOiJmaXh0dXJlLmlzc3VlciIsImtleXNfaGFzaCI6ImZpeHR1cmVfa2V5c19oYXNoIiwicHJvZmlsZSI6InZlcmlmaWVkIiwidHJ1c3RfZG9tYWluIjoiZml4dHVyZS5tYXAubG9jYWwifQ.SOtpYAe7H4O3un39Rbj1doN6Ul3RPIcHMw3TaiCFGqE"
+    }
+  }
+}

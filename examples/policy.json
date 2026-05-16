@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "critical-always-approval",
+      "capability": "*",
+      "condition": { "eq": ["risk_class", "critical"] },
+      "action": "require_approval"
+    },
+    {
+      "id": "high-value-payment",
+      "capability": "payment.*",
+      "condition": { "gt": ["input.amount", 5000] },
+      "action": "require_approval"
+    },
+    {
+      "id": "production-db-write-deny",
+      "capability": "db.write",
+      "condition": { "eq": ["constraints.environment", "production"] },
+      "action": "deny"
+    },
+    {
+      "id": "production-db-read-approval",
+      "capability": "db.read",
+      "condition": {
+        "and": [
+          { "eq": ["constraints.environment", "production"] },
+          { "gt": ["input.limit", 1000] }
+        ]
+      },
+      "action": "require_approval"
+    },
+    {
+      "id": "non-user-deny",
+      "capability": "payment.*",
+      "condition": { "not": { "eq": ["requester.type", "user"] } },
+      "action": "deny"
+    },
+    {
+      "id": "default-allow",
+      "capability": "*",
+      "condition": { "gte": ["input.value", 0] },
+      "action": "allow"
+    }
+  ]
+}

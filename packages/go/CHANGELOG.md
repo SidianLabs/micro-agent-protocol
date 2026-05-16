@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Updated to preview status (0.x versions)
-- Module path changed from `github.com/mapprotocol/go` to `github.com/mapprotocol/go/mapproto`
+- Module path changed from `github.com/SidianLabs/micro-agent-protocol` to `github.com/SidianLabs/micro-agent-protocol/mapproto`
 
 ### Known Issues
 - Protocol types not complete
@@ -30,4 +30,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signing implementations need completion
 - No integration tests
 
-[0.1.0]: https://github.com/mapprotocol/map/releases/tag/sdk/go/v0.1.0
+[0.1.0]: https://github.com/SidianLabs/micro-agent-protocol/releases/tag/sdk/go/v0.1.0

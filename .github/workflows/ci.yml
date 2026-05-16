@@ -1,0 +1,288 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+    tags:
+      - '**'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.11'
+  GO_VERSION: '1.22'
+
+jobs:
+  # ===========================================================================
+  # TypeScript / Node.js
+  # ===========================================================================
+  typescript:
+    name: TypeScript SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/typescript
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test -- --test-name-pattern='' --coverage
+        with:
+          coverage: true
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: success()
+        with:
+          files: ./coverage/lcov.info
+          flags: typescript
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Run lint
+        run: npm run lint
+
+  # ===========================================================================
+  # Reference Implementation (TypeScript)
+  # ===========================================================================
+  reference:
+    name: Reference Implementation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run check
+
+      - name: Build reference
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run conformance suites
+        run: npm run conformance:all
+
+      - name: Run lint
+        run: npm run lint
+
+  # ===========================================================================
+  # Python SDK
+  # ===========================================================================
+  python:
+    name: Python SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/python
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Type check (mypy)
+        run: mypy src
+
+      - name: Lint (ruff)
+        run: ruff check src
+
+      - name: Format check (black)
+        run: black --check src
+
+      - name: Run tests
+        run: pytest --cov=src --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: success()
+        with:
+          files: ./coverage.xml
+          flags: python
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ===========================================================================
+  # Go SDK
+  # ===========================================================================
+  go:
+    name: Go SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/go
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build ./...
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: success()
+        with:
+          files: ./coverage.out
+          flags: go
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          working-directory: packages/go
+
+  # ===========================================================================
+  # License Headers Check
+  # ===========================================================================
+  license-check:
+    name: License Headers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Apache 2.0 headers
+        run: |
+          if grep -rL "SPDX-License-Identifier: Apache-2.0" \
+            --include="*.ts" \
+            --include="*.js" \
+            --include="*.tsx" \
+            --include="*.jsx" \
+            --include="*.py" \
+            --include="*.go" \
+            --include="*.sh" \
+            --include="*.yaml" \
+            --include="*.yml" \
+            --include="*.md" \
+            . ; then
+            echo "ERROR: Files missing Apache 2.0 SPDX license header:"
+            grep -rL "SPDX-License-Identifier: Apache-2.0" \
+              --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx" \
+              --include="*.py" --include="*.go" --include="*.sh" \
+              --include="*.yaml" --include="*.yml" --include="*.md" \
+              .
+            exit 1
+          fi
+
+  # ===========================================================================
+  # Schema Validation
+  # ===========================================================================
+  schemas:
+    name: Schema Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate JSON Schemas
+        run: |
+          for schema in schemas/*.schema.json; do
+            echo "Validating $schema"
+            node -e "JSON.parse(require('fs').readFileSync('$schema'))"
+          done
+
+      - name: Check OpenAPI spec exists
+        run: |
+          if [ ! -f schemas/openapi.yaml ]; then
+            echo "ERROR: OpenAPI spec not found at schemas/openapi.yaml"
+            exit 1
+          fi
+
+  # ===========================================================================
+  # Security Audit
+  # ===========================================================================
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: success()
+        with:
+          sarif_file: 'trivy-results.sarif'

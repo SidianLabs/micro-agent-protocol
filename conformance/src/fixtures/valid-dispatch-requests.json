@@ -1,0 +1,160 @@
+{
+  "valid_dispatch_requests": [
+    {
+      "capability": "db.read.aggregate",
+      "envelope": {
+        "task_id": "test-task-001",
+        "requester_identity": {
+          "type": "user",
+          "id": "user_001",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "dbread-agent-v1",
+        "intent": "Read aggregate metrics",
+        "constraints": {
+          "common": {
+            "environment": "staging",
+            "redaction_level": "basic"
+          },
+          "domain": {
+            "dataset": "incident_metrics",
+            "service": "payments"
+          }
+        },
+        "risk_class": "low",
+        "delegation_token": "valid_delegation_token",
+        "requested_output_mode": "summary"
+      }
+    },
+    {
+      "capability": "audit.export",
+      "envelope": {
+        "task_id": "test-task-002",
+        "requester_identity": {
+          "type": "user",
+          "id": "user_002",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "audit-agent-v1",
+        "intent": "Export audit logs",
+        "constraints": {
+          "common": {
+            "environment": "production",
+            "redaction_level": "full"
+          },
+          "domain": {
+            "time_range": "last_7_days"
+          }
+        },
+        "risk_class": "medium",
+        "delegation_token": "valid_delegation_token",
+        "requested_output_mode": "detailed"
+      }
+    },
+    {
+      "capability": "compute.transform",
+      "envelope": {
+        "task_id": "test-task-003",
+        "requester_identity": {
+          "type": "service",
+          "id": "compute_svc",
+          "tenant_id": "tenant_B"
+        },
+        "target_agent": "compute-agent-v1",
+        "intent": "Transform data format",
+        "constraints": {
+          "common": {
+            "environment": "staging",
+            "redaction_level": "none"
+          },
+          "domain": {
+            "input_format": "csv",
+            "output_format": "json"
+          }
+        },
+        "risk_class": "low",
+        "delegation_token": "valid_delegation_token",
+        "requested_output_mode": "summary"
+      }
+    },
+    {
+      "capability": "notification.send",
+      "envelope": {
+        "task_id": "test-task-004",
+        "requester_identity": {
+          "type": "user",
+          "id": "user_004",
+          "tenant_id": "tenant_C"
+        },
+        "target_agent": "notification-agent-v1",
+        "intent": "Send notification",
+        "constraints": {
+          "common": {
+            "environment": "production",
+            "redaction_level": "basic"
+          },
+          "domain": {
+            "channel": "email",
+            "priority": "normal"
+          }
+        },
+        "risk_class": "medium",
+        "delegation_token": "valid_delegation_token",
+        "requested_output_mode": "summary"
+      }
+    },
+    {
+      "capability": "file.download",
+      "envelope": {
+        "task_id": "test-task-005",
+        "requester_identity": {
+          "type": "user",
+          "id": "user_005",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "storage-agent-v1",
+        "intent": "Download file",
+        "constraints": {
+          "common": {
+            "environment": "staging",
+            "redaction_level": "full"
+          },
+          "domain": {
+            "bucket": "user-uploads",
+            "filename": "report.pdf"
+          }
+        },
+        "risk_class": "low",
+        "delegation_token": "valid_delegation_token",
+        "requested_output_mode": "detailed"
+      }
+    }
+  ],
+  "capability_configs": {
+    "db.read.aggregate": {
+      "requires_approval": false,
+      "risk_class": "low",
+      "async_mode": false
+    },
+    "audit.export": {
+      "requires_approval": true,
+      "risk_class": "medium",
+      "async_mode": true
+    },
+    "compute.transform": {
+      "requires_approval": false,
+      "risk_class": "low",
+      "async_mode": false
+    },
+    "notification.send": {
+      "requires_approval": false,
+      "risk_class": "medium",
+      "async_mode": true
+    },
+    "file.download": {
+      "requires_approval": false,
+      "risk_class": "low",
+      "async_mode": false
+    }
+  }
+}

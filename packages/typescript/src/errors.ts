@@ -134,6 +134,7 @@ export class MapAPIError extends MapError {
     retryable?: boolean;
     status?: number;
     details?: ErrorDetails;
+    request_id?: string;
   }) {
     super(options.message);
     this.name = 'MapAPIError';
@@ -141,12 +142,14 @@ export class MapAPIError extends MapError {
     this.status = options.status ?? ERROR_CODE_STATUS_MAP[options.code];
     this.retryable = options.retryable ?? ERROR_CODE_RETRYABLE_MAP[options.code];
     this.details = options.details;
+    this.request_id = options.request_id;
   }
 
   readonly code: ErrorCode;
   readonly retryable: boolean;
   readonly status?: number;
   readonly details?: ErrorDetails;
+  readonly request_id?: string;
 }
 
 export class MapValidationError extends MapError {

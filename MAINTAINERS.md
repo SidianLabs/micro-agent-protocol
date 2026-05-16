@@ -2,9 +2,9 @@
 
 ## Current Maintainers
 
-| Name | GitHub | Role |
-|------|--------|------|
-| TBD | @tbd | Lead Maintainer |
+| Name | GitHub | Role | Email |
+|------|--------|------|-------|
+| Bhawesh Bhaskar | @BHAWESHBHASKAR | Lead Maintainer | bhawesh@sidian.dev |
 
 ## Become a Maintainer
 
@@ -119,9 +119,9 @@ Maintainers who step down become **Emeritus**:
 
 ## Contact
 
-- **General**: maintainers@map-protocol.dev
-- **Security**: security@map-protocol.dev
-- **Code of Conduct**: conduct@map-protocol.dev
+- **General**: Open a GitHub Issue at https://github.com/SidianLabs/micro-agent-protocol/issues
+- **Security**: Report via GitHub Security Advisory at https://github.com/SidianLabs/micro-agent-protocol/security/advisories
+- **Code of Conduct**: Open a GitHub Issue labeled "conduct"
 
 ## Acknowledgments
 
@@ -133,4 +133,4 @@ This governance model is inspired by:
 
 ---
 
-*Last updated: 2024-03-22*
+*Last updated: 2026*

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/task-envelope.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json",
   "title": "MAP Task Envelope",
   "type": "object",
   "additionalProperties": false,

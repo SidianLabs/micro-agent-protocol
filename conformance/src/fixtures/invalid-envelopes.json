@@ -1,0 +1,258 @@
+{
+  "invalid_envelopes": [
+    {
+      "description": "Missing task_id",
+      "envelope": {
+        "requester_identity": {
+          "type": "user",
+          "id": "user_001",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "dbread-agent-v1",
+        "intent": "Read data",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": "low",
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "missing_required_field"
+    },
+    {
+      "description": "Missing requester_identity",
+      "envelope": {
+        "task_id": "test-task-missing-identity",
+        "target_agent": "dbread-agent-v1",
+        "intent": "Read data",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": "low",
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "missing_required_field"
+    },
+    {
+      "description": "Missing target_agent",
+      "envelope": {
+        "task_id": "test-task-missing-agent",
+        "requester_identity": {
+          "type": "user",
+          "id": "user_001",
+          "tenant_id": "tenant_A"
+        },
+        "intent": "Read data",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": "low",
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "missing_required_field"
+    },
+    {
+      "description": "Missing intent",
+      "envelope": {
+        "task_id": "test-task-missing-intent",
+        "requester_identity": {
+          "type": "user",
+          "id": "user_001",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "dbread-agent-v1",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": "low",
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "missing_required_field"
+    },
+    {
+      "description": "Wrong type for task_id (number instead of string)",
+      "envelope": {
+        "task_id": 12345,
+        "requester_identity": {
+          "type": "user",
+          "id": "user_001",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "dbread-agent-v1",
+        "intent": "Read data",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": "low",
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "invalid_type"
+    },
+    {
+      "description": "Wrong type for risk_class (number instead of string)",
+      "envelope": {
+        "task_id": "test-task-wrong-type",
+        "requester_identity": {
+          "type": "user",
+          "id": "user_001",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "dbread-agent-v1",
+        "intent": "Read data",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": 999,
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "invalid_type"
+    },
+    {
+      "description": "Invalid risk_class value",
+      "envelope": {
+        "task_id": "test-task-invalid-risk",
+        "requester_identity": {
+          "type": "user",
+          "id": "user_001",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "dbread-agent-v1",
+        "intent": "Read data",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": "invalid_risk",
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "invalid_value"
+    },
+    {
+      "description": "Empty capability",
+      "capability": "",
+      "envelope": {
+        "task_id": "test-task-empty-cap",
+        "requester_identity": {
+          "type": "user",
+          "id": "user_001",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "dbread-agent-v1",
+        "intent": "Read data",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": "low",
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "invalid_request"
+    },
+    {
+      "description": "Empty requester id",
+      "envelope": {
+        "task_id": "test-task-empty-id",
+        "requester_identity": {
+          "type": "user",
+          "id": "",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "dbread-agent-v1",
+        "intent": "Read data",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": "low",
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "invalid_request"
+    },
+    {
+      "description": "Unknown identity type",
+      "envelope": {
+        "task_id": "test-task-unknown-type",
+        "requester_identity": {
+          "type": "unknown_type",
+          "id": "user_001",
+          "tenant_id": "tenant_A"
+        },
+        "target_agent": "dbread-agent-v1",
+        "intent": "Read data",
+        "constraints": {
+          "common": { "environment": "staging" }
+        },
+        "risk_class": "low",
+        "delegation_token": "token",
+        "requested_output_mode": "summary"
+      },
+      "expected_error": "invalid_value"
+    }
+  ],
+  "invalid_dispatch_requests": [
+    {
+      "description": "Missing capability field",
+      "dispatch": {
+        "envelope": {
+          "task_id": "test-task-no-cap",
+          "requester_identity": {
+            "type": "user",
+            "id": "user_001",
+            "tenant_id": "tenant_A"
+          },
+          "target_agent": "dbread-agent-v1",
+          "intent": "Read data",
+          "constraints": {
+            "common": { "environment": "staging" }
+          },
+          "risk_class": "low",
+          "delegation_token": "token",
+          "requested_output_mode": "summary"
+        }
+      },
+      "expected_error": "missing_required_field"
+    },
+    {
+      "description": "Missing envelope field",
+      "dispatch": {
+        "capability": "db.read.aggregate"
+      },
+      "expected_error": "missing_required_field"
+    }
+  ],
+  "invalid_receipts": [
+    {
+      "description": "Missing receipt_id",
+      "receipt": {
+        "task_id": "test-task-001",
+        "status": "completed",
+        "completed_at": "2026-03-22T00:00:00.000Z"
+      },
+      "expected_error": "missing_required_field"
+    },
+    {
+      "description": "Missing task_id",
+      "receipt": {
+        "receipt_id": "receipt_001",
+        "status": "completed",
+        "completed_at": "2026-03-22T00:00:00.000Z"
+      },
+      "expected_error": "missing_required_field"
+    },
+    {
+      "description": "Invalid status value",
+      "receipt": {
+        "receipt_id": "receipt_001",
+        "task_id": "test-task-001",
+        "status": "invalid_status",
+        "completed_at": "2026-03-22T00:00:00.000Z"
+      },
+      "expected_error": "invalid_value"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://map-spec.dev/schemas/dispatch-request.schema.json",
+  "$id": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/dispatch-request.schema.json",
   "title": "MAP Dispatch Request",
   "type": "object",
   "additionalProperties": false,
@@ -35,7 +35,7 @@
       }
     },
     "envelope": {
-      "$ref": "https://map-spec.dev/schemas/task-envelope.schema.json"
+      "$ref": "https://github.com/SidianLabs/micro-agent-protocol/raw/main/schemas/task-envelope.schema.json"
     }
   }
 }

@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
-import { createReferenceApp } from "../src/app.js";
+import { createReferenceApp } from "../app.js";
+import { createExampleAgents } from "../fixtures/agents.js";
 
-const app = createReferenceApp({ includeExampleAgents: true });
+const app = createReferenceApp({ agents: createExampleAgents() });
 
 test("orchestrator dispatches db read successfully", async () => {
   const outcome = await app.orchestrator.dispatch(
@@ -15,18 +16,18 @@ test("orchestrator dispatches db read successfully", async () => {
       constraints: {
         common: {
           environment: "staging",
-          redaction_level: "basic"
+          redaction_level: "basic",
         },
         domain: {
           dataset: "incident_metrics",
-          service: "payments"
-        }
+          service: "payments",
+        },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
+      requested_output_mode: "summary",
     },
-    "db.read.aggregate"
+    "db.read.aggregate",
   );
 
   assert.equal(outcome.result.status, "completed");
@@ -43,18 +44,18 @@ test("orchestrator negotiates preferred schema version when none is requested", 
       constraints: {
         common: {
           environment: "staging",
-          redaction_level: "basic"
+          redaction_level: "basic",
         },
         domain: {
           dataset: "incident_metrics",
-          service: "payments"
-        }
+          service: "payments",
+        },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
+      requested_output_mode: "summary",
     },
-    "db.read.aggregate"
+    "db.read.aggregate",
   );
 
   assert.equal(outcome.result.status, "completed");
@@ -73,21 +74,21 @@ test("orchestrator rejects unsupported requested schema version", async () => {
           common: {
             resource_id: "vendor_abc",
             currency: "INR",
-            max_amount: 450
+            max_amount: 450,
           },
           domain: {
             invoice_id: "INV-223",
-            approved_vendor_only: true
-          }
+            approved_vendor_only: true,
+          },
         },
         risk_class: "high",
         delegation_token: "placeholder",
-        requested_output_mode: "summary"
+        requested_output_mode: "summary",
       },
       "payment.execute",
-      "9.9.9"
+      "9.9.9",
     ),
-    /Unsupported schema version/
+    /Unsupported schema version/,
   );
 });
 
@@ -102,19 +103,19 @@ test("orchestrator records provider-translated schema versions", async () => {
         common: {
           resource_id: "vendor_abc",
           currency: "INR",
-          max_amount: 450
+          max_amount: 450,
         },
         domain: {
           invoice_id: "INV-223",
-          approved_vendor_only: true
-        }
+          approved_vendor_only: true,
+        },
       },
       risk_class: "high",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
+      requested_output_mode: "summary",
     },
     "payment.execute",
-    "1.0.0"
+    "1.0.0",
   );
 
   assert.equal(outcome.result.requested_schema_version, "1.0.0");
@@ -125,14 +126,14 @@ test("orchestrator records provider-translated schema versions", async () => {
     requested: {
       schema_version: "1.0.0",
       output_mode: "summary",
-      delivery_mode: "sync"
+      delivery_mode: "sync",
     },
     selected: {
       schema_version: "1.1.0",
       output_mode: "summary",
-      delivery_mode: "sync"
+      delivery_mode: "sync",
     },
-    provider_actions: ["schema_translated"]
+    provider_actions: ["schema_translated"],
   });
   assert.deepEqual(outcome.receipt.negotiation, outcome.result.negotiation);
 });
@@ -147,20 +148,20 @@ test("orchestrator supports negotiated async delivery mode", async () => {
       constraints: {
         common: {
           environment: "staging",
-          redaction_level: "basic"
+          redaction_level: "basic",
         },
         domain: {
           dataset: "incident_metrics",
-          service: "payments"
-        }
+          service: "payments",
+        },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
+      requested_output_mode: "summary",
     },
     "db.read.aggregate",
     undefined,
-    { delivery_mode: "async" }
+    { delivery_mode: "async" },
   );
 
   assert.equal(outcome.result.status, "running");
@@ -179,20 +180,20 @@ test("orchestrator rejects unsupported output mode for target agent", async () =
         constraints: {
           common: {
             environment: "staging",
-            redaction_level: "basic"
+            redaction_level: "basic",
           },
           domain: {
             dataset: "incident_metrics",
-            service: "payments"
-          }
+            service: "payments",
+          },
         },
         risk_class: "medium",
         delegation_token: "placeholder",
-        requested_output_mode: "debug"
+        requested_output_mode: "debug",
       },
-      "db.read.aggregate"
+      "db.read.aggregate",
     ),
-    /Unsupported output mode/
+    /Unsupported output mode/,
   );
 });
 
@@ -202,16 +203,16 @@ test("orchestrator rejects unknown agent capability", async () => {
       {
         task_id: "task_missing",
         requester_identity: { type: "user", id: "user_1" },
-      target_agent: "missing-agent",
-      intent: "Unknown task",
-      constraints: { common: {}, domain: {} },
+        target_agent: "missing-agent",
+        intent: "Unknown task",
+        constraints: { common: {}, domain: {} },
         risk_class: "low",
         delegation_token: "placeholder",
-        requested_output_mode: "summary"
+        requested_output_mode: "summary",
       },
-      "missing.capability"
+      "missing.capability",
     ),
-    /No micro-agent found/
+    /No micro-agent found/,
   );
 });
 
@@ -227,25 +228,25 @@ test("orchestrator rejects capability not supported by target agent", async () =
           common: {
             resource_id: "vendor_abc",
             currency: "INR",
-            max_amount: 450
+            max_amount: 450,
           },
           domain: {
             invoice_id: "INV-223",
-            approved_vendor_only: true
-          }
+            approved_vendor_only: true,
+          },
         },
         risk_class: "high",
         delegation_token: "placeholder",
-        requested_output_mode: "summary"
+        requested_output_mode: "summary",
       },
-      "payment.execute"
+      "payment.execute",
     ),
-    /Capability not supported/
+    /Capability not supported/,
   );
 });
 
 test("orchestrator rejects dispatch when target agent is disabled", async () => {
-  const localApp = createReferenceApp({ includeExampleAgents: true });
+  const localApp = createReferenceApp({ agents: createExampleAgents() });
   const descriptor = localApp.registry.get("dbread-agent-v1");
   assert.ok(descriptor);
   const {
@@ -256,7 +257,7 @@ test("orchestrator rejects dispatch when target agent is disabled", async () => 
   } = descriptor;
   localApp.registry.register({
     ...unsignedDescriptor,
-    registry_status: "disabled"
+    registry_status: "disabled",
   });
 
   await assert.rejects(
@@ -269,25 +270,25 @@ test("orchestrator rejects dispatch when target agent is disabled", async () => 
         constraints: {
           common: {
             environment: "staging",
-            redaction_level: "basic"
+            redaction_level: "basic",
           },
           domain: {
             dataset: "incident_metrics",
-            service: "payments"
-          }
+            service: "payments",
+          },
         },
         risk_class: "medium",
         delegation_token: "placeholder",
-        requested_output_mode: "summary"
+        requested_output_mode: "summary",
       },
-      "db.read.aggregate"
+      "db.read.aggregate",
     ),
-    /disabled in registry/
+    /disabled in registry/,
   );
 });
 
 test("orchestrator rejects dispatch when capability is disabled", async () => {
-  const localApp = createReferenceApp({ includeExampleAgents: true });
+  const localApp = createReferenceApp({ agents: createExampleAgents() });
   const descriptor = localApp.registry.get("dbread-agent-v1");
   assert.ok(descriptor);
   const {
@@ -298,9 +299,13 @@ test("orchestrator rejects dispatch when capability is disabled", async () => {
   } = descriptor;
   localApp.registry.register({
     ...unsignedDescriptor,
-    capability_descriptors: (unsignedDescriptor.capability_descriptors ?? []).map((item) =>
-      item.name === "db.read.aggregate" ? { ...item, status: "disabled" } : item
-    )
+    capability_descriptors: (
+      unsignedDescriptor.capability_descriptors ?? []
+    ).map((item) =>
+      item.name === "db.read.aggregate"
+        ? { ...item, status: "disabled" }
+        : item,
+    ),
   });
 
   await assert.rejects(
@@ -313,20 +318,20 @@ test("orchestrator rejects dispatch when capability is disabled", async () => {
         constraints: {
           common: {
             environment: "staging",
-            redaction_level: "basic"
+            redaction_level: "basic",
           },
           domain: {
             dataset: "incident_metrics",
-            service: "payments"
-          }
+            service: "payments",
+          },
         },
         risk_class: "medium",
         delegation_token: "placeholder",
-        requested_output_mode: "summary"
+        requested_output_mode: "summary",
       },
-      "db.read.aggregate"
+      "db.read.aggregate",
     ),
-    /Capability is disabled/
+    /Capability is disabled/,
   );
 });
 
@@ -340,18 +345,18 @@ test("orchestrator returns awaiting_approval for production db read", async () =
       constraints: {
         common: {
           environment: "production",
-          redaction_level: "basic"
+          redaction_level: "basic",
         },
         domain: {
           dataset: "incident_metrics",
-          service: "payments"
-        }
+          service: "payments",
+        },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
+      requested_output_mode: "summary",
     },
-    "db.read.aggregate"
+    "db.read.aggregate",
   );
 
   assert.equal(outcome.result.status, "awaiting_approval");
@@ -369,24 +374,25 @@ test("orchestrator resumes approval-gated task after approval", async () => {
       constraints: {
         common: {
           environment: "production",
-          redaction_level: "basic"
+          redaction_level: "basic",
         },
         domain: {
           dataset: "incident_metrics",
-          service: "payments"
-        }
+          service: "payments",
+        },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
+      requested_output_mode: "summary",
     },
-    "db.read.aggregate"
+    "db.read.aggregate",
   );
 
   const resumed = await app.orchestrator.approve({
     task_id: "task_db_resume",
     approval_reference: String(
-      paused.result.structured_output.approval_reference ?? "approval:task_db_resume"
+      paused.result.structured_output.approval_reference ??
+        "approval:task_db_resume",
     ),
     capability: "db.read.aggregate",
     envelope: {
@@ -397,17 +403,17 @@ test("orchestrator resumes approval-gated task after approval", async () => {
       constraints: {
         common: {
           environment: "production",
-          redaction_level: "basic"
+          redaction_level: "basic",
         },
         domain: {
           dataset: "incident_metrics",
-          service: "payments"
-        }
+          service: "payments",
+        },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
-      requested_output_mode: "summary"
-    }
+      requested_output_mode: "summary",
+    },
   });
 
   assert.equal(resumed.result.status, "completed");
@@ -428,19 +434,19 @@ test("orchestrator rejects approval when task is not awaiting approval", async (
         constraints: {
           common: {
             environment: "production",
-            redaction_level: "basic"
+            redaction_level: "basic",
           },
           domain: {
             dataset: "incident_metrics",
-            service: "payments"
-          }
+            service: "payments",
+          },
         },
         risk_class: "medium",
         delegation_token: "placeholder",
-        requested_output_mode: "summary"
-      }
+        requested_output_mode: "summary",
+      },
     }),
-    /Approval task not found|not awaiting approval/
+    /Approval task not found|not awaiting approval/,
   );
 });
 
@@ -455,21 +461,21 @@ test("orchestrator returns running for async task and later completes it", async
       constraints: {
         common: {
           environment: "staging",
-          redaction_level: "basic"
+          redaction_level: "basic",
         },
         domain: {
           dataset: "incident_metrics",
-          service: "payments"
-        }
+          service: "payments",
+        },
       },
       risk_class: "medium",
       delegation_token: "placeholder",
       requested_output_mode: "summary",
       metadata: {
-        async: true
-      }
+        async: true,
+      },
     },
-    "db.read.aggregate"
+    "db.read.aggregate",
   );
 
   assert.equal(outcome.result.status, "running");
