@@ -27,6 +27,7 @@
     "load:reference": "npm run build && node dist/src/load-test.js",
     "dev:server": "tsx src/server-main.ts",
     "dev:demo-server": "tsx demo/server.ts",
+    "quickstart": "tsx quickstart.ts",
     "demo:payment": "tsx demo/demo-payment.ts",
     "demo:db-read": "tsx demo/demo-db-read.ts",
     "demo:full": "tsx demo/demo-full-flow.ts",

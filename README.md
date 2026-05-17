@@ -20,11 +20,20 @@ MAP is a **firewall for AI actions**. Whatever your AI agent wants to do — sen
 ## 10-minute setup
 
 ```bash
-npm install @sidianlabs/map-sdk
+# TypeScript / Node.js
+npm install @sidianlabs/map-client
+
+# Python
+pip install mapprotocol
+
+# Go
+go get github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto
 ```
 
+### TypeScript
+
 ```typescript
-import { map } from '@sidianlabs/map-sdk';
+import { map } from '@sidianlabs/map-client';
 
 // Works for ANY action your AI agent takes
 const agent = map({
@@ -250,7 +259,7 @@ if (result.status === 'approval_required') {
 MAP ships with adapters for common capabilities:
 
 ```typescript
-import { map, HttpAdapter, PaymentExecuteAdapter, DbReadAdapter } from '@sidianlabs/map-sdk';
+import { map, HttpAdapter, PaymentExecuteAdapter, DbReadAdapter } from '@sidianlabs/map-client';
 
 const agent = map({ policy: [...] });
 
