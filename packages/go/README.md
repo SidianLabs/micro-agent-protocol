@@ -7,18 +7,69 @@ SPDX-License-Identifier: Apache-2.0
 
 # MAP Protocol Go SDK
 
-Go SDK preview for interacting with the MAP Protocol network.
+Go SDK for Micro Agent Protocol (MAP) — policy enforcement and audit trails for AI agents.
 
-**Status:** Preview source package. This package is not yet fully aligned with the current reference MAP HTTP contract. Use the TypeScript SDK as the canonical client surface today.
-
-**⚠️ Note:** This SDK is in preview status. API may change in 0.x releases.
+**Status:** Stable — production-ready.
 
 ## Installation
 
-This module is not published as a released Go package yet. Use it from the repository source:
+```bash
+go get github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto
+```
+
+## Quick Start
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "time"
+
+    mapproto "github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto"
+)
+
+func main() {
+    ctx := context.Background()
+
+    signer := mapproto.NewHMACSigner([]byte("your-secret-key"), "ethereum:0xYourAddress")
+    client, err := mapproto.NewClient(
+        mapproto.WithBaseURL("http://localhost:8787"),
+        mapproto.WithTimeout(30*time.Second),
+        mapproto.WithSigner(signer),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    result, err := client.Dispatch(ctx, &mapproto.DispatchRequest{
+        Capability: "payment.execute",
+        Envelope: &mapproto.TaskEnvelope{
+            TaskID: "task-123",
+            RequesterIdentity: &mapproto.RequesterIdentity{
+                Type: "user",
+                ID:   "user-abc",
+            },
+            Intent: `{"amount": 5000}`,
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    log.Printf("Result: %+v", result)
+}
+```
+
+## API
+
+See the [MAP Protocol specification](../../spec/MAP-SPEC-v1.md) for protocol details.
+
+## Running Tests
 
 ```bash
-go test ./...
+cd packages/go
+go test -race -count=1 ./...
 ```
 
 ## Quick Start

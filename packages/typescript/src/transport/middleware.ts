@@ -144,7 +144,7 @@ export function loggingMiddleware(logger: MAPLogger): Middleware {
     name: 'logging',
 
     async before(request: MapClientRequest): Promise<MapClientRequest> {
-      logger.info(`→ ${request.method} ${request.path}`, {
+      logger.info(`-> ${request.method} ${request.path}`, {
         headers: request.headers,
         bodySize: request.body ? JSON.stringify(request.body).length : 0,
       });
@@ -152,7 +152,7 @@ export function loggingMiddleware(logger: MAPLogger): Middleware {
     },
 
     async after(response: MapClientResponse): Promise<MapClientResponse> {
-      logger.info(`← ${response.statusCode}`, {
+      logger.info(`<- ${response.statusCode}`, {
         statusCode: response.statusCode,
         bodyPreview:
           typeof response.body === 'object'
@@ -163,7 +163,7 @@ export function loggingMiddleware(logger: MAPLogger): Middleware {
     },
 
     async onError(error: Error): Promise<Error> {
-      logger.error(`✗ Request failed: ${error.message}`, {
+      logger.error(` Request failed: ${error.message}`, {
         errorName: error.name,
         errorMessage: error.message,
       });

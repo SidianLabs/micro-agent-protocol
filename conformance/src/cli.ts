@@ -170,7 +170,7 @@ function printTextResults(results: SuiteResult[]): void {
     if (result.checks.length > 0) {
       console.log("  Checks:");
       for (const check of result.checks) {
-        const status = check.passed ? "✓" : (check.details?.skipped ? "○" : "✗");
+        const status = check.passed ? "PASS" : (check.details?.skipped ? "SKIP" : "FAIL");
         console.log(`    ${status} ${check.name}: ${check.message}`);
       }
       console.log("");
@@ -195,10 +195,10 @@ function printTextResults(results: SuiteResult[]): void {
 
   if (totalFailed > 0) {
     console.log("");
-    console.log("❌ CONFORMANCE FAILED — some checks did not pass.");
+    console.log("CONFORMANCE FAILED — some checks did not pass.");
   } else {
     console.log("");
-    console.log("✅ CONFORMANCE PASSED — all checks passed.");
+    console.log(" CONFORMANCE PASSED — all checks passed.");
   }
 }
 

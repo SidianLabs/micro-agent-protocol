@@ -1,13 +1,13 @@
 /**
+ * This file is generated from /protocol/map-types.ts.
+ * Do not edit it by hand.
+ */
+
+/**
  * MAP Protocol - Micro Agent Protocol
  *
  * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
- */
-
-/**
- * This file is generated from /protocol/map-types.ts.
- * Do not edit it by hand.
  */
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";

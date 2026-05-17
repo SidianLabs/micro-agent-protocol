@@ -29,6 +29,7 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-this-alias': ['error', { allowDestructuring: true, allowedNames: ['self'] }],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-implied-eval': 'error',
       '@typescript-eslint/no-unsafe-assignment': 'off',

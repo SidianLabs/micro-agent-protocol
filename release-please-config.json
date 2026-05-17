@@ -1,0 +1,26 @@
+{
+  "release-type": "node",
+  "packages": {
+    ".": {
+      "package-name": "micro-agent-protocol",
+      "changelog-path": "CHANGELOG.md"
+    },
+    "packages/typescript": {
+      "package-name": "@sidianlabs/map-client",
+      "changelog-path": "packages/typescript/CHANGELOG.md"
+    },
+    "packages/python": {
+      "package-name": "mapprotocol",
+      "changelog-path": "packages/python/CHANGELOG.md"
+    },
+    "packages/go": {
+      "package-name": "github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto",
+      "changelog-path": "packages/go/CHANGELOG.md"
+    }
+  },
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "draft": false,
+  "prerelease": true,
+  "include-v-in-tag": false
+}

@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mapprotocol"
-version = "2026.5.14"
+version = "0.1.0"
 description = "Official Python SDK for Micro Agent Protocol (MAP)"
 readme = "README.md"
 license = { text = "Apache-2.0" }

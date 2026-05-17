@@ -46,6 +46,7 @@ const HEADER_SH = `#!/bin/bash
 const CURRENT_MARKER = "Copyright © 2026 Sidian Labs";
 const OLD_MARKER = "Copyright MAP Protocol Authors";
 const OLD_YEAR = "Copyright 2024";
+const OLD_SPDX_LINE = "SPDX-FileCopyrightText: 2024 MAP Protocol";
 
 function getHeader(ext) {
   switch (ext) {
@@ -61,7 +62,7 @@ function getHeader(ext) {
 
 function fileNeedsUpdate(content, ext) {
   if (!getHeader(ext)) return false;
-  return content.includes(OLD_MARKER) || content.includes(OLD_YEAR) || !content.includes(CURRENT_MARKER);
+  return content.includes(OLD_MARKER) || content.includes(OLD_YEAR) || content.includes(OLD_SPDX_LINE) || !content.includes(CURRENT_MARKER);
 }
 
 function addOrUpdateHeader(content, ext) {
@@ -70,12 +71,18 @@ function addOrUpdateHeader(content, ext) {
   const lines = header.split("\n").filter(l => l.trim());
 
   // Check if already has new header
-  if (content.includes(CURRENT_MARKER)) {
-    return content; // already up to date
-  }
-
-  // Remove old header if present
   let result = content;
+
+  // Remove old stale patterns regardless
+  if (result.includes(OLD_SPDX_LINE)) {
+    result = result.split("\n").filter(l => !l.includes(OLD_SPDX_LINE)).join("\n");
+  }
+  // Remove duplicate consecutive SPDX lines (with optional blank line between)
+  result = result.replace(/(SPDX-License-Identifier: Apache-2\.0)\n\s*\n\s*\1/g, "$1");
+
+  if (result.includes(CURRENT_MARKER)) {
+    return result; // already up to date, but may have been cleaned
+  }
   if (content.includes(OLD_MARKER)) {
     // Find and remove old header block (first /** ... */ or # comment block)
     result = result.replace(/\/\*\*[\s\S]*?\*\/\n?/, "");

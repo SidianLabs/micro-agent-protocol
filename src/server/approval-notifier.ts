@@ -112,10 +112,7 @@ export class ApprovalNotifier {
     const webhookUrl = params.webhookUrl ?? this.defaultWebhookUrl;
     if (!webhookUrl) {
       // No webhook configured — log and continue
-      console.log(
-        `[MAP] Approval required for task ${params.taskId} (${params.capability}) — no webhook configured. ` +
-          `Approve via: POST /approve with approval_reference="${params.approvalReference}"`,
-      );
+      console.log(`[MAP] Approval required for task ${params.taskId} (${params.capability}) — no webhook configured. Approve via POST /approve with approval_reference="${params.approvalReference}"`);
       return;
     }
 
@@ -231,10 +228,6 @@ export class ApprovalNotifier {
       if (!response.ok) {
         throw new Error(`Webhook returned ${response.status}`);
       }
-
-      console.log(
-        `[MAP] Approval notification delivered for task ${notification.task_id} → ${url}`,
-      );
     } catch (err) {
       if (retriesLeft > 0) {
         const delay =

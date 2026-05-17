@@ -1,0 +1,48 @@
+# MAP Protocol — Docker Compose for local development
+#
+# Copyright © 2026 Sidian Labs
+# SPDX-License-Identifier: Apache-2.0
+
+services:
+  map-reference:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sidianlabs/map-reference:latest
+    ports:
+      - "8787:8787"
+    environment:
+      NODE_ENV: production
+      PORT: 8787
+      MAP_DEPLOYMENT_PROFILE: open
+      MAP_SIGNING_SECRET: ${MAP_SIGNING_SECRET:-demo-signing-secret-change-in-prod}
+      MAP_REQUIRE_TENANT: "false"
+      MAP_ADMIN_TOKEN: ${MAP_ADMIN_TOKEN:-}
+      MAP_APPROVAL_WEBHOOK_URL: ${MAP_APPROVAL_WEBHOOK_URL:-}
+      MAP_SERVER_BASE_URL: http://localhost:8787
+    volumes:
+      - map-data:/data
+    restart: unless-stopped
+
+  map-reference-regulated:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sidianlabs/map-reference:regulated
+    ports:
+      - "8788:8787"
+    environment:
+      NODE_ENV: production
+      PORT: 8787
+      MAP_DEPLOYMENT_PROFILE: regulated
+      MAP_SIGNING_SECRET: ${MAP_SIGNING_SECRET:-}
+      MAP_REQUIRE_TENANT: "true"
+      MAP_ADMIN_TOKEN: ${MAP_ADMIN_TOKEN:-}
+      MAP_SERVER_BASE_URL: http://localhost:8788
+    volumes:
+      - map-data-regulated:/data
+    restart: unless-stopped
+
+volumes:
+  map-data:
+  map-data-regulated:

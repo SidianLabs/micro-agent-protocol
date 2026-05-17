@@ -248,7 +248,7 @@ class TestInvalidCapabilityFuzz:
                     valid_error_status = response.status_code in (400, 404, 422)
                     print(
                         f'  [invalid-cap] "{capability}" → {response.status_code} '
-                        f"{'✓' if valid_error_status else '✗'}"
+                        f"{'' if valid_error_status else ''}"
                     )
                     tested_count += 1
                 except (httpx.ConnectError, httpx.ReadError) as exc:

@@ -373,12 +373,6 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
           const oauth2Result = await validateOAuth2Token(bearerToken);
           if (oauth2Result.valid && oauth2Result.sub) {
             authSubject = oauth2Result.sub;
-            console.log(
-              `[MAP] OAuth2 authenticated subject: ${authSubject}` +
-                (oauth2Result.scopes
-                  ? ` (scopes: ${oauth2Result.scopes.join(", ")})`
-                  : ""),
-            );
           }
         } catch {
           // Non-fatal: proceed even if OAuth2 validation fails
@@ -652,12 +646,6 @@ export async function handleMutationRoutes(ctx: MutationRouteContext): Promise<{
           const oauth2Result = await validateOAuth2Token(bearerToken);
           if (oauth2Result.valid && oauth2Result.sub) {
             authSubject = oauth2Result.sub;
-            console.log(
-              `[MAP] OAuth2 authenticated subject: ${authSubject}` +
-                (oauth2Result.scopes
-                  ? ` (scopes: ${oauth2Result.scopes.join(", ")})`
-                  : ""),
-            );
           }
         } catch {
           // Non-fatal: proceed even if OAuth2 validation fails

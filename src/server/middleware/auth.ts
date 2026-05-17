@@ -621,14 +621,6 @@ export async function authMiddleware(
         const oauth2Result = await validateOAuth2Token(bearerToken);
         if (oauth2Result.valid) {
           const subject = oauth2Result.sub ?? "bearer:authenticated";
-          if (oauth2Result.sub) {
-            console.log(
-              `[MAP] OAuth2 authenticated subject: ${oauth2Result.sub}` +
-                (oauth2Result.scopes
-                  ? ` (scopes: ${oauth2Result.scopes.join(", ")})`
-                  : ""),
-            );
-          }
           return { authenticated: true, subject };
         }
       } catch {

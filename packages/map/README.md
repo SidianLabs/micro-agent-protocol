@@ -10,7 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 **Policy enforcement and audit trails for AI agents. Works for any action. Open standard.**
 
 ```
-AI proposes → MAP checks policy → Allowed: execute + receipt | Blocked: deny | Risky: require approval
+AI proposes -> MAP checks policy -> Allowed: execute + receipt | Blocked: deny | Risky: require approval
 ```
 
 MAP is a **firewall for AI actions**. Whatever your AI agent wants to do — send emails, write to databases, call APIs, deploy infrastructure, process payments, update records — MAP enforces your rules and generates a signed receipt for every decision.
@@ -74,9 +74,9 @@ const result = await agent.run('payment.execute', {
   vendor_id: 'vendor_abc',
 });
 
-// result.status  → 'executed' | 'denied' | 'approval_required'
-// result.output  → whatever your handler returned
-// result.receipt → cryptographically signed proof of what happened
+// result.status  -> 'executed' | 'denied' | 'approval_required'
+// result.output  -> whatever your handler returned
+// result.receipt -> cryptographically signed proof of what happened
 ```
 
 That's it. No `TaskEnvelope`. No `AgentDescriptor`. No `DelegationToken`. Just policy, handlers, and receipts.
@@ -110,8 +110,8 @@ MAP solves all three, for any action your AI agent takes.
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  MAP Policy Engine                                          │
-│  Rule: payment.* + amount > 1000 → require_approval        │
-│  Rule: db.write + env=production → deny                     │
+│  Rule: payment.* + amount > 1000 -> require_approval        │
+│  Rule: db.write + env=production -> deny                     │
 └──────────┬──────────────┬──────────────────────────────────┘
            │              │
      ALLOW │        REQUIRE_APPROVAL
@@ -120,7 +120,7 @@ MAP solves all three, for any action your AI agent takes.
     ┌──────────┐   ┌──────────────────────────────────┐
     │ Execute  │   │ Notify approver (webhook/Slack)  │
     │ Adapter  │   │ Human reviews and approves       │
-    └────┬─────┘   │ MAP re-evaluates → Execute       │
+    └────┬─────┘   │ MAP re-evaluates -> Execute       │
          │         └──────────────────────────────────┘
          ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -327,12 +327,12 @@ curl http://localhost:8787/audit-events
 The EU AI Act requires audit trails for high-risk AI systems (August 2, 2026 deadline).
 
 MAP provides:
-- ✅ Tamper-evident audit event log (`GET /audit-events`)
-- ✅ Cryptographically signed execution receipts
-- ✅ Hash-chained audit checkpoints (verifiable integrity)
-- ✅ Policy decision records (what rule triggered, why)
-- ✅ Human oversight via approval workflow
-- ✅ Export-ready audit data
+-  Tamper-evident audit event log (`GET /audit-events`)
+-  Cryptographically signed execution receipts
+-  Hash-chained audit checkpoints (verifiable integrity)
+-  Policy decision records (what rule triggered, why)
+-  Human oversight via approval workflow
+-  Export-ready audit data
 
 ---
 
@@ -369,9 +369,9 @@ MAP_DEPLOYMENT_PROFILE=regulated
 
 | Language | Package | Status |
 |----------|---------|--------|
-| TypeScript | `@sidianlabs/map-sdk` | ✅ Complete |
-| Python | `mapprotocol` | ⚠️ Preview |
-| Go | `github.com/SidianLabs/micro-agent-protocol` | ⚠️ Preview |
+| TypeScript | `@sidianlabs/map-sdk` |  Complete |
+| Python | `mapprotocol` | [Warning]️ Preview |
+| Go | `github.com/SidianLabs/micro-agent-protocol` | [Warning]️ Preview |
 
 ---
 

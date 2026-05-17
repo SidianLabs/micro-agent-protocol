@@ -277,9 +277,12 @@ export class DbReadAdapter implements ExecutionAdapter {
 
     // Dynamic import of pg to avoid hard dependency
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pg = await import("pg" as any);
-      const Client = pg.default?.Client ?? pg.Client;
+      // @ts-expect-error — pg is optional, installed manually
+      const pg = await import("pg") as { Client?: { new(c: { connectionString?: string }): { connect(): Promise<void>; query(text: string, params: unknown[]): Promise<{ rows: unknown[]; rowCount?: number }>; end(): Promise<void> } }; default?: { Client?: { new(c: { connectionString?: string }): { connect(): Promise<void>; query(text: string, params: unknown[]): Promise<{ rows: unknown[]; rowCount?: number }>; end(): Promise<void> } } } };
+      const Client = pg.Client ?? (pg.default?.Client ?? null);
+      if (!Client) {
+        throw new Error("pg module loaded but Client class not found.");
+      }
       const client = new Client({ connectionString: this.connectionString });
       await client.connect();
       try {

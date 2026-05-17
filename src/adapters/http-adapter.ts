@@ -9,7 +9,6 @@
  * HTTP Adapter
  *
  * Executes outbound HTTP requests as a MAP capability.
- * This is the first real-world adapter — it actually does something.
  *
  * Capability: "http.request"
  *
@@ -70,6 +69,7 @@ export class HttpAdapter implements ExecutionAdapter {
       "http://localhost",
       "http://127.",
       "http://10.",
+      "http://0.",
       "http://172.16.",
       "http://172.17.",
       "http://172.18.",
@@ -87,8 +87,12 @@ export class HttpAdapter implements ExecutionAdapter {
       "http://172.30.",
       "http://172.31.",
       "http://192.168.",
+      "http://169.254.",
+      "http://[::",
       "https://localhost",
       "https://127.",
+      "https://[::",
+      "https://0.",
     ];
     this.maxResponseBodyBytes =
       options.maxResponseBodyBytes ?? MAX_RESPONSE_BODY_BYTES;
@@ -113,14 +117,21 @@ export class HttpAdapter implements ExecutionAdapter {
       if (this.requireHttps && !url.startsWith("https://")) {
         errors.push({ field: "url", message: "Only https:// URLs are allowed." });
       }
-      const blocked = this.blockedPrefixes.find((prefix) =>
-        url.toLowerCase().startsWith(prefix.toLowerCase()),
-      );
-      if (blocked) {
-        errors.push({ field: "url", message: `URL is blocked (matches blocked prefix).` });
-      }
       try {
-        new URL(url);
+        const parsed = new URL(url);
+        const hostname = parsed.hostname.toLowerCase();
+        if (hostname === "localhost" || hostname === "0.0.0.0" ||
+            hostname === "[::1]" || hostname === "[::]" ||
+            hostname === "127.0.0.1") {
+          errors.push({ field: "url", message: "URL targets a blocked host." });
+        } else {
+          const blocked = this.blockedPrefixes.find((prefix) =>
+            url.toLowerCase().startsWith(prefix.toLowerCase()),
+          );
+          if (blocked) {
+            errors.push({ field: "url", message: "URL is blocked (matches blocked prefix)." });
+          }
+        }
       } catch {
         errors.push({ field: "url", message: "url is not a valid URL." });
       }

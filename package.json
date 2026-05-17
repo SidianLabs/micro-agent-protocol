@@ -1,6 +1,6 @@
 {
   "name": "micro-agent-protocol",
-  "version": "2026.5.14",
+  "version": "0.1.0",
   "description": "Micro Agent Protocol (MAP) - Open standard for AI assistant to micro-agent delegation",
   "type": "module",
   "workspaces": [
@@ -27,6 +27,7 @@
     "load:reference": "npm run build && node dist/src/load-test.js",
     "dev:server": "tsx src/server-main.ts",
     "dev:demo-server": "tsx demo/server.ts",
+    "quickstart": "tsx quickstart.ts",
     "demo:payment": "tsx demo/demo-payment.ts",
     "demo:db-read": "tsx demo/demo-db-read.ts",
     "demo:full": "tsx demo/demo-full-flow.ts",
