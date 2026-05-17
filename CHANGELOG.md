@@ -32,14 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Quickstart demo (npm run quickstart)
 
 ### Changed
-- Version: 2026.05.14 → 0.1.0 (semver-compliant)
+- Version: 2026.05.14 -> 0.1.0 (semver-compliant)
 - Error code mapping replaced 78-line nested ternary with lookup table
 - Copyright: © 2026 Sidian Labs
 - .gitignore: removed SECURITY.md, CONTRIBUTING.md, NOTICE from ignore list
 
 ### Fixed
 - Async queue retry mechanism: pendingRetry tracking for capacity management
-- No adapter for capability → proper invalid_request error code
+- No adapter for capability -> proper invalid_request error code
 - SSRF protection: blocked 0.0.0.0, IPv6, AWS metadata addresses
 - crypto.randomBytes for retry jitter (was Math.random)
 - Removed orphan code, dead imports, and unused randomFn option

@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 
 Go SDK for Micro Agent Protocol (MAP) — policy enforcement and audit trails for AI agents.
 
-**Status:** ✅ Stable — production-ready.
+**Status:** Stable — production-ready.
 
 ## Installation
 

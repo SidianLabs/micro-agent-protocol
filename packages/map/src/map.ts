@@ -40,9 +40,9 @@ import { randomUUID } from "node:crypto";
  *      vendor_id: 'vendor_abc',
  *    });
  *
- *    // result.status  → 'executed' | 'denied' | 'approval_required'
- *    // result.output  → { charge_id: '...', status: 'succeeded' }
- *    // result.receipt → cryptographically signed proof of what happened
+ *    // result.status  -> 'executed' | 'denied' | 'approval_required'
+ *    // result.output  -> { charge_id: '...', status: 'succeeded' }
+ *    // result.receipt -> cryptographically signed proof of what happened
  *
  * ─── THAT'S IT ───────────────────────────────────────────────────────────────
  *
@@ -352,7 +352,7 @@ export function map(options: MapOptions = {}): MapInstance {
   // Adapter registry
   const adapters = new Map<string, ExecutionAdapter>();
 
-  // Pending approvals (approval_reference → pending intent)
+  // Pending approvals (approval_reference -> pending intent)
   const pendingApprovals = new Map<string, PendingApproval>();
 
   // Core executor

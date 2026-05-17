@@ -336,12 +336,12 @@ curl http://localhost:8787/audit-events
 The EU AI Act requires audit trails for high-risk AI systems (August 2, 2026 deadline).
 
 MAP provides:
-- ✅ Tamper-evident audit event log (`GET /audit-events`)
-- ✅ Cryptographically signed execution receipts
-- ✅ Hash-chained audit checkpoints (verifiable integrity)
-- ✅ Policy decision records (what rule triggered, why)
-- ✅ Human oversight via approval workflow
-- ✅ Export-ready audit data
+- [Yes] Tamper-evident audit event log (`GET /audit-events`)
+- [Yes] Cryptographically signed execution receipts
+- [Yes] Hash-chained audit checkpoints (verifiable integrity)
+- [Yes] Policy decision records (what rule triggered, why)
+- [Yes] Human oversight via approval workflow
+- [Yes] Export-ready audit data
 
 ---
 
@@ -378,9 +378,9 @@ MAP_DEPLOYMENT_PROFILE=regulated
 
 | Language | Package | Status |
 |----------|---------|--------|
-| TypeScript | `@sidianlabs/map-sdk` | ✅ Complete |
-| Python | `mapprotocol` | ⚠️ Preview |
-| Go | `github.com/SidianLabs/micro-agent-protocol` | ⚠️ Preview |
+| TypeScript | `@sidianlabs/map-client` | Stable |
+| Go | `github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto` | Stable |
+| Python | `mapprotocol` | Preview |
 
 ---
 

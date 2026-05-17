@@ -176,7 +176,7 @@ describe('Fuzz / Property Tests', () => {
           const validErrorStatus =
             response.status === 400 || response.status === 404 || response.status === 422;
           console.log(
-            `  [invalid-cap] "${capability}" → ${response.status} ${validErrorStatus ? '✓' : '✗'}`
+            `  [invalid-cap] "${capability}" → ${response.status} ${validErrorStatus ? '' : ''}`
           );
           testedCount++;
         } catch (err) {

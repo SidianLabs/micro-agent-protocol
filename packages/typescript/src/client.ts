@@ -328,7 +328,7 @@ export class MapAssistantClient {
   }
 
   /**
-   * High-level workflow that chains dispatch → poll → approve automatically.
+   * High-level workflow that chains dispatch -> poll -> approve automatically.
    */
   async workflow(
     request: DispatchRequest,

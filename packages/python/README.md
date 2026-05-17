@@ -10,9 +10,9 @@ SPDX-License-Identifier: Apache-2.0
 
 Python SDK for Micro Agent Protocol (MAP).
 
-**Status:** Preview source package. This package is not yet fully aligned with the current reference MAP HTTP contract. Use the TypeScript SDK as the canonical client surface today.
+**Status:** Preview source package. This package is not yet published to PyPI.
 
-**⚠️ Note:** This SDK is in preview status. API may change in 0.x releases.
+**[Warning]️ Note:** This SDK is in preview status. API may change in 0.x releases.
 
 ## Installation
 
