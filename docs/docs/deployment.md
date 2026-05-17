@@ -21,7 +21,7 @@ version: '3.8'
 
 services:
   map-server:
-    image: mapprotocol/map-server:latest
+    image: sidianlabs/map-reference:latest
     ports:
       - "8787:8787"
     environment:
@@ -136,7 +136,7 @@ MAP/docs/deployment.md#L90-150
 replicaCount: 3
 
 image:
-  repository: mapprotocol/map-server
+  repository: sidianlabs/map-reference
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -284,7 +284,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: map-server
-          image: mapprotocol/map-server:latest
+          image: sidianlabs/map-reference:latest
           ports:
             - containerPort: 8787
           env:

@@ -17,7 +17,7 @@ The official TypeScript/JavaScript SDK for MAP Protocol.
 ## Installation
 
 ```bash
-npm install @mapprotocol/sdk
+npm install @sidianlabs/map-client
 ```
 
 ## Requirements
@@ -35,10 +35,10 @@ import {
   RSASigner,
   RiskLevel,
   VisibilityMode,
-} from '@mapprotocol/sdk';
+} from '@sidianlabs/map-client';
 
 // Create a client
-const client = MapAssistantClient.forBaseUrl('https://api.mapprotocol.ai');
+const client = MapAssistantClient.forBaseUrl('https://localhost:8787');
 
 // Configure signing (HMAC)
 client.configureSigning('key-id', 'secret-key');
@@ -126,7 +126,7 @@ import {
   validateResultPackage,
   validateExecutionReceipt,
   validateDelegationToken,
-} from '@mapprotocol/sdk';
+} from '@sidianlabs/map-client';
 
 try {
   validateTaskEnvelope(someObject);
@@ -138,7 +138,7 @@ try {
 ## Error Handling
 
 ```typescript
-import { MapError, MapAPIError, MapValidationError } from '@mapprotocol/sdk';
+import { MapError, MapAPIError, MapValidationError } from '@sidianlabs/map-client';
 
 try {
   await client.dispatch(request);

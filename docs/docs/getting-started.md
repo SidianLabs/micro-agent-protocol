@@ -20,13 +20,13 @@ Choose your preferred SDK:
 
 ```bash
 # TypeScript/JavaScript
-npm install @mapprotocol/sdk
+npm install @sidianlabs/map-client
 
 # Python
 pip install mapprotocol
 
 # Go
-go get github.com/mapprotocol/map/packages/go/mapproto
+go get github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto
 ```
 
 ## Quick Start
@@ -34,9 +34,9 @@ go get github.com/mapprotocol/map/packages/go/mapproto
 ### TypeScript
 
 ```typescript
-import { MapAssistantClient } from '@mapprotocol/sdk';
+import { MapAssistantClient } from '@sidianlabs/map-client';
 
-const client = MapAssistantClient.forBaseUrl('https://api.mapprotocol.ai');
+const client = MapAssistantClient.forBaseUrl('https://localhost:8787');
 
 // Configure authentication
 client.configureSigning('your-key-id', 'your-secret');
@@ -70,7 +70,7 @@ Preview note: the Python SDK package is not yet fully aligned with the current r
 ```python
 from mapprotocol import Client
 
-client = Client(base_url="https://api.mapprotocol.ai")
+client = Client(base_url="https://localhost:8787")
 client.configure_signing(key_id="your-key-id", secret="your-secret")
 
 result = client.dispatch({
@@ -98,11 +98,11 @@ Preview note: the Go SDK package is not yet fully aligned with the current refer
 package main
 
 import (
-    "github.com/mapprotocol/map/packages/go/mapproto"
+    "github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto"
 )
 
 func main() {
-    client := mapproto.NewClient("https://api.mapprotocol.ai")
+    client := mapproto.NewClient("https://localhost:8787")
     client.ConfigureSigning("your-key-id", "your-secret")
     
     result, err := client.Dispatch(mapproto.DispatchRequest{

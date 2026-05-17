@@ -17,8 +17,8 @@ We welcome contributions from developers, researchers, and organizations.
 
 - [Code of Conduct](https://github.com/SidianLabs/micro-agent-protocol/blob/main/CODE_OF_CONDUCT.md)
 - [Security Policy](https://github.com/SidianLabs/micro-agent-protocol/blob/main/SECURITY.md)
-- [GitHub Discussions](https://github.com/mapprotocol/map/discussions)
-- [Issues](https://github.com/mapprotocol/map/issues)
+- [GitHub Discussions](https://github.com/SidianLabs/micro-agent-protocol/discussions)
+- [Issues](https://github.com/SidianLabs/micro-agent-protocol/issues)
 
 ## Ways to Contribute
 
@@ -45,7 +45,7 @@ We welcome contributions from developers, researchers, and organizations.
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/mapprotocol/map.git
+git clone https://github.com/SidianLabs/micro-agent-protocol.git
 cd map
 ```
 
@@ -80,9 +80,9 @@ cd ../go && go test ./...
 MAP/docs/contributing.md#L1-50
 map/
 ├── packages/
-│   ├── typescript/          # @mapprotocol/sdk (npm)
-│   ├── python/              # @mapprotocol/python (PyPI)
-│   └── go/                  # github.com/mapprotocol/go
+│   ├── typescript/          # @sidianlabs/map-client (npm)
+│   ├── python/              # mapprotocol (PyPI)
+│   └── go/                  # github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto
 ├── reference/               # TypeScript reference implementation
 │   ├── src/
 │   │   ├── control-plane/   # Control plane components
@@ -476,12 +476,12 @@ Contributors who submit accepted changes will be recognized:
 - [Documentation](https://map-protocol.dev/docs)
 - [Protocol Specification](./protocol-spec.md)
 - [OpenAPI Specification](https://github.com/SidianLabs/micro-agent-protocol/blob/main/schemas/openapi.yaml)
-- [GitHub Discussions](https://github.com/mapprotocol/map/discussions)
-- [Issues](https://github.com/mapprotocol/map/issues)
+- [GitHub Discussions](https://github.com/SidianLabs/micro-agent-protocol/discussions)
+- [Issues](https://github.com/SidianLabs/micro-agent-protocol/issues)
 
 ## Questions?
 
-- **General Questions**: [GitHub Discussions](https://github.com/mapprotocol/map/discussions)
+- **General Questions**: [GitHub Discussions](https://github.com/SidianLabs/micro-agent-protocol/discussions)
 - **Security Issues**: See [SECURITY.md](https://github.com/SidianLabs/micro-agent-protocol/blob/main/SECURITY.md)
 - **Code of Conduct**: See [CODE_OF_CONDUCT.md](https://github.com/SidianLabs/micro-agent-protocol/blob/main/CODE_OF_CONDUCT.md)
 - **Email**: maintainers@map-protocol.dev

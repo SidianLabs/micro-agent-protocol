@@ -32,7 +32,7 @@ pip install mapprotocol
 from mapprotocol import Client, RiskLevel, VisibilityMode
 
 # Create a client
-client = Client(base_url="https://api.mapprotocol.ai")
+client = Client(base_url="https://localhost:8787")
 
 # Configure signing
 client.configure_signing(key_id="key-id", secret="secret-key")

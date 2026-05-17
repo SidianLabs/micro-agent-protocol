@@ -19,7 +19,7 @@ The official Go SDK for MAP Protocol.
 ## Installation
 
 ```bash
-go get github.com/mapprotocol/map/packages/go/mapproto
+go get github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto
 ```
 
 ## Requirements
@@ -33,12 +33,12 @@ package main
 
 import (
     "fmt"
-    "github.com/mapprotocol/map/packages/go/mapproto"
+    "github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto"
 )
 
 func main() {
     // Create a client
-    client := mapproto.NewClient("https://api.mapprotocol.ai")
+    client := mapproto.NewClient("https://localhost:8787")
 
     // Configure signing
     client.ConfigureSigning("key-id", "secret-key")
@@ -110,7 +110,7 @@ Get the health status of the service.
 ## Error Handling
 
 ```go
-import "github.com/mapprotocol/map/packages/go/mapproto"
+import "github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto"
 
 result, err := client.Dispatch(req)
 if err != nil {
