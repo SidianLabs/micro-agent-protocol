@@ -21,7 +21,7 @@ This guide will help you get started with MAP Protocol in 5 minutes.
 ### Step 1: Clone and Install
 
 ```bash
-git clone https://github.com/mapprotocol/map.git
+git clone https://github.com/SidianLabs/micro-agent-protocol.git
 cd map
 npm ci
 npm run build

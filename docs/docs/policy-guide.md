@@ -130,7 +130,7 @@ Policies are evaluated based on:
 Create a custom policy engine:
 
 ```typescript
-import type { PolicyEngine, PolicyContext, PolicyDecision } from '@mapprotocol/sdk';
+import type { PolicyEngine, PolicyContext, PolicyDecision } from '@sidianlabs/map-client';
 
 export class CustomPolicyEngine implements PolicyEngine {
   private readonly approvalThreshold: number;

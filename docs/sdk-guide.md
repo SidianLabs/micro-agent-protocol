@@ -49,8 +49,8 @@ const result = await client.dispatch({
 #### Payment Dispatch
 
 ```typescript
-import { MapAssistantClient } from '@mapprotocol/sdk';
-import type { DispatchRequest, InvokeResult } from '@mapprotocol/sdk';
+import { MapAssistantClient } from '@sidianlabs/map-client';
+import type { DispatchRequest, InvokeResult } from '@sidianlabs/map-client';
 
 const client = MapAssistantClient.forBaseUrl(process.env.MAP_API_URL!);
 client.configureSigning(
@@ -99,7 +99,7 @@ async function processPayment(
 #### Database Read
 
 ```typescript
-import type { TaskEnvelope, VisibilityMode } from '@mapprotocol/sdk';
+import type { TaskEnvelope, VisibilityMode } from '@sidianlabs/map-client';
 
 async function queryDatabase(
   userId: string,
@@ -143,7 +143,7 @@ async function queryDatabase(
 #### Async Task Polling
 
 ```typescript
-import { MapAssistantClient } from '@mapprotocol/sdk';
+import { MapAssistantClient } from '@sidianlabs/map-client';
 
 const client = MapAssistantClient.forBaseUrl(process.env.MAP_API_URL!);
 
@@ -207,7 +207,7 @@ const client = MapAssistantClient.forBaseUrl('https://api.map-protocol.dev/v1', 
 ### Installation
 
 ```bash
-git clone https://github.com/mapprotocol/map.git
+git clone https://github.com/SidianLabs/micro-agent-protocol.git
 cd map/packages/python
 pip install -e .
 ```
@@ -351,7 +351,7 @@ def dispatch_with_retry(request, max_retries=3):
 ### Installation
 
 ```bash
-git clone https://github.com/mapprotocol/map.git
+git clone https://github.com/SidianLabs/micro-agent-protocol.git
 cd map/packages/go
 go test ./...
 ```
@@ -363,7 +363,7 @@ package main
 
 import (
     "context"
-    mapproto "github.com/mapprotocol/go"
+    mapproto "github.com/SidianLabs/micro-agent-protocol/go"
 )
 
 func main() {
@@ -386,8 +386,8 @@ import (
     "fmt"
     "time"
     
-    mapproto "github.com/mapprotocol/go"
-    "github.com/mapprotocol/go/types"
+    mapproto "github.com/SidianLabs/micro-agent-protocol/go"
+    "github.com/SidianLabs/micro-agent-protocol/go/types"
 )
 
 func processPayment(
@@ -444,8 +444,8 @@ import (
     "fmt"
     "time"
     
-    mapproto "github.com/mapprotocol/go"
-    "github.com/mapprotocol/go/types"
+    mapproto "github.com/SidianLabs/micro-agent-protocol/go"
+    "github.com/SidianLabs/micro-agent-protocol/go/types"
 )
 
 func queryMetrics(
@@ -501,8 +501,8 @@ import (
     "errors"
     "time"
     
-    mapproto "github.com/mapprotocol/go"
-    "github.com/mapprotocol/go/types"
+    mapproto "github.com/SidianLabs/micro-agent-protocol/go"
+    "github.com/SidianLabs/micro-agent-protocol/go/types"
 )
 
 func dispatchWithRetry(
