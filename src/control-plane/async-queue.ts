@@ -7,7 +7,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 
 export interface DeadLetterRecord {
   task_id: string;
@@ -61,11 +61,11 @@ export interface AsyncTaskQueueOptions {
   maxAttempts?: number;
   retryDelayMs?: number;
   maxRetryDelayMs?: number;
+  jitterFactor?: number;
   retryJitterRatio?: number;
   maxConcurrent?: number;
   maxConcurrentPerTenant?: number;
   maxQueueDepth?: number;
-  randomFn?: () => number;
   deadLetterStorePath?: string;
   maxDeadLetters?: number;
 }
@@ -116,7 +116,6 @@ export class AsyncTaskQueue {
   private readonly maxConcurrent: number;
   private readonly maxConcurrentPerTenant?: number;
   private readonly maxQueueDepth: number;
-  private readonly randomFn: () => number;
   private readonly deadLetterStorePath?: string;
   private readonly maxDeadLetters: number;
   private processing = false;
@@ -141,7 +140,6 @@ export class AsyncTaskQueue {
         ? Math.max(1, options.maxConcurrentPerTenant)
         : undefined;
     this.maxQueueDepth = Math.max(1, options.maxQueueDepth ?? 1_000);
-    this.randomFn = options.randomFn ?? Math.random;
     this.deadLetterStorePath = options.deadLetterStorePath;
     this.maxDeadLetters = Math.max(1, options.maxDeadLetters ?? 500);
     this.hydrateDeadLetters();
@@ -569,14 +567,9 @@ export class AsyncTaskQueue {
   }
 
   private jitterDelta(): number {
-    if (this.retryJitterRatio <= 0) {
-      return 0;
-    }
-    const randomValue = this.randomFn();
-    const bounded = Number.isFinite(randomValue)
-      ? Math.min(1, Math.max(0, randomValue))
-      : 0.5;
-    return (bounded * 2 - 1) * this.retryJitterRatio;
+    const bytes = randomBytes(4);
+    const uniform = bytes.readUInt32LE(0) / 0x100000000;
+    return (uniform - 0.5) * 2 * this.retryJitterRatio;
   }
 
   private clampJitterRatio(value: number): number {
