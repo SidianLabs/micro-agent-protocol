@@ -45,5 +45,4 @@ This directory contains the **canonical Protocol Buffer definition** for the Mic
 
 - [Buf Documentation](https://buf.build/docs)
 - [Google API Design Guide — Protocol Buffers](https://cloud.google.com/apis/design/proto3)
-- [A2A Protocol — a2a.proto](https://github.com/google/A2A)
 - [MAP Main README](../README.md)
