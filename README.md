@@ -110,33 +110,23 @@ MAP solves all three, for any action your AI agent takes.
 
 ## How it works
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  AI System (ChatGPT, Claude, Copilot, your agent)           │
-│  "Transfer $5,000 to vendor_abc"                            │
-└─────────────────────────┬───────────────────────────────────┘
-                          │ Intent
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│  MAP Policy Engine                                          │
-│  Rule: payment.* + amount > 1000 → require_approval        │
-│  Rule: db.write + env=production → deny                     │
-└──────────┬──────────────┬──────────────────────────────────┘
-           │              │
-     ALLOW │        REQUIRE_APPROVAL
-           │              │
-           ▼              ▼
-    ┌──────────┐   ┌──────────────────────────────────┐
-    │ Execute  │   │ Notify approver (webhook/Slack)  │
-    │ Adapter  │   │ Human reviews and approves       │
-    └────┬─────┘   │ MAP re-evaluates → Execute       │
-         │         └──────────────────────────────────┘
-         ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Signed Receipt                                             │
-│  { receipt_id, action, policy_checks, timestamp, sig }     │
-│  Cryptographically verifiable. Tamper-evident.             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    AI["AI System
+    ChatGPT, Claude, Copilot, your agent
+    'Transfer $5,000 to vendor_abc'"]
+    AI -->|Intent| Policy["MAP Policy Engine
+    Rule: payment.* + amount > 1000 → require_approval
+    Rule: db.write + env=production → deny"]
+    Policy -->|ALLOW| Execute["Execute Adapter"]
+    Policy -->|REQUIRE_APPROVAL| Notify["Notify approver
+    (webhook/Slack)
+    Human reviews and approves
+    MAP re-evaluates → Execute"]
+    Execute --> Receipt["Signed Receipt
+    { receipt_id, action, policy_checks, timestamp, sig }
+    Cryptographically verifiable. Tamper-evident."]
+    Notify -->|Approved| Execute
 ```
 
 ---
