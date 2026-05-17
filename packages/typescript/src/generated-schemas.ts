@@ -3,9 +3,7 @@
  *
  * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
- */
-
-/**
+ *
  * This file is generated from /schemas/*.schema.json.
  * Do not edit it by hand.
  */

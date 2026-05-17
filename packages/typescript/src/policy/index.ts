@@ -198,7 +198,7 @@ export class PolicyEngine {
       case 'in':
         return Array.isArray(condition.value) && condition.value.includes(this.getFieldValue(condition.field!, envelope, context));
 
-      case 'contains':
+      case 'contains': {
         const fieldValue = this.getFieldValue(condition.field!, envelope, context);
         if (typeof fieldValue === 'string' && typeof condition.value === 'string') {
           return fieldValue.includes(condition.value);
@@ -207,6 +207,7 @@ export class PolicyEngine {
           return fieldValue.includes(condition.value);
         }
         return false;
+      }
 
       default:
         return false;

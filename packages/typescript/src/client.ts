@@ -501,13 +501,13 @@ export class MapAssistantClient {
   async streamTask(taskId: string): Promise<AsyncIterable<TaskEvent>> {
     const encodedTaskId = encodeURIComponent(taskId);
     const streamUrl = `${this.baseUrl}/tasks/${encodedTaskId}/stream`;
-    const client = this;
+    const self = this;
 
     return {
       [Symbol.asyncIterator](): AsyncIterator<TaskEvent> {
         let buffer = '';
         let abortController: AbortController | null = null;
-        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+        const reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
         let stopped = false;
         let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
@@ -519,7 +519,7 @@ export class MapAssistantClient {
             method: 'GET',
             headers: {
               Accept: 'text/event-stream',
-              ...client['defaultHeaders'],
+              ...self['defaultHeaders'],
             },
             signal: sig,
           });
