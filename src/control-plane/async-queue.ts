@@ -123,6 +123,7 @@ export class AsyncTaskQueue {
   private readonly inflightByTenant = new Map<string, number>();
   private pendingRetry = 0;
   private readonly tenantQuota: Map<string, number> = new Map();
+  private running = true;
 
   constructor(options: AsyncTaskQueueOptions = {}) {
     this.maxAttempts = Math.max(1, options.maxAttempts ?? 3);
@@ -235,6 +236,10 @@ export class AsyncTaskQueue {
       result.set(tenant, { quota, inflight, queued });
     }
     return result;
+  }
+
+  stop(): void {
+    this.running = false;
   }
 
   getStats(): AsyncQueueStats {
@@ -418,6 +423,7 @@ export class AsyncTaskQueue {
           const jitterMultiplier = 1 + this.jitterDelta();
           const retryDelay = Math.max(1, Math.round(baseDelay * jitterMultiplier));
           setTimeout(() => {
+            if (!this.running) return;
             this.pendingRetry--;
             if (this.queue.length >= this.maxQueueDepth) {
               const record: DeadLetterRecord = {
@@ -528,6 +534,7 @@ export class AsyncTaskQueue {
     const jitterMultiplier = 1 + this.jitterDelta();
     const retryDelay = Math.max(1, Math.round(baseDelay * jitterMultiplier));
     setTimeout(() => {
+      if (!this.running) return;
       if (this.queue.length >= this.maxQueueDepth) {
         const record: DeadLetterRecord = {
           task_id: job.taskId,

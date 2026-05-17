@@ -124,6 +124,39 @@ export { checkWritableFilePath } from "./persistence.js";
 // createMapHandler
 // ═════════════════════════════════════════════════════════════════════════════
 
+const ERROR_CODE_PATTERNS: [RegExp, string][] = [
+  [/No micro-agent found/, "agent_not_found"],
+  [/Target agent is disabled in registry/, "agent_disabled"],
+  [/Capability not supported/, "capability_not_found"],
+  [/Capability is disabled for target agent/, "capability_disabled"],
+  [/Approval task not found/, "task_not_found"],
+  [/Task not found/, "task_not_found"],
+  [/Receipt not found/, "receipt_not_found"],
+  [/not awaiting approval/, "approval_required"],
+  [/Invalid approval reference/, "invalid_request"],
+  [/Task id conflict|Idempotency key conflict/, "idempotency_conflict"],
+  [/Async queue capacity exceeded/, "rate_limited"],
+  [/tenant_id is required/, "policy_denied"],
+  [/Task denied/, "policy_denied"],
+  [/Unsupported schema version/, "schema_version_unsupported"],
+  [/Unsupported output mode/, "unsupported_output_mode"],
+  [/Invalid task state transition|Terminal task state|Task lifecycle invariant violated/, "invalid_request"],
+  [/No adapter for capability/, "invalid_request"],
+  [/Negotiation delivery mode conflicts/, "invalid_request"],
+  [/requires approval/, "approval_required"],
+  [/replay detected/, "invalid_auth"],
+  [/Delegation token has expired/, "token_expired"],
+  [/Invalid MAP/, "invalid_request"],
+  [/Approval request/, "invalid_request"],
+];
+
+function classifyErrorCode(message: string): string {
+  for (const [pattern, code] of ERROR_CODE_PATTERNS) {
+    if (pattern.test(message)) return code;
+  }
+  return "request_failed";
+}
+
 export function createMapHandler(options: MapHttpServerOptions = {}) {
   const deploymentProfile = options.deploymentProfile ?? "open";
 
@@ -1152,84 +1185,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     } catch (error) {
       const originalMessage =
         error instanceof Error ? error.message : "Unknown server error.";
-      const code = originalMessage.includes("No micro-agent found")
-        ? "agent_not_found"
-        : originalMessage.includes("Target agent is disabled in registry")
-          ? "agent_disabled"
-          : originalMessage.includes("Capability not supported")
-            ? "capability_not_found"
-            : originalMessage.includes(
-                  "Capability is disabled for target agent",
-                )
-              ? "capability_disabled"
-              : originalMessage.includes("Approval task not found")
-                ? "task_not_found"
-                : originalMessage.includes("Task not found")
-                  ? "task_not_found"
-                  : originalMessage.includes("Receipt not found")
-                    ? "receipt_not_found"
-                    : originalMessage.includes("not awaiting approval")
-                      ? "approval_required"
-                      : originalMessage.includes("Invalid approval reference")
-                        ? "invalid_request"
-                        : originalMessage.includes("Task id conflict") ||
-                            originalMessage.includes("Idempotency key conflict")
-                          ? "idempotency_conflict"
-                          : originalMessage.includes(
-                                "Async queue capacity exceeded",
-                              )
-                            ? "rate_limited"
-                            : originalMessage.includes("tenant_id is required")
-                              ? "policy_denied"
-                              : originalMessage.includes("Task denied")
-                                ? "policy_denied"
-                                : originalMessage.includes(
-                                      "Unsupported schema version",
-                                    )
-                                  ? "schema_version_unsupported"
-                                  : originalMessage.includes(
-                                        "Unsupported output mode",
-                                      )
-                                    ? "unsupported_output_mode"
-                                    : originalMessage.includes(
-                                          "Invalid task state transition",
-                                        ) ||
-                                        originalMessage.includes(
-                                          "Terminal task state",
-                                        ) ||
-                                        originalMessage.includes(
-                                          "Task lifecycle invariant violated",
-                                        )
-                                      ? "invalid_request"
-                      : originalMessage.includes(
-                            "No adapter for capability",
-                          )
-                            ? "invalid_request"
-                            : originalMessage.includes(
-                                  "Negotiation delivery mode conflicts",
-                                )
-                              ? "invalid_request"
-                                        : originalMessage.includes(
-                                              "requires approval",
-                                            )
-                                          ? "approval_required"
-                                          : originalMessage.includes(
-                                                "replay detected",
-                                              )
-                                            ? "invalid_auth"
-                                            : originalMessage.includes(
-                                                  "Approval request",
-                                                )
-                                              ? "invalid_request"
-                                              : originalMessage.includes(
-                                                    "Invalid MAP",
-                                                  )
-                                                ? "invalid_request"
-                                                : originalMessage.includes(
-                                                      "Delegation token has expired",
-                                                    )
-                                                  ? "token_expired"
-                                                  : "request_failed";
+      const code = classifyErrorCode(originalMessage);
 
       console.error("MAP internal error:", originalMessage, {
         requestId,

@@ -19,6 +19,7 @@ import type {
   InvokeResult,
   ResultPackage,
   TaskEnvelope,
+  TaskStatus,
 } from "../types.js";
 import type { ExecutionReceipt as MapExecutionReceipt } from "../types.js";
 import type { ExecutionReceipt as ECPCoreExecutionReceipt } from "../core/types.js";
@@ -682,7 +683,7 @@ export class OrchestratorRuntime {
     const isECPReceipt = "action" in coreResult && coreResult.action !== undefined;
     if (isECPReceipt) {
       const receipt = coreResult as ECPCoreExecutionReceipt;
-      const status =
+      const status: TaskStatus =
         receipt.action === "approval_required"
           ? "awaiting_approval"
           : receipt.action === "executed"
@@ -691,7 +692,7 @@ export class OrchestratorRuntime {
       const result: ResultPackage = {
         task_id: envelope.task_id,
         context_id: envelope.context_id,
-        status: status as any,
+        status,
         summary: `Execution ${receipt.action}: ${receipt.status}`,
         structured_output: { capability },
         negotiated_schema_version: negotiation?.selected?.schema_version,
@@ -725,12 +726,12 @@ export class OrchestratorRuntime {
     }
 
     const execResult = coreResult as ExecutionResult;
-    const taskStatus = execResult.status === "ok" ? "completed" : "failed";
+    const taskStatus: TaskStatus = execResult.status === "ok" ? "completed" : "failed";
 
     const result: ResultPackage = {
       task_id: envelope.task_id,
       context_id: envelope.context_id ?? execResult.intent_id,
-      status: taskStatus as any,
+      status: taskStatus,
       summary: execResult.summary,
       structured_output: this.enrichStructuredOutput(execResult.output, envelope),
       negotiated_schema_version: negotiation?.selected?.schema_version,
