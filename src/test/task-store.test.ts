@@ -12,6 +12,23 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { TaskStore } from "../control-plane/task-store.js";
 
+function makeReceipt(taskId: string, suffix: string) {
+  return {
+    receipt_id: `receipt:${taskId}:${suffix}`,
+    intent_id: taskId,
+    capability: "db.read.aggregate",
+    action: "executed" as const,
+    status: "ok" as const,
+    task_id: taskId,
+    agent_id: "dbread-agent-v1",
+    resource_touched: "database",
+    policy_checks: ["policy_passed"],
+    timestamp: new Date().toISOString(),
+    result_hash: `sha256:${taskId}:${suffix}`,
+    signature: "sig",
+  };
+}
+
 function seedRunningTask(taskStore: TaskStore, taskId: string) {
   taskStore.save({
     task_id: taskId,
@@ -25,17 +42,7 @@ function seedRunningTask(taskStore: TaskStore, taskId: string) {
       structured_output: {},
       followup_required: true,
     },
-    receipt: {
-      receipt_id: `receipt:${taskId}:running`,
-      task_id: taskId,
-      agent_id: "dbread-agent-v1",
-      action_taken: "db.read.aggregate.running",
-      resource_touched: "database",
-      policy_checks: ["policy_passed"],
-      timestamp: new Date().toISOString(),
-      result_hash: `sha256:${taskId}:running`,
-      signature: "sig",
-    },
+    receipt: makeReceipt(taskId, "running"),
   });
 }
 
@@ -52,17 +59,7 @@ test("task store allows valid lifecycle transition running -> completed", () => 
       structured_output: {},
       followup_required: false,
     },
-    receipt: {
-      receipt_id: "receipt:task_ts_ok:completed",
-      task_id: "task_ts_ok",
-      agent_id: "dbread-agent-v1",
-      action_taken: "db.read.aggregate.completed",
-      resource_touched: "database",
-      policy_checks: ["policy_passed"],
-      timestamp: new Date().toISOString(),
-      result_hash: "sha256:task_ts_ok:completed",
-      signature: "sig",
-    },
+    receipt: makeReceipt("task_ts_ok", "completed"),
   });
 
   assert.equal(updated?.status, "completed");
@@ -91,17 +88,7 @@ test("task store rejects terminal transition completed -> failed", () => {
       structured_output: {},
       followup_required: false,
     },
-    receipt: {
-      receipt_id: "receipt:task_ts_terminal:completed",
-      task_id: "task_ts_terminal",
-      agent_id: "dbread-agent-v1",
-      action_taken: "db.read.aggregate.completed",
-      resource_touched: "database",
-      policy_checks: ["policy_passed"],
-      timestamp: new Date().toISOString(),
-      result_hash: "sha256:task_ts_terminal:completed",
-      signature: "sig",
-    },
+    receipt: makeReceipt("task_ts_terminal", "completed"),
   });
 
   assert.throws(() => {
@@ -123,17 +110,7 @@ test("task store rejects terminal result mutation for same completed state", () 
       structured_output: { value: 1 },
       followup_required: false,
     },
-    receipt: {
-      receipt_id: "receipt:task_ts_mutate:completed",
-      task_id: "task_ts_mutate",
-      agent_id: "dbread-agent-v1",
-      action_taken: "db.read.aggregate.completed",
-      resource_touched: "database",
-      policy_checks: ["policy_passed"],
-      timestamp: new Date().toISOString(),
-      result_hash: "sha256:task_ts_mutate:completed",
-      signature: "sig",
-    },
+    receipt: makeReceipt("task_ts_mutate", "completed"),
   });
 
   assert.throws(() => {
@@ -166,9 +143,12 @@ test("task store rejects lifecycle transition when result.status mismatches task
       },
       receipt: {
         receipt_id: "receipt:task_ts_status_mismatch:completed",
+        intent_id: "task_ts_status_mismatch",
+        capability: "db.read.aggregate",
+        action: "executed" as const,
+        status: "ok" as const,
         task_id: "task_ts_status_mismatch",
         agent_id: "dbread-agent-v1",
-        action_taken: "db.read.aggregate.completed",
         resource_touched: "database",
         policy_checks: [],
         timestamp: new Date().toISOString(),
@@ -206,9 +186,12 @@ test("task store rejects lifecycle transition when receipt.task_id mismatches ta
       },
       receipt: {
         receipt_id: "receipt:task_ts_receipt_mismatch:completed",
+        intent_id: "task_ts_receipt_mismatch",
+        capability: "db.read.aggregate",
+        action: "executed" as const,
+        status: "ok" as const,
         task_id: "task_ts_other",
         agent_id: "dbread-agent-v1",
-        action_taken: "db.read.aggregate.completed",
         resource_touched: "database",
         policy_checks: [],
         timestamp: new Date().toISOString(),
@@ -235,17 +218,7 @@ test("task store persists records with sqlite db path across restarts", () => {
         structured_output: {},
         followup_required: false,
       },
-      receipt: {
-        receipt_id: "receipt:task_ts_db:completed",
-        task_id: "task_ts_db",
-        agent_id: "dbread-agent-v1",
-        action_taken: "db.read.aggregate.completed",
-        resource_touched: "database",
-        policy_checks: ["policy_passed"],
-        timestamp: new Date().toISOString(),
-        result_hash: "sha256:task_ts_db:completed",
-        signature: "sig",
-      },
+      receipt: makeReceipt("task_ts_db", "completed"),
     });
 
     const taskStoreB = new TaskStore({ dbPath });
@@ -280,17 +253,7 @@ test("task store indexes idempotency keys and restores them across restart", () 
         structured_output: {},
         followup_required: false,
       },
-      receipt: {
-        receipt_id: "receipt:task_idem_store_1",
-        task_id: "task_idem_store_1",
-        agent_id: "dbread-agent-v1",
-        action_taken: "db.read.aggregate.completed",
-        resource_touched: "database",
-        policy_checks: ["policy_passed"],
-        timestamp: new Date().toISOString(),
-        result_hash: "sha256:task_idem_store_1",
-        signature: "sig",
-      },
+      receipt: makeReceipt("task_idem_store_1", "completed"),
     });
     const foundA = taskStoreA.findByIdempotencyKey("idem-store-key-1");
     assert.equal(foundA?.task_id, "task_idem_store_1");
@@ -317,17 +280,7 @@ test("task store rejects duplicate idempotency keys for different task ids", () 
       structured_output: {},
       followup_required: false,
     },
-    receipt: {
-      receipt_id: "receipt:task_idem_dup_1",
-      task_id: "task_idem_dup_1",
-      agent_id: "dbread-agent-v1",
-      action_taken: "db.read.aggregate.completed",
-      resource_touched: "database",
-      policy_checks: [],
-      timestamp: new Date().toISOString(),
-      result_hash: "hash",
-      signature: "sig",
-    },
+    receipt: makeReceipt("task_idem_dup_1", "completed"),
   });
 
   assert.throws(
@@ -344,17 +297,7 @@ test("task store rejects duplicate idempotency keys for different task ids", () 
           structured_output: {},
           followup_required: false,
         },
-        receipt: {
-          receipt_id: "receipt:task_idem_dup_2",
-          task_id: "task_idem_dup_2",
-          agent_id: "dbread-agent-v1",
-          action_taken: "db.read.aggregate.completed",
-          resource_touched: "database",
-          policy_checks: [],
-          timestamp: new Date().toISOString(),
-          result_hash: "hash",
-          signature: "sig",
-        },
+        receipt: makeReceipt("task_idem_dup_2", "completed"),
       }),
     /Idempotency key already exists/,
   );

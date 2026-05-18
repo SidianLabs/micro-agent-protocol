@@ -94,11 +94,18 @@ test("policy requires approval for critical risk class regardless of capability"
   assert.equal(decision.matched_rule, "critical-always-approval");
 });
 
-test("policy allows when no rules match", () => {
-  const emptyPolicy: PolicyDocument = { version: "1.0", rules: [] };
+test("policy allows when no rules match and default_action is allow", () => {
+  const emptyPolicy: PolicyDocument = { version: "1.0", rules: [], default_action: "allow" };
   const decision = evaluate(baseIntent, emptyPolicy);
   assert.equal(decision.action, "allow");
   assert.equal(decision.reason, "Default allow - no rules matched");
+});
+
+test("C3 policy denies when no rules match (default-deny)", () => {
+  const emptyPolicy: PolicyDocument = { version: "1.0", rules: [] };
+  const decision = evaluate(baseIntent, emptyPolicy);
+  assert.equal(decision.action, "deny");
+  assert.equal(decision.reason, "Default deny - no rules matched");
 });
 
 test("policy evaluates rules in order (first match wins)", () => {
@@ -137,6 +144,7 @@ test("policy supports AND conditions", () => {
 test("policy supports OR conditions", () => {
   const orPolicy: PolicyDocument = {
     version: "1.0",
+    default_action: "allow",
     rules: [
       {
         id: "risky-or-expensive",
@@ -164,6 +172,7 @@ test("policy supports OR conditions", () => {
 test("policy supports NOT conditions", () => {
   const notPolicy: PolicyDocument = {
     version: "1.0",
+    default_action: "allow",
     rules: [
       {
         id: "deny-non-users",
@@ -189,6 +198,7 @@ test("policy supports NOT conditions", () => {
 test("policy supports IN operator", () => {
   const inPolicy: PolicyDocument = {
     version: "1.0",
+    default_action: "allow",
     rules: [
       {
         id: "allowed-currencies",

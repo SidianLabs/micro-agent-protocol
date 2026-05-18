@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { describe, it } from "./test-runtime.js";
 import signatureFixtures from "./fixtures/signature-fixtures.json" with { type: "json" };
 
 const BASE_URL = "http://localhost:8787";

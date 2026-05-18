@@ -11,6 +11,8 @@ import {
   createPublicKey,
   createSign,
   createVerify,
+  randomBytes,
+  randomUUID,
   timingSafeEqual,
 } from "node:crypto";
 import type {
@@ -38,6 +40,30 @@ const DEFAULT_ALG = "HS256";
 const DEFAULT_REQUEST_MAX_AGE_MS = 5 * 60 * 1000;
 const nonceCache = new Map<string, number>();
 const NONCE_MAX_AGE_MS = 5 * 60 * 1000;
+
+// Ephemeral key material — generated once per process, memoized
+let _ephemeralSecret: string | undefined;
+let _ephemeralUUID: string | undefined;
+
+function randomBytesForEphemeral(): string {
+  if (!_ephemeralSecret) {
+    _ephemeralSecret = randomBytes(32).toString("base64url");
+  }
+  return _ephemeralSecret;
+}
+
+function randomUUIDForEphemeral(): string {
+  if (!_ephemeralUUID) {
+    _ephemeralUUID = randomUUID();
+  }
+  return _ephemeralUUID;
+}
+
+/** Reset ephemeral key state (for testing only). */
+export function _resetEphemeralKey(): void {
+  _ephemeralSecret = undefined;
+  _ephemeralUUID = undefined;
+}
 
 const DEFAULT_SCOPES = [
   "descriptor",
@@ -200,18 +226,34 @@ function getDefaultSigningKey(): SigningKey {
     );
   }
 
+  // Fail-closed if MAP_REQUIRE_SIGNING_SECRET=true
+  if (process.env.MAP_REQUIRE_SIGNING_SECRET === "true") {
+    throw new Error(
+      "MAP_REQUIRE_SIGNING_SECRET is set but MAP_SIGNING_SECRET is not configured. " +
+      "Refusing to start with ephemeral key. Set MAP_SIGNING_SECRET for stable signing.",
+    );
+  }
+
+  // Generate ephemeral per-process key — receipts cannot be verified after restart
+  const ephemeralSecret = randomBytesForEphemeral();
+  const shortId = randomUUIDForEphemeral().slice(0, 8);
+  const ephemeralKid = `map-ephemeral-${shortId}`;
+
   console.warn(
-    "WARNING: Using default demo signing secret. Not suitable for production.",
+    `WARNING: Using ephemeral signing key kid=${ephemeralKid}. ` +
+    `Receipts signed by this process cannot be verified after restart. ` +
+    `Set MAP_SIGNING_SECRET for stable signing.`,
   );
+
   return {
-    kid: DEFAULT_KID,
+    kid: ephemeralKid,
     alg: "HS256",
     status: "active",
     scopes: DEFAULT_SCOPES,
     demo_only: true,
     material: {
       type: "hmac",
-      secret: "map-dev-secret",
+      secret: ephemeralSecret,
     },
   };
 }
@@ -788,16 +830,20 @@ function receiptSigningPayload(
 ): Record<string, unknown> {
   return {
     receipt_id: receipt.receipt_id,
-    task_id: receipt.task_id,
+    intent_id: receipt.intent_id,
+    capability: receipt.capability,
+    action: receipt.action,
+    timestamp: receipt.timestamp,
+    status: receipt.status,
+    // Protocol-level optional fields (included when present for stable canonicalization)
+    task_id: receipt.task_id ?? null,
     tenant_id: receipt.tenant_id ?? null,
     request_id: receipt.request_id ?? null,
-    agent_id: receipt.agent_id,
-    action_taken: receipt.action_taken,
-    resource_touched: receipt.resource_touched,
-    policy_checks: receipt.policy_checks,
+    agent_id: receipt.agent_id ?? null,
+    resource_touched: receipt.resource_touched ?? null,
+    policy_checks: receipt.policy_checks ?? null,
     approval_used: receipt.approval_used ?? null,
-    timestamp: receipt.timestamp,
-    result_hash: receipt.result_hash,
+    result_hash: receipt.result_hash ?? null,
     requested_schema_version: receipt.requested_schema_version ?? null,
     executed_schema_version: receipt.executed_schema_version ?? null,
     negotiation: receipt.negotiation ?? null,

@@ -9,12 +9,15 @@ node_modules/
 # Build output
 dist/
 *.egg-info/
+*.tsbuildinfo
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# Platform metadata
 .DS_Store
 
 # Environment
@@ -45,12 +48,12 @@ session-update.md
 ECP-DESIGN.md
 documentation/
 
-# Runtime data
+# Runtime state (relocated from .map/ to .local/map/)
 .map/
-demo
+.local/
 
-# ECP (do not ignore - these are primary)
-# ecp/
+# Demo (generated)
+demo
 
 # Legacy MAP (archived, do not modify)
 # map/

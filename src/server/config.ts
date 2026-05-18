@@ -24,12 +24,12 @@ export function resolveServerOptionsFromEnv(
   return {
     port: Number(env.PORT ?? 8787),
     deploymentProfile,
-    taskStorePath: env.MAP_TASK_STORE_PATH ?? ".map/task-store.json",
+    taskStorePath: env.MAP_TASK_STORE_PATH ?? ".local/map/task-store.json",
     taskStoreDbPath: env.MAP_TASK_DB_PATH,
-    receiptStorePath: env.MAP_RECEIPT_STORE_PATH ?? ".map/receipts.json",
+    receiptStorePath: env.MAP_RECEIPT_STORE_PATH ?? ".local/map/receipts.json",
     receiptStoreDbPath: env.MAP_RECEIPT_DB_PATH,
     deadLetterStorePath:
-      env.MAP_DEAD_LETTER_STORE_PATH ?? ".map/dead-letters.json",
+      env.MAP_DEAD_LETTER_STORE_PATH ?? ".local/map/dead-letters.json",
     requireTenant: env.MAP_REQUIRE_TENANT === "true",
     asyncQueueMaxAttempts: Number(env.MAP_ASYNC_MAX_ATTEMPTS ?? 3),
     asyncQueueRetryDelayMs: Number(env.MAP_ASYNC_RETRY_DELAY_MS ?? 50),
@@ -50,16 +50,16 @@ export function resolveServerOptionsFromEnv(
     metricsFailureRateThreshold: parseOptionalNumber(
       env.MAP_METRICS_FAILURE_RATE_THRESHOLD,
     ),
-    metricsStorePath: env.MAP_METRICS_STORE_PATH ?? ".map/metrics.json",
+    metricsStorePath: env.MAP_METRICS_STORE_PATH ?? ".local/map/metrics.json",
     rateLimitWindowMs: parseOptionalNumber(env.MAP_RATE_LIMIT_WINDOW_MS),
     rateLimitMaxRequests: parseOptionalNumber(env.MAP_RATE_LIMIT_MAX_REQUESTS),
     rateLimitMaxRequestsPerTenant: parseOptionalNumber(
       env.MAP_RATE_LIMIT_MAX_REQUESTS_PER_TENANT,
     ),
-    auditStorePath: env.MAP_AUDIT_STORE_PATH ?? ".map/audit-events.json",
-    alertStorePath: env.MAP_ALERT_STORE_PATH ?? ".map/alerts.json",
+    auditStorePath: env.MAP_AUDIT_STORE_PATH ?? ".local/map/audit-events.json",
+    alertStorePath: env.MAP_ALERT_STORE_PATH ?? ".local/map/alerts.json",
     runtimeControlStorePath:
-      env.MAP_RUNTIME_CONTROL_STORE_PATH ?? ".map/runtime-controls.json",
+      env.MAP_RUNTIME_CONTROL_STORE_PATH ?? ".local/map/runtime-controls.json",
     auditMaxEvents: parseOptionalNumber(env.MAP_AUDIT_MAX_EVENTS),
     auditCheckpointInterval: parseOptionalNumber(
       env.MAP_AUDIT_CHECKPOINT_INTERVAL,

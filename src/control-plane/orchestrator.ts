@@ -543,13 +543,16 @@ export class OrchestratorRuntime {
 
     const unsignedReceipt: Omit<MapExecutionReceipt, "signature"> = {
       receipt_id: "receipt:" + taskId + ":cancel",
+      intent_id: taskId,
+      capability: existingTask.capability,
+      action: "denied",
+      status: "error",
       task_id: taskId,
       tenant_id: this.resolveTenantId(
         existingTask.requester_identity.tenant_id,
       ),
       request_id: existingTask.receipt?.request_id,
       agent_id: existingTask.target_agent,
-      action_taken: existingTask.capability + ".cancelled",
       resource_touched: existingTask.target_agent,
       policy_checks: ["cancellation_requested"],
       approval_used: undefined,
@@ -580,7 +583,7 @@ export class OrchestratorRuntime {
     return {
       action: decision.action,
       reason: decision.reason,
-      policy_checks: decision.matched_rule ? [`Rule: ${decision.matched_rule}`] : ["Default allow"],
+      policy_checks: decision.matched_rule ? [`Rule: ${decision.matched_rule}`] : [decision.action === "allow" ? "Default allow" : "Default deny"],
     };
   }
 
@@ -704,6 +707,10 @@ export class OrchestratorRuntime {
       };
       const unsignedReceipt: Omit<MapExecutionReceipt, "signature"> = {
         receipt_id: `${receipt.receipt_id}:${randomUUID()}`,
+        intent_id: envelope.task_id,
+        capability,
+        action: receipt.action,
+        status: receipt.status,
         task_id: envelope.task_id,
         tenant_id: envelope.requester_identity.tenant_id,
         request_id:
@@ -711,7 +718,6 @@ export class OrchestratorRuntime {
             ? envelope.metadata.request_id
             : undefined,
         agent_id: envelope.target_agent,
-        action_taken: `${capability}.${receipt.action}`,
         resource_touched: envelope.target_agent,
         policy_checks: ["core_executed"],
         timestamp: receipt.timestamp,
@@ -744,6 +750,10 @@ export class OrchestratorRuntime {
 
     const unsignedReceipt: Omit<MapExecutionReceipt, "signature"> = {
       receipt_id: `receipt:${envelope.task_id}:${Date.now()}:${randomUUID()}`,
+      intent_id: envelope.task_id,
+      capability,
+      action: taskStatus === "completed" ? "executed" : "denied",
+      status: execResult.status === "ok" ? "ok" : "error",
       task_id: envelope.task_id,
       tenant_id: envelope.requester_identity.tenant_id,
       request_id:
@@ -751,7 +761,6 @@ export class OrchestratorRuntime {
           ? envelope.metadata.request_id
           : undefined,
       agent_id: envelope.target_agent,
-      action_taken: `${capability}.${taskStatus}`,
       resource_touched: envelope.target_agent,
       policy_checks: ["core_executed"],
       timestamp: new Date().toISOString(),
@@ -813,8 +822,24 @@ export class OrchestratorRuntime {
     actionTaken: string,
     decision: { policy_checks: string[]; approval_reference?: string }
   ): Omit<MapExecutionReceipt, "signature"> {
+    const intentId = envelope.task_id;
+    // Map actionTaken to core ReceiptAction
+    const coreAction = actionTaken.includes("approval_required")
+      ? "approval_required" as const
+      : actionTaken.includes("denied") || actionTaken.includes("cancelled")
+        ? "denied" as const
+        : "executed" as const;
+    const coreStatus = coreAction === "executed" ? "ok" as const : "error" as const;
+
     return {
+      // Core fields (from CoreExecutionReceipt)
       receipt_id: `receipt:${envelope.task_id}:${Date.now()}:${randomUUID()}`,
+      intent_id: intentId,
+      capability,
+      action: coreAction,
+      timestamp: new Date().toISOString(),
+      status: coreStatus,
+      // Protocol-level fields
       task_id: envelope.task_id,
       tenant_id: this.resolveTenantId(envelope.requester_identity.tenant_id),
       request_id:
@@ -822,11 +847,9 @@ export class OrchestratorRuntime {
           ? envelope.metadata.request_id
           : undefined,
       agent_id: descriptor.agent_id,
-      action_taken: actionTaken,
       resource_touched: descriptor.domain,
       policy_checks: decision.policy_checks,
       approval_used: decision.approval_reference,
-      timestamp: new Date().toISOString(),
       result_hash: `sha256:${envelope.task_id}:${actionTaken}`,
     };
   }

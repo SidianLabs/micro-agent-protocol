@@ -9,27 +9,25 @@ SPDX-License-Identifier: Apache-2.0
 
 Official TypeScript/Node.js SDK for Micro Agent Protocol (MAP).
 
-**Status:** Preview source package. API may change in 0.x releases.
+**Status:** Developer preview.
+
+This is the strongest SDK surface in the repo today, but it is still a `0.x` package and the broader release story around it is still settling.
 
 ## Installation
 
-This package is not published to npm yet. Use it from the repository source:
+Install from npm:
 
 ```bash
-npm install
-npm run build
+npm install @sidianlabs/map-client
 ```
 
 ## Quick Start
 
 ```typescript
-import { MapAssistantClient, HMACSigner } from '@sidianlabs/map-sdk';
-
-const signer = new HMACSigner('your-secret-key', 'key-id');
+import { MapAssistantClient } from '@sidianlabs/map-client';
 
 const client = new MapAssistantClient({
   baseUrl: 'http://localhost:8787',
-  signer,
   timeout: 30_000,
 });
 
@@ -76,7 +74,7 @@ const client = new MapAssistantClient({
 ### HMAC Signer
 
 ```typescript
-import { HMACSigner } from '@sidianlabs/map-sdk';
+import { HMACSigner } from '@sidianlabs/map-client';
 
 const signer = new HMACSigner('secret-key', 'key-id');
 ```
@@ -84,7 +82,7 @@ const signer = new HMACSigner('secret-key', 'key-id');
 ### RSA Signer
 
 ```typescript
-import { RSASigner } from '@sidianlabs/map-sdk';
+import { RSASigner } from '@sidianlabs/map-client';
 
 const signer = new RSASigner(privateKeyPEM, 'key-id');
 ```
@@ -92,7 +90,7 @@ const signer = new RSASigner(privateKeyPEM, 'key-id');
 ### HTTP Signer (for signed HTTP requests)
 
 ```typescript
-import { HTTPSigner } from '@sidianlabs/map-sdk';
+import { HTTPSigner } from '@sidianlabs/map-client';
 
 const signer = new HTTPSigner('key-id', 'secret');
 client.configureSigning('key-id', 'secret');
@@ -103,7 +101,7 @@ client.configureSigning('key-id', 'secret');
 For real-time dispatch and task status streaming:
 
 ```typescript
-import { WebSocketTransport } from '@sidianlabs/map-sdk';
+import { WebSocketTransport } from '@sidianlabs/map-client';
 
 // Create transport
 const transport = new WebSocketTransport('ws://localhost:8787', {
@@ -181,7 +179,7 @@ import {
   MapRetryableError,
   ErrorCode,
   ERROR_CODE_RETRYABLE_MAP,
-} from '@sidianlabs/map-sdk';
+} from '@sidianlabs/map-client';
 
 try {
   await client.dispatch({ ... });
@@ -241,7 +239,7 @@ import {
   InMemorySpanExporter,
   SpanKind,
   SpanStatus,
-} from '@sidianlabs/map-sdk';
+} from '@sidianlabs/map-client';
 
 // Create tracer with exporter
 const tracer = new Tracer({
@@ -302,7 +300,7 @@ type SpanStatus = 'ok' | 'error' | 'uninstrumented';
 Collect and export metrics in Prometheus format:
 
 ```typescript
-import { PrometheusMetricsCollector } from '@sidianlabs/map-sdk';
+import { PrometheusMetricsCollector } from '@sidianlabs/map-client';
 
 const metrics = new PrometheusMetricsCollector({
   prefix: 'map',
@@ -344,7 +342,7 @@ import {
   HTTPHealthCheck,
   WebSocketHealthCheck,
   FunctionalHealthCheck,
-} from '@sidianlabs/map-sdk';
+} from '@sidianlabs/map-client';
 
 // Build health checks
 const healthChecker = new HealthCheckBuilder()
@@ -402,7 +400,7 @@ new FunctionalHealthCheck('custom', async () => {
 Convenience class for integrated observability:
 
 ```typescript
-import { ObservabilityManager, LogLevel } from '@sidianlabs/map-sdk';
+import { ObservabilityManager, LogLevel } from '@sidianlabs/map-client';
 
 const obs = new ObservabilityManager({
   serviceName: 'payment-agent',
@@ -420,20 +418,20 @@ obs.recordAgentInvocation('agent-payment', 'payment.process', 120);
 ## Storage Adapters
 
 ```typescript
-import { SQLiteStorage } from '@sidianlabs/map-sdk';
+import { SQLiteStorage } from '@sidianlabs/map-client';
 
 // Use SQLite for persistence
 const storage = new SQLiteStorage('./map.db');
 
 // Or in-memory for testing
-import { InMemoryStorage } from '@sidianlabs/map-sdk';
+import { InMemoryStorage } from '@sidianlabs/map-client';
 const storage = new InMemoryStorage();
 ```
 
 ## Logging
 
 ```typescript
-import { MAPLogger, LogLevel } from '@sidianlabs/map-sdk';
+import { MAPLogger, LogLevel } from '@sidianlabs/map-client';
 
 const logger = new MAPLogger({
   level: LogLevel.INFO,
@@ -450,7 +448,7 @@ import {
   validateTaskEnvelope,
   validateDispatchRequest,
   validateExecutionReceipt,
-} from '@sidianlabs/map-sdk';
+} from '@sidianlabs/map-client';
 
 try {
   validateTaskEnvelope(envelope);
@@ -463,7 +461,7 @@ try {
 ## Policy Engine
 
 ```typescript
-import { PolicyEngine, PolicyContext } from '@sidianlabs/map-sdk';
+import { PolicyEngine, PolicyContext } from '@sidianlabs/map-client';
 
 const engine = new PolicyEngine(policyRules);
 
@@ -494,7 +492,7 @@ import {
   HealthCheckBuilder,
   Tracer,
   SpanKind,
-} from '@sidianlabs/map-sdk';
+} from '@sidianlabs/map-client';
 
 async function main() {
   // Setup observability

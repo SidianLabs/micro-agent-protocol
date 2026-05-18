@@ -7,13 +7,14 @@
     "map-conformance": "./dist/cli.js"
   },
   "scripts": {
+    "pretest": "npm run build",
     "test": "node --test --test-concurrency=1 dist/*.test.js",
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit",
     "cli": "node dist/cli.js"
   },
   "dependencies": {
-    "@sidianlabs/map-sdk": "*"
+    "@sidianlabs/map-client": "*"
   },
   "keywords": [
     "map-protocol",

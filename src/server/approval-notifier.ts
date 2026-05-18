@@ -88,7 +88,8 @@ export class ApprovalNotifier {
     this.signingSecret =
       options.signingSecret ??
       process.env.MAP_SIGNING_SECRET ??
-      "map-dev-secret";
+      process.env.MAP_WEBHOOK_SECRET ??
+      "";
     this.maxRetries = options.maxRetries ?? 3;
     this.retryDelayMs = options.retryDelayMs ?? 1000;
   }

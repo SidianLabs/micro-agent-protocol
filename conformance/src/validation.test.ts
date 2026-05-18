@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { describe, it } from "./test-runtime.js";
 import validDispatchRequests from "./fixtures/valid-dispatch-requests.json" with { type: "json" };
 import invalidEnvelopes from "./fixtures/invalid-envelopes.json" with { type: "json" };
 

@@ -5,6 +5,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+/** MAP protocol specification version. */
+export const MAP_PROTOCOL_VERSION = "1.0";
+
+/** MAP reference implementation version (read from package.json). */
+export const MAP_REFERENCE_VERSION: string = (() => {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const pkgPath = join(__dirname, "..", "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    return pkg.version ?? "0.1.0";
+  } catch {
+    return "0.1.0";
+  }
+})();
+
 export { createSystem, createReferenceApp } from "./app.js";
 export { execute, type ExecuteOptions } from "./core/execute.js";
 export { Executor } from "./core/execution/index.js";

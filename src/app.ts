@@ -132,6 +132,7 @@ export function createSystem(options: SystemOptions) {
 export function createReferenceApp(options: Omit<SystemOptions, "policy" | "adapters"> & { policy?: PolicyDocument; adapters?: Map<string, ExecutionAdapter> }) {
   const defaultPolicy: PolicyDocument = options.policy ?? {
     version: "1.0",
+    default_action: "allow",
     rules: [
       {
         id: "high-value-payment",

@@ -1657,10 +1657,13 @@ test("server filters alerts by tenant_id", async () => {
           receipts: [
             {
               receipt_id: "receipt:task_alert_tenant_a",
+              intent_id: "task_alert_tenant_a",
+              capability: "db.read.aggregate",
+              action: "executed",
+              status: "ok",
               task_id: "task_alert_tenant_a",
               tenant_id: "tenant_A",
               agent_id: "dbread-agent-v1",
-              action_taken: "query",
               resource_touched: "incident_metrics",
               policy_checks: [],
               timestamp: new Date().toISOString(),
@@ -1871,10 +1874,13 @@ test("server metrics signing anomalies detect unknown key usage", async () => {
           receipts: [
             {
               receipt_id: "receipt:task_unknown_signature",
+              intent_id: "task_unknown_signature",
+              capability: "db.read.aggregate",
+              action: "executed",
+              status: "ok",
               task_id: "task_unknown_signature",
               tenant_id: "tenant_A",
               agent_id: "dbread-agent-v1",
-              action_taken: "query",
               resource_touched: "incident_metrics",
               policy_checks: [],
               timestamp: new Date().toISOString(),

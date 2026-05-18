@@ -1,11 +1,10 @@
+#!/usr/bin/env node
 /**
  * MAP Protocol - Micro Agent Protocol
  *
  * Copyright © 2026 Sidian Labs
  * SPDX-License-Identifier: Apache-2.0
  */
-
-#!//usr/bin/env node
 
 import { run as runLevel1 } from "./suites/level1.js";
 import { run as runLevel2 } from "./suites/level2.js";

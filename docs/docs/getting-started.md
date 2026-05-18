@@ -19,13 +19,13 @@ MAP (Micro Agent Protocol) is an open standard for AI assistant-to-micro-agent d
 Choose your preferred SDK:
 
 ```bash
-# TypeScript/JavaScript
+# TypeScript/JavaScript (best-supported today)
 npm install @sidianlabs/map-client
 
-# Python
-pip install mapprotocol
+# Python (preview: source install)
+pip install -e packages/python
 
-# Go
+# Go (preview: source package)
 go get github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto
 ```
 

@@ -615,7 +615,7 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     );
     const receiptCounts = input.receipts.reduce<Record<string, number>>(
       (acc, receipt) => {
-        const keyId = getSignatureKeyId(receipt.signature) ?? "unknown";
+        const keyId = getSignatureKeyId(receipt.signature ?? "") ?? "unknown";
         acc[keyId] = (acc[keyId] ?? 0) + 1;
         return acc;
       },

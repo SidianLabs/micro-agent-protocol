@@ -6,52 +6,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-
-/**
- * MAP — Micro Agent Protocol
- *
- * The single entry point. This is all you need to know.
- *
- * ─── 10-MINUTE SETUP ────────────────────────────────────────────────────────
- *
- * 1. Create a MAP instance with your policy:
- *
- *    import { map } from './map.js';
- *
- *    const agent = map({
- *      policy: [
- *        { when: 'payment.*', amount_gt: 1000, require: 'approval' },
- *        { when: 'db.write',  env: 'production', require: 'deny'    },
- *      ]
- *    });
- *
- * 2. Register what your agent can do:
- *
- *    agent.can('payment.execute', async (input) => {
- *      const charge = await stripe.charges.create({ amount: input.amount });
- *      return { charge_id: charge.id, status: charge.status };
- *    });
- *
- * 3. Run it:
- *
- *    const result = await agent.run('payment.execute', {
- *      amount: 5000,
- *      currency: 'USD',
- *      vendor_id: 'vendor_abc',
- *    });
- *
- *    // result.status  → 'executed' | 'denied' | 'approval_required'
- *    // result.output  → { charge_id: '...', status: 'succeeded' }
- *    // result.receipt → cryptographically signed proof of what happened
- *
- * ─── THAT'S IT ───────────────────────────────────────────────────────────────
- *
- * Everything else (HTTP server, multi-tenancy, async queues, deployment
- * profiles, signing keys) is optional and available when you need it.
- *
- * See: https://map-protocol.dev/docs/getting-started
- */
-
 import { readFileSync } from "node:fs";
 import { Executor } from "./core/execution/index.js";
 import { evaluate } from "./core/policy/index.js";
@@ -113,10 +67,9 @@ function compileSimpleRule(rule: SimpleRule, index: number): PolicyRule {
   }
 
   // If no conditions specified, always match (catch-all)
-  // Use a field existence check that's always true for any valid intent
   const condition: PolicyCondition =
     conditions.length === 0
-      ? { neq: ["capability", "__never_match_this__"] } // always true
+      ? { always: true } // first-class always-true condition
       : conditions.length === 1
         ? conditions[0]
         : { and: conditions };
@@ -140,15 +93,23 @@ function compileSimpleRule(rule: SimpleRule, index: number): PolicyRule {
 
 function compilePolicy(
   rules: SimpleRule[] | PolicyDocument,
+  defaultAction?: "allow" | "deny",
 ): PolicyDocument {
   // Already a full PolicyDocument
   if ("version" in rules && "rules" in rules) {
     return rules as PolicyDocument;
   }
-  // Simple DSL array
+  // Simple DSL array — default_action is "deny" unless caller opts in to "allow"
+  // or the rule list contains a catch-all { when: '*', require: 'allow' }
+  const simpleRules = rules as SimpleRule[];
+  const hasCatchAllAllow = simpleRules.some(
+    (r) => r.when === "*" && r.require === "allow",
+  );
+  const effectiveDefault = defaultAction ?? (hasCatchAllAllow ? "allow" : "deny");
   return {
     version: "1.0",
-    rules: (rules as SimpleRule[]).map((r, i) => compileSimpleRule(r, i)),
+    rules: simpleRules.map((r, i) => compileSimpleRule(r, i)),
+    default_action: effectiveDefault,
   };
 }
 
@@ -183,9 +144,15 @@ export interface MapOptions {
    * - Simple DSL: [{ when: 'payment.*', amount_gt: 1000, require: 'approval' }]
    * - Full PolicyDocument: { version: '1.0', rules: [...] }
    * - Path to a JSON file: './policy.json'
-   * - Omit for allow-all (useful for getting started)
+   * - Omit for default-deny (safe starting point)
    */
   policy?: SimpleRule[] | PolicyDocument | string;
+
+  /**
+   * Default action when no rule matches. Defaults to "deny" (fail-closed).
+   * Set to "allow" to opt in to permissive mode (not recommended for production).
+   */
+  defaultAction?: "allow" | "deny";
 
   /**
    * Who is making requests. Defaults to { type: 'service', id: 'default' }.
@@ -334,14 +301,18 @@ export function map(options: MapOptions = {}): MapInstance {
   let policyDoc: PolicyDocument;
 
   if (!options.policy) {
-    // Default: allow everything (good for getting started)
-    policyDoc = { version: "1.0", rules: [] };
+    // Default: deny everything (safe starting point — register explicit allow rules)
+    policyDoc = { version: "1.0", rules: [], default_action: options.defaultAction ?? "deny" };
   } else if (typeof options.policy === "string") {
     // File path — load synchronously at startup
     const raw = readFileSync(options.policy, "utf8");
     policyDoc = JSON.parse(raw) as PolicyDocument;
+    // Respect defaultAction override if the loaded doc doesn't specify one
+    if (policyDoc.default_action === undefined && options.defaultAction) {
+      policyDoc.default_action = options.defaultAction;
+    }
   } else {
-    policyDoc = compilePolicy(options.policy);
+    policyDoc = compilePolicy(options.policy, options.defaultAction);
   }
 
   const defaultRequester: RequesterIdentity = options.requester ?? {
@@ -509,23 +480,16 @@ export function map(options: MapOptions = {}): MapInstance {
 
       pendingApprovals.delete(approvalReference);
 
-      // Execute with allow-all policy — the human already approved this
-      const approvedPolicy: PolicyDocument = { version: "1.0", rules: [] };
-      executor.setPolicy(approvedPolicy);
-      try {
-        const raw = await executor.execute(pending.intent);
-        const result = toMapResult(raw, pending.intent);
-        return result;
-      } finally {
-        // Restore the real policy
-        executor.setPolicy(policyDoc);
-      }
+      // Execute via executeApproved — skips policy gate without mutating shared state
+      const raw = await executor.executeApproved(pending.intent);
+      const result = toMapResult(raw, pending.intent);
+      return result;
     },
 
     setPolicy(policy) {
       policyDoc = typeof policy === "string"
         ? JSON.parse(readFileSync(policy, "utf8")) as PolicyDocument
-        : compilePolicy(policy);
+        : compilePolicy(policy, options.defaultAction);
       executor.setPolicy(policyDoc);
     },
 

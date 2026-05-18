@@ -11,10 +11,7 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "paths": {
-      "@sidianlabs/map-sdk": ["../packages/typescript/src/index.ts"]
-    }
+    "skipLibCheck": true
   },
   "include": ["src/**/*.ts"]
 }
