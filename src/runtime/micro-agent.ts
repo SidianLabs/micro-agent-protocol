@@ -139,8 +139,23 @@ export abstract class BaseMicroAgent implements MicroAgent {
           : undefined;
     const negotiation = this.resolveNegotiation(envelope);
 
+    // Determine core receipt fields from action string
+    const coreAction = action.includes("approval_required")
+      ? "approval_required" as const
+      : action.includes("denied") || action.includes("cancelled")
+        ? "denied" as const
+        : "executed" as const;
+    const coreStatus = coreAction === "executed" ? "ok" as const : "error" as const;
+    const capability = typeof envelope.metadata?.capability === "string"
+      ? envelope.metadata.capability
+      : envelope.intent;
+
     const unsignedReceipt = {
       receipt_id: `receipt:${envelope.task_id}`,
+      intent_id: envelope.task_id,
+      capability,
+      action: coreAction,
+      status: coreStatus,
       task_id: envelope.task_id,
       tenant_id:
         typeof envelope.requester_identity.tenant_id === "string" &&
@@ -150,7 +165,6 @@ export abstract class BaseMicroAgent implements MicroAgent {
       request_id:
         typeof envelope.metadata?.request_id === "string" ? envelope.metadata.request_id : undefined,
       agent_id: this.descriptor.agent_id,
-      action_taken: action,
       resource_touched: resourceTouched,
       policy_checks: policyChecks,
       approval_used: approvalUsed,

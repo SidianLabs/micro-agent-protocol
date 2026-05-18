@@ -7,11 +7,13 @@ SPDX-License-Identifier: Apache-2.0
 
 # MAP Protocol Conformance Test Suite
 
-This directory contains the conformance test suite for the MAP Protocol implementation. These tests verify that an implementation correctly implements the MAP Protocol specification across all defined interfaces and behaviors.
+This directory contains the preview conformance harness for MAP Protocol implementations.
+
+**Status:** Developer preview. Use it for local compatibility testing and investigation. Do not treat it as polished certification infrastructure yet.
 
 ## Certification Levels
 
-MAP Protocol defines three formal certification levels. See [`docs/conformance-certification.md`](../docs/conformance-certification.md) for details:
+MAP defines three intended certification levels. Treat them as target levels for now rather than a fully productized certification program. See [`docs/conformance-certification.md`](../docs/conformance-certification.md) for the current model:
 
 | Level | Name | Description |
 |---|---|---|
@@ -30,26 +32,18 @@ MAP Protocol defines three formal certification levels. See [`docs/conformance-c
 ### Running Tests
 
 ```bash
-# Install dependencies
-npm install
-
-# Build the test suite
+cd conformance
 npm run build
-
-# Run all tests
 npm test
-
-# Run specific test suite
-npm test -- --testPathPattern=dispatch
-
-# Run tests for a specific certification level
-npm test -- --testPathPattern="dispatch|approval|api-surface|error-codes|schema-negotiation|validation"  # Level 1
-npm test -- --testPathPattern="signing|idempotency|tenant-isolation|trust-chain|policy|async-queue|task-store|receipt-store"  # Level 2
 ```
 
 ### Test Configuration
 
-Tests are designed to run against a reference server at `http://localhost:8787`. Ensure the server is running before executing the test suite.
+Tests are designed to run against a reference server at `http://localhost:8787`.
+
+- With a live server, the harness runs real protocol checks.
+- Without a live server, network-dependent tests skip cleanly.
+- A run with many skips is not certification evidence; it only means the harness itself executed successfully.
 
 Override the server URL with environment variables:
 
@@ -65,17 +59,10 @@ Ensure your MAP Protocol server is running and configured to accept test traffic
 
 ### Step 2: Run Conformance Tests
 
-Run the test suites for your target certification level.
+Run the harness against a live implementation and review the results manually.
 
 ```bash
-# Level 1
-npm test -- --testPathPattern="dispatch|approval|api-surface|error-codes|schema-negotiation|validation"
-
-# Level 2 (includes Level 1)
 npm test
-
-# Level 3 (includes all, plus additional reliability tests)
-npm test -- --runChaosTests  # opt-in for destructive tests
 ```
 
 ### Step 3: Collect Evidence
@@ -108,6 +95,8 @@ Create a [GitHub Issue](https://github.com/SidianLabs/micro-agent-protocol/issue
 3. Target certification level
 4. Links to all required evidence
 
+Until the workflow is hardened further, frame this as a review request rather than an automated stamp of compliance.
+
 ## Test Suites
 
 | Test File | Level | Description |
@@ -120,15 +109,13 @@ Create a [GitHub Issue](https://github.com/SidianLabs/micro-agent-protocol/issue
 | `src/schema-negotiation.test.ts` | L1 | Tests for schema version negotiation |
 | `src/signing.test.ts` | L2 | Tests for cryptographic signature verification |
 | `src/idempotency.test.ts` | L2 | Tests for idempotent operations |
-| `src/tenant-isolation.test.ts` | L2 | Tests for tenant isolation |
+| tenant isolation coverage | L2 | Covered through the current harness and security/policy checks |
 | `src/trust-chain.test.ts` | L2 | Tests for trust chain verification |
 | `src/policy.test.ts` | L2 | Tests for policy evaluation |
 | `src/async-queue.test.ts` | L2 | Tests for async delivery queue |
 | `src/task-store.test.ts` | L2 | Tests for task persistence |
 | `src/receipt-store.test.ts` | L2 | Tests for receipt storage |
-| `src/chaos-engineering.test.ts` | L3 | Tests for chaos engineering |
-| `src/dr-drill.test.ts` | L3 | Tests for disaster recovery |
-| `src/backpressure.test.ts` | L3 | Tests for backpressure handling |
+| reference reliability coverage | L3 | Reliability checks are currently stronger in the reference implementation test suite than in this standalone harness |
 
 ## Fixtures
 
@@ -141,6 +128,5 @@ Test fixtures are located in `src/fixtures/` and include:
 ## Related Resources
 
 - [Conformance Certification Levels](../docs/conformance-certification.md)
-- [SDK Compatibility Matrix](../docs/sdk-compatibility-matrix.md)
-- [V1 Candidate Checklist](../docs/v1-candidate-checklist.md)
+- [SDK Compatibility Matrix](../docs/docs/sdk/compatibility-matrix.md)
 - [MAP Protocol Specification](../spec/)

@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { describe, it } from "./test-runtime.js";
 
 const BASE_URL = "http://localhost:8787";
 

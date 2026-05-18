@@ -86,7 +86,17 @@ export type PolicyCondition =
   | LogicalAndCondition
   | LogicalOrCondition
   | LogicalNotCondition
+  | AlwaysCondition
+  | NeverCondition
   | FieldRef;
+
+export interface AlwaysCondition {
+  always: true;
+}
+
+export interface NeverCondition {
+  never: true;
+}
 
 export interface ComparisonCondition {
   [operator: string]: [string, unknown];
@@ -120,6 +130,8 @@ export interface PolicyRule {
 export interface PolicyDocument {
   version: "1.0";
   rules: PolicyRule[];
+  /** Default action when no rule matches. Defaults to "deny" (fail-closed). */
+  default_action?: PolicyAction;
 }
 
 export interface ValidationResult {

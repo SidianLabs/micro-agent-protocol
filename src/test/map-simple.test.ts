@@ -19,7 +19,7 @@ import { map } from "../map.js";
 // ─── Basic execution ──────────────────────────────────────────────────────────
 
 test("map: allow-all policy executes immediately", async () => {
-  const agent = map(); // no policy = allow everything
+  const agent = map({ defaultAction: "allow" }); // explicit allow-all
 
   agent.can("hello.greet", async (input) => ({
     message: `Hello, ${input.name}!`,
@@ -119,7 +119,7 @@ test("map: approve() executes the pending intent", async () => {
 });
 
 test("map: approve() throws for unknown reference", async () => {
-  const agent = map();
+  const agent = map({ defaultAction: "allow" });
 
   await assert.rejects(
     () => agent.approve("approval:nonexistent"),
@@ -162,6 +162,7 @@ test("map: onDecision hook fires for every run", async () => {
   const agent = map({
     policy: [
       { when: "payment.*", amount_gt: 1000, require: "approval" },
+      { when: "payment.*", require: "allow" },
     ],
     onDecision: ({ action }) => {
       decisions.push(action);
@@ -170,8 +171,8 @@ test("map: onDecision hook fires for every run", async () => {
 
   agent.can("payment.execute", async () => ({ status: "succeeded" }));
 
-  await agent.run("payment.execute", { amount: 50 });   // allow
-  await agent.run("payment.execute", { amount: 5000 }); // require_approval
+  await agent.run("payment.execute", { amount: 50 });   // allow (matches second rule)
+  await agent.run("payment.execute", { amount: 5000 }); // require_approval (matches first rule)
 
   assert.deepEqual(decisions, ["allow", "require_approval"]);
 });
@@ -224,6 +225,7 @@ test("map: check() returns allow for low-value payment", async () => {
   const agent = map({
     policy: [
       { when: "payment.*", amount_gt: 1000, require: "approval" },
+      { when: "payment.*", require: "allow" },
     ],
   });
 
@@ -234,7 +236,7 @@ test("map: check() returns allow for low-value payment", async () => {
 // ─── Chaining .can() ─────────────────────────────────────────────────────────
 
 test("map: .can() is chainable", async () => {
-  const agent = map()
+  const agent = map({ defaultAction: "allow" })
     .can("hello.greet", async (input) => ({ message: `Hello ${input.name}` }))
     .can("hello.farewell", async (input) => ({ message: `Goodbye ${input.name}` }));
 
@@ -288,7 +290,7 @@ test("map: getPolicy() returns the compiled policy document", () => {
 // ─── No handler registered ───────────────────────────────────────────────────
 
 test("map: run() throws when no handler registered for capability", async () => {
-  const agent = map();
+  const agent = map({ defaultAction: "allow" });
 
   await assert.rejects(
     () => agent.run("unknown.capability", {}),
@@ -302,6 +304,7 @@ test("map: accepts full PolicyDocument directly", async () => {
   const agent = map({
     policy: {
       version: "1.0",
+      default_action: "allow",
       rules: [
         {
           id: "deny-prod-writes",

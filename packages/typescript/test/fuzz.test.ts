@@ -6,7 +6,7 @@
  */
 
 import { randomUUID, randomInt } from 'node:crypto';
-import { describe, it } from 'node:test';
+import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +47,25 @@ const INTENTS = [
 ];
 
 const TENANT_IDS = ['tenant_A', 'tenant_B', 'tenant_C', 'tenant_D'];
+const MAP_SERVER_URL = 'http://localhost:8787';
+let serverAvailability: Promise<boolean> | undefined;
+
+async function isServerReachable(): Promise<boolean> {
+  if (!serverAvailability) {
+    serverAvailability = fetch(`${MAP_SERVER_URL}/health`)
+      .then((response) => response.ok)
+      .catch(() => false);
+  }
+  return serverAvailability;
+}
+
+async function requireServer(t: TestContext): Promise<boolean> {
+  if (!(await isServerReachable())) {
+    t.skip('MAP reference server is not running at http://localhost:8787');
+    return false;
+  }
+  return true;
+}
 
 function pick<T>(arr: readonly T[]): T {
   return arr[randomInt(arr.length)];
@@ -122,32 +141,27 @@ describe('Fuzz / Property Tests', () => {
   // Random dispatch fuzz
   // -----------------------------------------------------------------------
   describe('Random dispatch fuzz', () => {
-    it('should handle 50 random valid dispatch requests', async () => {
+    it('should handle 50 random valid dispatch requests', async (t) => {
+      if (!(await requireServer(t))) return;
       const results: { taskId: string; status: number }[] = [];
 
       for (let i = 0; i < 50; i++) {
         const req = buildValidDispatchRequest();
-        try {
-          const response = await fetch('http://localhost:8787/dispatch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req),
-          });
+        const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req),
+        });
 
-          assert.ok(isValidHttpStatus(response.status), `Unexpected status: ${response.status}`);
-          results.push({
-            taskId: (req.envelope as Record<string, unknown>).task_id as string,
-            status: response.status,
-          });
-        } catch (err) {
-          // Network errors are acceptable for a fuzz test — the server might
-          // not be running. Log and continue.
-          console.log(`  [fuzz] request ${i} failed: ${(err as Error).message}`);
-        }
+        assert.ok(isValidHttpStatus(response.status), `Unexpected status: ${response.status}`);
+        results.push({
+          taskId: (req.envelope as Record<string, unknown>).task_id as string,
+          status: response.status,
+        });
       }
 
       console.log(`  Random dispatch fuzz: ${results.length}/${50} requests completed`);
-      assert.ok(results.length >= 0, 'All requests should either succeed or fail gracefully');
+      assert.strictEqual(results.length, 50, 'Expected every random dispatch to receive a response');
     });
   });
 
@@ -155,7 +169,8 @@ describe('Fuzz / Property Tests', () => {
   // Invalid capability fuzz
   // -----------------------------------------------------------------------
   describe('Invalid capability fuzz', () => {
-    it('should return 400/404 for 20 random invalid capabilities', async () => {
+    it('should return 400/404 for 20 random invalid capabilities', async (t) => {
+      if (!(await requireServer(t))) return;
       const invalidCapabilities = Array.from({ length: 20 }, () => {
         const prefix = pick(['invalid.', 'nonexistent.', 'fake.', 'bad.', 'unknown.']);
         const suffix = randomString(8);
@@ -165,26 +180,20 @@ describe('Fuzz / Property Tests', () => {
       let testedCount = 0;
       for (const capability of invalidCapabilities) {
         const req = buildValidDispatchRequest({ capability });
-        try {
-          const response = await fetch('http://localhost:8787/dispatch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req),
-          });
+        const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req),
+        });
 
-          // Invalid capabilities should yield 400 or 404
-          const validErrorStatus =
-            response.status === 400 || response.status === 404 || response.status === 422;
-          console.log(
-            `  [invalid-cap] "${capability}" → ${response.status} ${validErrorStatus ? '' : ''}`
-          );
-          testedCount++;
-        } catch (err) {
-          console.log(`  [invalid-cap] "${capability}" → network error: ${(err as Error).message}`);
-        }
+        const validErrorStatus =
+          response.status === 400 || response.status === 404 || response.status === 422;
+        assert.ok(validErrorStatus, `Expected invalid capability ${capability} to be rejected, got ${response.status}`);
+        testedCount++;
       }
 
       console.log(`  Invalid capability fuzz: ${testedCount}/${invalidCapabilities.length} tested`);
+      assert.strictEqual(testedCount, invalidCapabilities.length);
     });
   });
 
@@ -192,135 +201,111 @@ describe('Fuzz / Property Tests', () => {
   // Boundary value fuzz
   // -----------------------------------------------------------------------
   describe('Boundary value fuzz', () => {
-    it('should handle max_amount=0', async () => {
+    it('should handle max_amount=0', async (t) => {
+      if (!(await requireServer(t))) return;
       const req = buildValidDispatchRequest();
       (
         ((req.envelope as Record<string, unknown>).constraints as Record<string, unknown>)
           .common as Record<string, unknown>
       ).max_amount = 0;
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
-        console.log(`  max_amount=0 → ${response.status}`);
-        assert.ok(isValidHttpStatus(response.status));
-      } catch (err) {
-        console.log(`  max_amount=0 → network error: ${(err as Error).message}`);
-      }
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      console.log(`  max_amount=0 → ${response.status}`);
+      assert.ok(isValidHttpStatus(response.status));
     });
 
-    it('should handle max_amount=999999999', async () => {
+    it('should handle max_amount=999999999', async (t) => {
+      if (!(await requireServer(t))) return;
       const req = buildValidDispatchRequest();
       (
         ((req.envelope as Record<string, unknown>).constraints as Record<string, unknown>)
           .common as Record<string, unknown>
       ).max_amount = 999999999;
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
-        console.log(`  max_amount=999999999 → ${response.status}`);
-        assert.ok(isValidHttpStatus(response.status));
-      } catch (err) {
-        console.log(`  max_amount=999999999 → network error: ${(err as Error).message}`);
-      }
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      console.log(`  max_amount=999999999 → ${response.status}`);
+      assert.ok(isValidHttpStatus(response.status));
     });
 
-    it('should handle empty intent string', async () => {
+    it('should handle empty intent string', async (t) => {
+      if (!(await requireServer(t))) return;
       const req = buildValidDispatchRequest();
       (req.envelope as Record<string, unknown>).intent = '';
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
-        console.log(`  empty intent → ${response.status}`);
-        // Empty intent may be rejected or accepted — both are valid
-        assert.ok(isValidHttpStatus(response.status));
-      } catch (err) {
-        console.log(`  empty intent → network error: ${(err as Error).message}`);
-      }
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      console.log(`  empty intent → ${response.status}`);
+      assert.ok(isValidHttpStatus(response.status));
     });
 
-    it('should handle very long strings', async () => {
+    it('should handle very long strings', async (t) => {
+      if (!(await requireServer(t))) return;
       const req = buildValidDispatchRequest();
       (req.envelope as Record<string, unknown>).intent = randomString(10000);
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
-        console.log(`  very long intent (10000 chars) → ${response.status}`);
-        assert.ok(isValidHttpStatus(response.status));
-      } catch (err) {
-        console.log(`  very long intent → network error: ${(err as Error).message}`);
-      }
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      console.log(`  very long intent (10000 chars) → ${response.status}`);
+      assert.ok(isValidHttpStatus(response.status));
     });
 
-    it('should handle special characters in intent', async () => {
+    it('should handle special characters in intent', async (t) => {
+      if (!(await requireServer(t))) return;
       const req = buildValidDispatchRequest();
       (req.envelope as Record<string, unknown>).intent = randomSpecialString(100);
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
-        console.log(`  special chars intent → ${response.status}`);
-        assert.ok(isValidHttpStatus(response.status));
-      } catch (err) {
-        console.log(`  special chars intent → network error: ${(err as Error).message}`);
-      }
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      console.log(`  special chars intent → ${response.status}`);
+      assert.ok(isValidHttpStatus(response.status));
     });
 
-    it('should handle missing required field (no task_id)', async () => {
+    it('should handle missing required field (no task_id)', async (t) => {
+      if (!(await requireServer(t))) return;
       const req = buildValidDispatchRequest();
       delete (req.envelope as Record<string, unknown>).task_id;
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
-        console.log(`  missing task_id → ${response.status}`);
-        // Should be a client error (4xx)
-        assert.ok(response.status >= 400 && response.status < 500);
-      } catch (err) {
-        console.log(`  missing task_id → network error: ${(err as Error).message}`);
-      }
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      console.log(`  missing task_id → ${response.status}`);
+      assert.ok(response.status >= 400 && response.status < 500);
     });
 
-    it('should handle negative max_amount', async () => {
+    it('should handle negative max_amount', async (t) => {
+      if (!(await requireServer(t))) return;
       const req = buildValidDispatchRequest();
       (
         ((req.envelope as Record<string, unknown>).constraints as Record<string, unknown>)
           .common as Record<string, unknown>
       ).max_amount = -1;
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
-        console.log(`  max_amount=-1 → ${response.status}`);
-        // Should likely be rejected
-        assert.ok(isValidHttpStatus(response.status));
-      } catch (err) {
-        console.log(`  max_amount=-1 → network error: ${(err as Error).message}`);
-      }
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      console.log(`  max_amount=-1 → ${response.status}`);
+      assert.ok(isValidHttpStatus(response.status));
     });
   });
 
@@ -328,12 +313,13 @@ describe('Fuzz / Property Tests', () => {
   // Concurrent fuzz
   // -----------------------------------------------------------------------
   describe('Concurrent fuzz', () => {
-    it('should handle 20 concurrent dispatches — no crashes', async () => {
+    it('should handle 20 concurrent dispatches — no crashes', async (t) => {
+      if (!(await requireServer(t))) return;
       const requests = Array.from({ length: 20 }, () => buildValidDispatchRequest());
 
       const responses = await Promise.allSettled(
         requests.map((req) =>
-          fetch('http://localhost:8787/dispatch', {
+          fetch(`${MAP_SERVER_URL}/dispatch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(req),
@@ -362,9 +348,7 @@ describe('Fuzz / Property Tests', () => {
         `  Concurrent: ${successCount} responses, ${errorCount} errors (network/server)`
       );
 
-      // The test passes if no unhandled rejections or crashes occur.
-      // Even if the server is unavailable, the client code shouldn't crash.
-      assert.ok(true, 'Concurrent fuzz completed without crashes');
+      assert.strictEqual(successCount, requests.length, 'Expected every concurrent dispatch to settle with a response');
     });
   });
 
@@ -372,7 +356,8 @@ describe('Fuzz / Property Tests', () => {
   // Rapid state change fuzz
   // -----------------------------------------------------------------------
   describe('Rapid state change fuzz', () => {
-    it('should handle accepted→proposed→running→completed 10 times rapidly', async () => {
+    it('should handle accepted→proposed→running→completed 10 times rapidly', async (t) => {
+      if (!(await requireServer(t))) return;
       // This simulates rapid state transitions by firing dispatches
       // and then polling for state changes in quick succession.
 
@@ -384,21 +369,17 @@ describe('Fuzz / Property Tests', () => {
         const taskId = (req.envelope as Record<string, unknown>).task_id as string;
         taskIds.push(taskId);
 
-        try {
-          await fetch('http://localhost:8787/dispatch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req),
-          });
-        } catch (err) {
-          // Server may not be running — continue
-        }
+        await fetch(`${MAP_SERVER_URL}/dispatch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req),
+        });
       }
 
       // Phase 2: Rapidly poll all tasks
       const pollResults = await Promise.allSettled(
         taskIds.map(async (taskId) => {
-          const res = await fetch(`http://localhost:8787/tasks/${taskId}`, {
+          const res = await fetch(`${MAP_SERVER_URL}/tasks/${taskId}`, {
             headers: { 'Content-Type': 'application/json' },
           });
           return { taskId, status: res.status };
@@ -411,7 +392,7 @@ describe('Fuzz / Property Tests', () => {
       }
 
       console.log(`  Rapid state change: polled ${polledCount}/${taskIds.length} tasks`);
-      assert.ok(true, 'Rapid state change fuzz completed without corruption');
+      assert.strictEqual(polledCount, taskIds.length, 'Expected every task poll to complete');
     });
   });
 
@@ -435,74 +416,46 @@ describe('Fuzz / Property Tests', () => {
   // Property: receipt always present
   // -----------------------------------------------------------------------
   describe('Property: receipt always present', () => {
-    it('should produce a receipt for every successful dispatch', async () => {
+    it('should produce a receipt for every successful dispatch', async (t) => {
+      if (!(await requireServer(t))) return;
       // Fire a valid dispatch and verify the response structure
       const req = buildValidDispatchRequest();
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
 
-        if (response.status === 200 || response.status === 202) {
-          const body = await response.json().catch(() => ({}));
-
-          // A successful dispatch should produce a receipt or at minimum a task_id
-          const hasReceipt =
-            'receipt_id' in body ||
-            'receipt' in body ||
-            'task_id' in body;
-          console.log(
-            `  Receipt property: status=${response.status}, hasReceipt=${hasReceipt}, keys=${Object.keys(body).join(',')}`
-          );
-
-          // If server returns 200, it should include a receipt or task reference
-          if (response.status === 200) {
-            // Note: in async mode the server may return 202 with no receipt yet
-            // so we only enforce this property for 200 responses
-            console.log('  (receipt property checked against 200 response)');
-          }
-        } else {
-          console.log(`  Non-success status ${response.status} — skipping receipt check`);
-        }
-      } catch (err) {
-        console.log(`  Receipt property test — server unreachable: ${(err as Error).message}`);
-      }
-
-      // The property is structural — the test validates it doesn't crash.
-      assert.ok(true, 'Receipt property test completed');
+      assert.ok(response.status === 200 || response.status === 202);
+      const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      const hasReceipt = 'receipt_id' in body || 'receipt' in body || 'task_id' in body;
+      console.log(
+        `  Receipt property: status=${response.status}, hasReceipt=${hasReceipt}, keys=${Object.keys(body).join(',')}`
+      );
+      assert.ok(hasReceipt, 'Successful dispatch should include a receipt or task reference');
     });
 
-    it('should verify receipt has valid signature field when present', async () => {
+    it('should verify receipt has valid signature field when present', async (t) => {
+      if (!(await requireServer(t))) return;
       const req = buildValidDispatchRequest();
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
-
-        if (response.status === 200) {
-          const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-
-          // If the response includes a receipt, it must have a signature
-          if (body.receipt && typeof body.receipt === 'object') {
-            const receipt = body.receipt as Record<string, unknown>;
-            const hasSignature =
-              'signature' in receipt && typeof receipt.signature === 'string' && receipt.signature.length > 0;
-            console.log(
-              `  Receipt signature property: hasSignature=${hasSignature}`
-            );
-          }
-        }
-      } catch (err) {
-        console.log(`  Receipt signature test — server unreachable: ${(err as Error).message}`);
+      if (response.status !== 200) {
+        t.skip(`Receipt signature check requires synchronous success response, got ${response.status}`);
       }
 
-      assert.ok(true, 'Receipt signature property test completed');
+      const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      assert.ok(body.receipt && typeof body.receipt === 'object', 'Expected response to include receipt object');
+      const receipt = body.receipt as Record<string, unknown>;
+      const hasSignature =
+        'signature' in receipt && typeof receipt.signature === 'string' && receipt.signature.length > 0;
+      console.log(`  Receipt signature property: hasSignature=${hasSignature}`);
+      assert.ok(hasSignature, 'Receipt should include a non-empty signature');
     });
   });
 
@@ -510,36 +463,30 @@ describe('Fuzz / Property Tests', () => {
   // Edge-case: malformed JSON body
   // -----------------------------------------------------------------------
   describe('Malformed input fuzz', () => {
-    it('should handle malformed JSON gracefully', async () => {
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: 'this is not json {{{',
-        });
-        console.log(`  Malformed JSON → ${response.status}`);
-        // Should return a 4xx error
-        assert.ok(response.status >= 400 && response.status < 500);
-      } catch (err) {
-        console.log(`  Malformed JSON → network error: ${(err as Error).message}`);
-      }
+    it('should handle malformed JSON gracefully', async (t) => {
+      if (!(await requireServer(t))) return;
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'this is not json {{{',
+      });
+      console.log(`  Malformed JSON → ${response.status}`);
+      assert.ok(response.status >= 400 && response.status < 500);
     });
 
-    it('should handle empty body gracefully', async () => {
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: '',
-        });
-        console.log(`  Empty body → ${response.status}`);
-        assert.ok(response.status >= 400 && response.status < 500);
-      } catch (err) {
-        console.log(`  Empty body → network error: ${(err as Error).message}`);
-      }
+    it('should handle empty body gracefully', async (t) => {
+      if (!(await requireServer(t))) return;
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '',
+      });
+      console.log(`  Empty body → ${response.status}`);
+      assert.ok(response.status >= 400 && response.status < 500);
     });
 
-    it('should handle excessively deep nesting', async () => {
+    it('should handle excessively deep nesting', async (t) => {
+      if (!(await requireServer(t))) return;
       // Build a deeply nested object
       let deep: unknown = { value: 'bottom' };
       for (let i = 0; i < 50; i++) {
@@ -548,17 +495,13 @@ describe('Fuzz / Property Tests', () => {
 
       const req = { ...buildValidDispatchRequest(), deep };
 
-      try {
-        const response = await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        });
-        console.log(`  Deep nesting (50 levels) → ${response.status}`);
-        assert.ok(isValidHttpStatus(response.status));
-      } catch (err) {
-        console.log(`  Deep nesting → network error: ${(err as Error).message}`);
-      }
+      const response = await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      console.log(`  Deep nesting (50 levels) → ${response.status}`);
+      assert.ok(isValidHttpStatus(response.status));
     });
   });
 
@@ -566,7 +509,8 @@ describe('Fuzz / Property Tests', () => {
   // Fuzzing tenant boundaries
   // -----------------------------------------------------------------------
   describe('Tenant boundary fuzz', () => {
-    it('should not leak tasks across tenants', async () => {
+    it('should not leak tasks across tenants', async (t) => {
+      if (!(await requireServer(t))) return;
       const tenantA = 'tenant_fuzz_A';
       const tenantB = 'tenant_fuzz_B';
 
@@ -577,35 +521,23 @@ describe('Fuzz / Property Tests', () => {
       ).tenant_id = tenantA;
       const taskIdA = (reqA.envelope as Record<string, unknown>).task_id as string;
 
-      try {
-        // Dispatch for tenant A
-        await fetch('http://localhost:8787/dispatch', {
-          method: 'POST',
+      await fetch(`${MAP_SERVER_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqA),
+      });
+
+      const responseB = await fetch(
+        `${MAP_SERVER_URL}/tasks/${taskIdA}?tenant_id=${tenantB}`,
+        {
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(reqA),
-        });
-
-        // Try to read task as tenant B — should get 404 or 403
-        const responseB = await fetch(
-          `http://localhost:8787/tasks/${taskIdA}?tenant_id=${tenantB}`,
-          {
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-
-        console.log(
-          `  Tenant isolation: reading tenant A's task as tenant B → ${responseB.status}`
-        );
-
-        // Should NOT return 200 for cross-tenant access
-        if (responseB.status === 200) {
-          console.log('  WARNING: possible tenant isolation leak!');
         }
-      } catch (err) {
-        console.log(`  Tenant boundary fuzz — server unreachable: ${(err as Error).message}`);
-      }
+      );
 
-      assert.ok(true, 'Tenant boundary fuzz completed');
+      console.log(
+        `  Tenant isolation: reading tenant A's task as tenant B → ${responseB.status}`
+      );
+      assert.notStrictEqual(responseB.status, 200, 'Cross-tenant task read should not succeed');
     });
   });
 });

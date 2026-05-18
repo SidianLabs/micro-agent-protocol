@@ -39,10 +39,13 @@ import {
 function makeReceipt(taskId: string, receiptId?: string): any {
   return {
     receipt_id: receiptId ?? `receipt:${taskId}`,
+    intent_id: taskId,
+    capability: "test.action",
+    action: "executed",
+    status: "ok",
     task_id: taskId,
     tenant_id: "tenant_dr",
     agent_id: "agent-dr",
-    action_taken: "test.action",
     resource_touched: "test-resource",
     policy_checks: ["check_1"],
     timestamp: new Date().toISOString(),
@@ -64,9 +67,12 @@ function makeTaskResult(taskId: string, status: string = "completed"): any {
 function makeTaskReceipt(taskId: string): any {
   return {
     receipt_id: `receipt:${taskId}`,
+    intent_id: taskId,
+    capability: "test.action",
+    action: "executed",
+    status: "ok",
     task_id: taskId,
     agent_id: "agent-dr",
-    action_taken: "test.action",
     resource_touched: "test-resource",
     policy_checks: ["check_1"],
     timestamp: new Date().toISOString(),

@@ -200,10 +200,13 @@ export function mapResultToExecution(
   };
   receipt: {
     receipt_id: string;
+    intent_id: string;
+    capability: string;
+    action: "executed" | "denied" | "approval_required";
+    status: "ok" | "error";
     task_id: string;
     tenant_id?: string;
     agent_id: string;
-    action_taken: string;
     resource_touched: string;
     policy_checks: string[];
     timestamp: string;
@@ -223,12 +226,18 @@ export function mapResultToExecution(
     followup_required: false,
   };
 
+  const coreAction = taskStatus === "completed" ? "executed" as const : "denied" as const;
+  const coreStatus = coreResult.status === "ok" ? "ok" as const : "error" as const;
+
   const receipt = {
     receipt_id: `receipt:${envelope.task_id}:${Date.now()}`,
+    intent_id: envelope.task_id,
+    capability,
+    action: coreAction,
+    status: coreStatus,
     task_id: envelope.task_id,
     tenant_id: envelope.requester_identity.tenant_id,
     agent_id: envelope.target_agent,
-    action_taken: `${capability}.${taskStatus}`,
     resource_touched: envelope.target_agent,
     policy_checks: ["policy_passed"],
     timestamp: new Date().toISOString(),

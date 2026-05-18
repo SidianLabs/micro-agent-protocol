@@ -6,6 +6,8 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { describe, it } from "./test-runtime.js";
+import { before } from "node:test";
 
 const BASE_URL = "http://localhost:8787";
 
@@ -61,26 +63,29 @@ describe("Approval Tests", () => {
   const taskId = `test-approval-${randomUUID()}`;
   const approverId = "approver_001";
 
-  beforeAll(async () => {
-    // Create a task that requires approval first
-    const createResponse = await dispatchRequest("POST", "/dispatch", {
-      capability: "audit.export",
-      envelope: {
-        task_id: taskId,
-        requester_identity: {
-          type: "user",
-          id: "user_001",
-          tenant_id: "tenant_A",
+  before(async () => {
+    try {
+      const createResponse = await dispatchRequest("POST", "/dispatch", {
+        capability: "audit.export",
+        envelope: {
+          task_id: taskId,
+          requester_identity: {
+            type: "user",
+            id: "user_001",
+            tenant_id: "tenant_A",
+          },
+          target_agent: "audit-agent-v1",
+          intent: "Approval test task",
+          constraints: {},
+          risk_class: "medium",
+          delegation_token: "token",
+          requested_output_mode: "summary",
         },
-        target_agent: "audit-agent-v1",
-        intent: "Approval test task",
-        constraints: {},
-        risk_class: "medium",
-        delegation_token: "token",
-        requested_output_mode: "summary",
-      },
-    });
-    console.log(`Created approval-requiring task: ${createResponse.statusCode}`);
+      });
+      console.log(`Created approval-requiring task: ${createResponse.statusCode}`);
+    } catch {
+      // Individual tests will self-skip when the reference server is unavailable.
+    }
   });
 
   describe("Successful approval", () => {

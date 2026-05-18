@@ -302,25 +302,38 @@ export interface ResultPackage {
   extensions?: string[];
 }
 
-export interface ExecutionReceipt {
-  receipt_id: string;
-  task_id: string;
+import type {
+  ExecutionReceipt as CoreExecutionReceipt,
+} from "../core/types.js";
+
+/**
+ * OrchestratorReceipt extends the core ExecutionReceipt with protocol-level
+ * fields used by the orchestrator runtime. This is the unified receipt type
+ * for the protocol layer — it includes all core fields plus optional
+ * orchestrator-specific metadata.
+ */
+export interface OrchestratorReceipt extends CoreExecutionReceipt {
+  task_id?: string;
   order_id?: string;
   tenant_id?: string;
   request_id?: string;
   agent_id: string;
-  action_taken: string;
-  resource_touched: string;
-  policy_checks: string[];
+  /** Canonical action name (same as core `action` field). */
+  resource_touched?: string;
+  policy_checks?: string[];
   approval_used?: string;
-  timestamp: string;
-  result_hash: string;
+  result_hash?: string;
   requested_schema_version?: string;
   executed_schema_version?: string;
   negotiation?: InvocationNegotiation;
-  signature: string;
   extensions?: string[];
 }
+
+/**
+ * @deprecated Use OrchestratorReceipt instead. This alias exists for backward
+ * compatibility with code that imports ExecutionReceipt from the protocol layer.
+ */
+export type ExecutionReceipt = OrchestratorReceipt;
 
 export interface PolicyDecision {
   allowed: boolean;

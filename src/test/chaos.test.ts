@@ -21,9 +21,12 @@ function makeReceipt(
 ): ExecutionReceipt {
   return {
     receipt_id: `receipt:${taskId}:${suffix}`,
+    intent_id: taskId,
+    capability: "db.read.aggregate",
+    action: "executed",
+    status: "ok",
     task_id: taskId,
     agent_id: agentId,
-    action_taken: `db.read.aggregate.${suffix}`,
     resource_touched: "database",
     policy_checks: ["policy_passed"],
     timestamp: new Date().toISOString(),

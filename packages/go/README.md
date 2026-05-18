@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 
 Go SDK for Micro Agent Protocol (MAP) — policy enforcement and audit trails for AI agents.
 
-**Status:** Stable — production-ready.
+**Status:** Preview. The package builds and the client surface is usable, but the docs and examples are still being tightened.
 
 ## Installation
 
@@ -72,46 +72,6 @@ cd packages/go
 go test -race -count=1 ./...
 ```
 
-## Quick Start
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "log"
-    "time"
-
-    "github.com/SidianLabs/micro-agent-protocol/mapproto"
-)
-
-func main() {
-    ctx := context.Background()
-
-    signer := mapproto.NewHMACSigner(
-        []byte("your-secret-key"),
-        "ethereum:0xYourAddress",
-    )
-
-    client, err := mapproto.NewClient(
-        mapproto.WithBaseURL("http://localhost:8787"),
-        mapproto.WithTimeout(30*time.Second),
-        mapproto.WithSigner(signer),
-    )
-    if err != nil {
-        log.Fatalf("Failed to create client: %v", err)
-    }
-
-    // Check health
-    health, err := client.GetHealth(ctx)
-    if err != nil {
-        log.Fatalf("Health check failed: %v", err)
-    }
-    fmt.Printf("Connected to MAP Protocol API %s\n", health.Version)
-}
-```
-
 ## Client Options
 
 ```go
@@ -145,34 +105,10 @@ if err != nil {
 }
 ```
 
-## Dispatching Tasks
+## Notes
 
-```go
-dispatchReq := mapproto.DispatchRequest{
-    Envelope: mapproto.TaskEnvelope{
-        Requester: mapproto.RequesterIdentity{
-            Address: "0xYourAddress",
-            ChainID: "ethereum",
-        },
-        Constraints: mapproto.TaskConstraints{
-            MaxBudget:   "1000000",
-            MaxDuration: 300,
-            RiskLevel:   mapproto.RiskLevelLow,
-            RequiredTags: []string{"payment"},
-            Timeout:      60,
-        },
-        Payload:   []byte(`{"type":"payment","to":"0xRecipient","amount":"1000"}`),
-        CreatedAt: time.Now().Unix(),
-        ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
-    },
-}
-
-task, err := client.Dispatch(ctx, dispatchReq)
-if err != nil {
-    log.Fatalf("Dispatch failed: %v", err)
-}
-fmt.Printf("Task ID: %s\n", task.ID)
-```
+- Use the import path shown in the first quick-start example: `github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto`.
+- Treat the quick start above as the canonical example until the broader README examples are refreshed to the current API surface.
 
 ## Querying Tasks
 
