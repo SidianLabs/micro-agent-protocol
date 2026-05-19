@@ -5,6 +5,10 @@ Copyright © 2026 Sidian Labs
 SPDX-License-Identifier: Apache-2.0
 -->
 
+<p align="center">
+  <img src="docs/static/img/map-logo.svg" width="180" alt="MAP Protocol Logo" />
+</p>
+
 # MAP — Micro Agent Protocol
 
 **Policy enforcement and audit trails for AI agents. Works for any action. Open standard.**

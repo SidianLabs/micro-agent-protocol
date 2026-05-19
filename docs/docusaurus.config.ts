@@ -52,7 +52,7 @@ const config: Config = {
       title: 'MAP Protocol',
       logo: {
         alt: 'MAP Protocol Logo',
-        src: 'img/logo.svg',
+        src: 'img/map-logo.svg',
       },
       items: [
         {
