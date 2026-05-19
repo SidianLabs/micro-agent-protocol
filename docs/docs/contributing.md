@@ -80,7 +80,7 @@ cd ../go && go test ./...
 MAP/docs/contributing.md#L1-50
 map/
 ├── packages/
-│   ├── typescript/          # @sidianlabs/map-client (npm)
+│   ├── typescript/          # @sidianlabs/map (npm)
 │   ├── python/              # mapprotocol (PyPI)
 │   └── go/                  # github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto
 ├── reference/               # TypeScript reference implementation

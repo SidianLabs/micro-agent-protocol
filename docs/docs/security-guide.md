@@ -79,7 +79,7 @@ function signHttpRequest(request: SignedRequestPayload): Record<string, string> 
 **Creating a Signed Request (TypeScript):**
 
 ```typescript
-import { signHttpRequest } from '@sidianlabs/map-client';
+import { signHttpRequest } from '@sidianlabs/map';
 
 const headers = signHttpRequest({
   method: 'POST',

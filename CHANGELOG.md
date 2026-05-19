@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Policy engine with conformance test suites (reference, profiles, trust, errors, contract, API surface)
 - HTTP, Payment, and DB-read adapters
 - Full HTTP server with dispatch/approve/reject routes, webhook outbox, SQLite persistence
-- TypeScript SDK (@sidianlabs/map-client) with generated types + schemas
+- TypeScript SDK (@sidianlabs/map) with generated types + schemas
 - Python SDK (mapprotocol) — pyproject.toml packaging, mypy/ruff/black compliant
 - Go SDK (github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto)
 - Signing model with JWS/JCS canonicalization and key rotation

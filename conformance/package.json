@@ -14,7 +14,7 @@
     "cli": "node dist/cli.js"
   },
   "dependencies": {
-    "@sidianlabs/map-client": "*"
+    "@sidianlabs/map": "*"
   },
   "keywords": [
     "map-protocol",

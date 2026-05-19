@@ -20,7 +20,7 @@ Choose your preferred SDK:
 
 ```bash
 # TypeScript/JavaScript (best-supported today)
-npm install @sidianlabs/map-client
+npm install @sidianlabs/map
 
 # Python (preview: source install)
 pip install -e packages/python
@@ -34,7 +34,7 @@ go get github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto
 ### TypeScript
 
 ```typescript
-import { MapAssistantClient } from '@sidianlabs/map-client';
+import { MapAssistantClient } from '@sidianlabs/map';
 
 const client = MapAssistantClient.forBaseUrl('https://localhost:8787');
 

@@ -26,7 +26,7 @@ MAP is a **firewall for AI actions**. Whatever your AI agent wants to do — sen
 MAP is in **developer preview**.
 
 - The reference TypeScript implementation is the most complete surface today.
-- `@sidianlabs/map-client` is the best-supported package in the repo.
+- `@sidianlabs/map` is the best-supported package in the repo.
 - The Python and Go SDKs are preview source packages and still need more contract alignment and polish.
 - The conformance harness is useful for compatibility testing, but it should still be treated as preview infrastructure.
 
@@ -38,7 +38,7 @@ The right expectation is: **preview, but real**. You can evaluate it, build agai
 
 ```bash
 # TypeScript / Node.js (best-supported surface today)
-npm install @sidianlabs/map-client
+npm install @sidianlabs/map
 
 # Python (preview: source install today)
 pip install -e packages/python
@@ -50,7 +50,7 @@ go get github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto
 ### TypeScript
 
 ```typescript
-import { map } from '@sidianlabs/map-client';
+import { map } from '@sidianlabs/map';
 
 // Works for ANY action your AI agent takes
 const agent = map({
@@ -266,7 +266,7 @@ if (result.status === 'approval_required') {
 MAP ships with adapters for common capabilities:
 
 ```typescript
-import { map, HttpAdapter, PaymentExecuteAdapter, DbReadAdapter } from '@sidianlabs/map-client';
+import { map, HttpAdapter, PaymentExecuteAdapter, DbReadAdapter } from '@sidianlabs/map';
 
 const agent = map({ policy: [...] });
 
@@ -385,7 +385,7 @@ MAP_DEPLOYMENT_PROFILE=regulated
 
 | Language | Package | Status |
 |----------|---------|--------|
-| TypeScript | `@sidianlabs/map-client` | Stable |
+| TypeScript | `@sidianlabs/map` | Stable |
 | Go | `github.com/SidianLabs/micro-agent-protocol/packages/go/mapproto` | Stable |
 | Python | `mapprotocol` | Preview |
 

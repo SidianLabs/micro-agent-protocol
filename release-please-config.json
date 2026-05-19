@@ -6,7 +6,7 @@
       "changelog-path": "CHANGELOG.md"
     },
     "packages/typescript": {
-      "package-name": "@sidianlabs/map-client",
+      "package-name": "@sidianlabs/map",
       "changelog-path": "packages/typescript/CHANGELOG.md"
     },
     "packages/python": {

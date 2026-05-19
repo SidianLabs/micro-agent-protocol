@@ -49,8 +49,8 @@ const result = await client.dispatch({
 #### Payment Dispatch
 
 ```typescript
-import { MapAssistantClient } from '@sidianlabs/map-client';
-import type { DispatchRequest, InvokeResult } from '@sidianlabs/map-client';
+import { MapAssistantClient } from '@sidianlabs/map';
+import type { DispatchRequest, InvokeResult } from '@sidianlabs/map';
 
 const client = MapAssistantClient.forBaseUrl(process.env.MAP_API_URL!);
 client.configureSigning(
@@ -99,7 +99,7 @@ async function processPayment(
 #### Database Read
 
 ```typescript
-import type { TaskEnvelope, VisibilityMode } from '@sidianlabs/map-client';
+import type { TaskEnvelope, VisibilityMode } from '@sidianlabs/map';
 
 async function queryDatabase(
   userId: string,
@@ -143,7 +143,7 @@ async function queryDatabase(
 #### Async Task Polling
 
 ```typescript
-import { MapAssistantClient } from '@sidianlabs/map-client';
+import { MapAssistantClient } from '@sidianlabs/map';
 
 const client = MapAssistantClient.forBaseUrl(process.env.MAP_API_URL!);
 
