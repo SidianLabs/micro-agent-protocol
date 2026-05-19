@@ -17,7 +17,7 @@ import {
   type TaskStatus,
   type HealthStatus,
   type ApiResponse,
-} from '@sidianlabs/map-client';
+} from '@sidianlabs/map';
 
 /**
  * Result of a single conformance check

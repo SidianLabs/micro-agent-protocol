@@ -18,13 +18,13 @@ This is the strongest SDK surface in the repo today, but it is still a `0.x` pac
 Install from npm:
 
 ```bash
-npm install @sidianlabs/map-client
+npm install @sidianlabs/map
 ```
 
 ## Quick Start
 
 ```typescript
-import { MapAssistantClient } from '@sidianlabs/map-client';
+import { MapAssistantClient } from '@sidianlabs/map';
 
 const client = new MapAssistantClient({
   baseUrl: 'http://localhost:8787',
@@ -74,7 +74,7 @@ const client = new MapAssistantClient({
 ### HMAC Signer
 
 ```typescript
-import { HMACSigner } from '@sidianlabs/map-client';
+import { HMACSigner } from '@sidianlabs/map';
 
 const signer = new HMACSigner('secret-key', 'key-id');
 ```
@@ -82,7 +82,7 @@ const signer = new HMACSigner('secret-key', 'key-id');
 ### RSA Signer
 
 ```typescript
-import { RSASigner } from '@sidianlabs/map-client';
+import { RSASigner } from '@sidianlabs/map';
 
 const signer = new RSASigner(privateKeyPEM, 'key-id');
 ```
@@ -90,7 +90,7 @@ const signer = new RSASigner(privateKeyPEM, 'key-id');
 ### HTTP Signer (for signed HTTP requests)
 
 ```typescript
-import { HTTPSigner } from '@sidianlabs/map-client';
+import { HTTPSigner } from '@sidianlabs/map';
 
 const signer = new HTTPSigner('key-id', 'secret');
 client.configureSigning('key-id', 'secret');
@@ -101,7 +101,7 @@ client.configureSigning('key-id', 'secret');
 For real-time dispatch and task status streaming:
 
 ```typescript
-import { WebSocketTransport } from '@sidianlabs/map-client';
+import { WebSocketTransport } from '@sidianlabs/map';
 
 // Create transport
 const transport = new WebSocketTransport('ws://localhost:8787', {
@@ -179,7 +179,7 @@ import {
   MapRetryableError,
   ErrorCode,
   ERROR_CODE_RETRYABLE_MAP,
-} from '@sidianlabs/map-client';
+} from '@sidianlabs/map';
 
 try {
   await client.dispatch({ ... });
@@ -239,7 +239,7 @@ import {
   InMemorySpanExporter,
   SpanKind,
   SpanStatus,
-} from '@sidianlabs/map-client';
+} from '@sidianlabs/map';
 
 // Create tracer with exporter
 const tracer = new Tracer({
@@ -300,7 +300,7 @@ type SpanStatus = 'ok' | 'error' | 'uninstrumented';
 Collect and export metrics in Prometheus format:
 
 ```typescript
-import { PrometheusMetricsCollector } from '@sidianlabs/map-client';
+import { PrometheusMetricsCollector } from '@sidianlabs/map';
 
 const metrics = new PrometheusMetricsCollector({
   prefix: 'map',
@@ -342,7 +342,7 @@ import {
   HTTPHealthCheck,
   WebSocketHealthCheck,
   FunctionalHealthCheck,
-} from '@sidianlabs/map-client';
+} from '@sidianlabs/map';
 
 // Build health checks
 const healthChecker = new HealthCheckBuilder()
@@ -400,7 +400,7 @@ new FunctionalHealthCheck('custom', async () => {
 Convenience class for integrated observability:
 
 ```typescript
-import { ObservabilityManager, LogLevel } from '@sidianlabs/map-client';
+import { ObservabilityManager, LogLevel } from '@sidianlabs/map';
 
 const obs = new ObservabilityManager({
   serviceName: 'payment-agent',
@@ -418,20 +418,20 @@ obs.recordAgentInvocation('agent-payment', 'payment.process', 120);
 ## Storage Adapters
 
 ```typescript
-import { SQLiteStorage } from '@sidianlabs/map-client';
+import { SQLiteStorage } from '@sidianlabs/map';
 
 // Use SQLite for persistence
 const storage = new SQLiteStorage('./map.db');
 
 // Or in-memory for testing
-import { InMemoryStorage } from '@sidianlabs/map-client';
+import { InMemoryStorage } from '@sidianlabs/map';
 const storage = new InMemoryStorage();
 ```
 
 ## Logging
 
 ```typescript
-import { MAPLogger, LogLevel } from '@sidianlabs/map-client';
+import { MAPLogger, LogLevel } from '@sidianlabs/map';
 
 const logger = new MAPLogger({
   level: LogLevel.INFO,
@@ -448,7 +448,7 @@ import {
   validateTaskEnvelope,
   validateDispatchRequest,
   validateExecutionReceipt,
-} from '@sidianlabs/map-client';
+} from '@sidianlabs/map';
 
 try {
   validateTaskEnvelope(envelope);
@@ -461,7 +461,7 @@ try {
 ## Policy Engine
 
 ```typescript
-import { PolicyEngine, PolicyContext } from '@sidianlabs/map-client';
+import { PolicyEngine, PolicyContext } from '@sidianlabs/map';
 
 const engine = new PolicyEngine(policyRules);
 
@@ -492,7 +492,7 @@ import {
   HealthCheckBuilder,
   Tracer,
   SpanKind,
-} from '@sidianlabs/map-client';
+} from '@sidianlabs/map';
 
 async function main() {
   // Setup observability

@@ -26,7 +26,7 @@ MAP is a **firewall for AI actions**. Whatever your AI agent wants to do — sen
 MAP is in **developer preview**.
 
 - The reference TypeScript implementation is the most complete surface today.
-- `@sidianlabs/map-client` is the best-supported package in the repo.
+- `@sidianlabs/map` is the best-supported package in the repo.
 - The Python and Go SDKs are preview source packages and still need more contract alignment and polish.
 - The conformance harness is useful for compatibility testing, but it should still be treated as preview infrastructure.
 
