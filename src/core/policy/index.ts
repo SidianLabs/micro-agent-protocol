@@ -238,10 +238,6 @@ function getFieldValueFromParts(parts: string[], intent: Intent): unknown {
 
 // ─── Legacy uncompiled path (kept for backward compat with direct condition checks) ──
 
-function getFieldValue(path: string, intent: Intent): unknown {
-  return getFieldValueFromParts(path.split("."), intent);
-}
-
 // ─── Type guards ─────────────────────────────────────────────────────────────
 
 function isComparisonCondition(obj: PolicyCondition): obj is ComparisonCondition {
