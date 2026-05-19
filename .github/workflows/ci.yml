@@ -198,7 +198,7 @@ jobs:
       - name: Check Apache 2.0 headers
         run: |
           if grep -rL "SPDX-License-Identifier: Apache-2.0" \
-            --exclude-dir=".github" \
+            --exclude-dir=".github" --exclude-dir="node_modules" --exclude-dir="dist" --exclude-dir="coverage" \
             --include="*.ts" \
             --include="*.js" \
             --include="*.tsx" \
@@ -212,7 +212,7 @@ jobs:
             . ; then
             echo "ERROR: Files missing Apache 2.0 SPDX license header:"
             grep -rL "SPDX-License-Identifier: Apache-2.0" \
-              --exclude-dir=".github" \
+              --exclude-dir=".github" --exclude-dir="node_modules" --exclude-dir="dist" --exclude-dir="coverage" \
               --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx" \
               --include="*.py" --include="*.go" --include="*.sh" \
               --include="*.yaml" --include="*.yml" --include="*.md" \
