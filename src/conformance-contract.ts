@@ -16,7 +16,7 @@ interface ConformanceContract {
 }
 
 function run(): void {
-  const contractPath = resolve(process.cwd(), "docs/governance/conformance-contract-v1.json");
+  const contractPath = resolve(process.cwd(), "docs/docs/governance/conformance-contract-v1.json");
   const packagePath = resolve(process.cwd(), "package.json");
   const contract = JSON.parse(readFileSync(contractPath, "utf8")) as ConformanceContract;
   const pkg = JSON.parse(readFileSync(packagePath, "utf8")) as {
