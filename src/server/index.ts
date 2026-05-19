@@ -77,12 +77,14 @@ import {
 } from "./state.js";
 
 // ── Services ────────────────────────────────────────────────────────────────
-import { MetricsService, createMetricsService } from "./services/metrics.js";
+import { MetricsManager } from "./services/metrics-manager.js";
+import { AuditManager } from "./services/audit-manager.js";
+import { SigningAnomalyDetector } from "./services/signing-anomaly-detector.js";
+import { RateLimiter } from "./services/rate-limiter.js";
 import {
   AlertService,
   type AlertServiceDependencies,
 } from "./services/alerts.js";
-import { SLOMonitor } from "./services/slo-monitor.js";
 
 // ── Security ────────────────────────────────────────────────────────────────
 import {
@@ -230,65 +232,57 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     metricsState: hydratedMetrics,
   } = state;
 
-  // ── Metrics service ────────────────────────────────────────────────────
-  const metrics = createMetricsService({
+  // ── Metrics & SLO Manager ──────────────────────────────────────────────
+  const metricsManager = new MetricsManager({
     metricsWindowMs,
     maxLatencySamplesPerCapability,
     metricsStorePath: options.metricsStorePath,
     hydratedState: hydratedMetrics,
   });
+  const metrics = metricsManager.metrics;
+  const sloMonitor = metricsManager.sloMonitor;
 
   function persistMetrics(): void {
-    if (!options.metricsStorePath) return;
-    const json = metrics.toJSON();
-    persistMetricsStateToDisk(options.metricsStorePath, {
-      requestsTotal: json.requests_total,
-      requestsSucceeded: json.requests_succeeded,
-      requestsFailed: json.requests_failed,
-      requestEvents: json.request_events,
-      errorsByCode: new Map(Object.entries(json.errors_by_code)),
-      errorsByAgent: new Map(Object.entries(json.errors_by_agent)),
-      errorsByAgentByCode: new Map(
-        Object.entries(json.errors_by_agent_by_code).map(([agent, codes]) => [
-          agent,
-          new Map(Object.entries(codes)),
-        ]),
-      ),
-      capabilityLatencySamples: new Map(
-        Object.entries(json.capability_latency_samples).map(
-          ([cap, samples]) => [cap, Array.isArray(samples) ? samples : []],
-        ),
-      ),
-      metricsWindowMs,
-    });
+    metricsManager.persist();
   }
-
-  // ── SLO Monitor ──────────────────────────────────────────────────────
-  const sloMonitor = new SLOMonitor();
 
   function persistSLOMetrics(): void {
-    // SLO data is small and in-memory; persist alongside metrics if a metrics store path is set.
-    if (!options.metricsStorePath) return;
-    try {
-      const sloJson = sloMonitor.toJSON();
-      const sloPath = options.metricsStorePath.replace(/\.json$/, "-slo.json");
-      mkdirSync(dirname(sloPath), { recursive: true });
-      writeFileSync(sloPath, JSON.stringify(sloJson, null, 2), "utf8");
-    } catch {
-      // Non-critical – SLO persistence failure should not crash the server.
-    }
+    // Persisted automatically via metricsManager.persist()
   }
+
+  // ── Other Managers ─────────────────────────────────────────────────────
+  const auditManager = new AuditManager({
+    auditStorePath: options.auditStorePath,
+    auditMaxEvents,
+    auditCheckpointInterval,
+    hydratedEvents: auditEvents,
+    hydratedCheckpoints: auditCheckpoints,
+  });
+
+  const signingAnomalyDetector = new SigningAnomalyDetector({
+    signingRetiringKeyCriticalRatio,
+    signingUnknownKeyCriticalRatio,
+  });
+
+  const rateLimiter = new RateLimiter({
+    rateLimitStatePath: options.rateLimitStatePath,
+    rateLimitWindowMs,
+    rateLimitMaxRequests: options.rateLimitMaxRequests,
+    rateLimitMaxRequestsPerTenant: options.rateLimitMaxRequestsPerTenant,
+    hydratedGlobalEvents: globalRateLimitEvents,
+    hydratedTenantEvents: tenantRateLimitEvents,
+  });
 
   // ── Alert service ──────────────────────────────────────────────────────
   const alertDeps: AlertServiceDependencies = {
     getQueueStats: () => app.asyncQueue.getStats() as any,
-    getRequestMetrics: () => metrics.getRequestMetrics(),
+    getRequestMetrics: () => metricsManager.getRequestMetrics(),
     listDeadLettersByTenant: (tenantId: string) =>
       app.asyncQueue.listDeadLettersByTenant(tenantId),
     listReceiptsByTenant: (tenantId?: string) =>
       app.receiptStore.list(tenantId) as any,
     listRegistryDescriptors: () => app.registry.list() as any,
-    getAuditCheckpoints: () => auditCheckpoints as any,
+    getAuditCheckpoints: () => auditManager.getCheckpoints() as any,
     collectSigningAnomalies: (usage: any) => collectSigningAnomalies(usage),
     collectSigningKeyUsageForData: (input: any) =>
       collectSigningKeyUsageForData(input as any),
@@ -342,13 +336,8 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
     return new Set<string>(revokedSigningKeys.keys());
   }
 
-  function getEffectiveVerificationKeys(): ReturnType<
-    typeof getVerificationKeys
-  > {
-    const revoked = getEffectiveRevokedKeyIds();
-    return getVerificationKeys().map((key) =>
-      revoked.has(key.kid) ? { ...key, status: "revoked" as const } : key,
-    );
+  function getEffectiveVerificationKeys() {
+    return signingAnomalyDetector.getEffectiveVerificationKeys(getEffectiveRevokedKeyIds());
   }
 
   function getRuntimeRevocationMetadata(
@@ -358,45 +347,12 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   }
 
   function evaluateDeploymentProfile() {
-    const violations: string[] = [];
-    const verificationKeys = getEffectiveVerificationKeys();
-    const signableKeys = verificationKeys.filter(
-      (key) => key.status !== "revoked",
-    );
-    const activeKid = getActiveSignatureKeyId();
-    const activeSignableKey =
-      activeKid && activeKid.trim().length > 0
-        ? signableKeys.find((key) => key.kid === activeKid)
-        : undefined;
-
-    if (deploymentProfile === "verified" || deploymentProfile === "regulated") {
-      if (options.enforceSignedRequests !== true) {
-        violations.push("signed_requests_not_enforced");
-      }
-      if (!activeSignableKey) {
-        violations.push("active_signing_key_missing");
-      }
-      if (signableKeys.some((key) => key.demo_only)) {
-        violations.push("demo_signing_keys_present");
-      }
-      if (!activeSignableKey || activeSignableKey.alg !== "RS256") {
-        violations.push("active_key_not_rs256");
-      }
-      if (signableKeys.some((key) => key.alg !== "RS256")) {
-        violations.push("non_asymmetric_signing_keys_present");
-      }
-    }
-    if (deploymentProfile === "regulated") {
-      if (options.requireTenant !== true) {
-        violations.push("tenant_required_not_enforced");
-      }
-    }
-
-    return {
-      profile: deploymentProfile,
-      compliant: violations.length === 0,
-      violations,
-    };
+    return signingAnomalyDetector.evaluateDeploymentProfile({
+      deploymentProfile,
+      enforceSignedRequests: options.enforceSignedRequests,
+      requireTenant: options.requireTenant,
+      revokedKids: getEffectiveRevokedKeyIds(),
+    });
   }
 
   function isAgentDisabled(agentId: string): boolean {
@@ -423,378 +379,37 @@ export function createMapHandler(options: MapHttpServerOptions = {}) {
   }
 
   // ── Audit chain ────────────────────────────────────────────────────────
-  function hashAuditEventBase(input: {
-    timestamp: string;
-    request_id: string;
-    code: string;
-    message: string;
-    method: string;
-    route: string;
-    tenant_id?: string;
-    target_agent?: string;
-    chain_index: number;
-    prev_event_hash: string;
-  }): string {
-    const canonical = [
-      input.timestamp,
-      input.request_id,
-      input.code,
-      input.message,
-      input.method,
-      input.route,
-      input.tenant_id ?? "",
-      input.target_agent ?? "",
-      String(input.chain_index),
-      input.prev_event_hash,
-    ].join("|");
-    return createHash("sha256").update(canonical).digest("hex");
+  function recordAuditEvent(event: Parameters<AuditManager["recordAuditEvent"]>[0]): void {
+    auditManager.recordAuditEvent(event);
   }
 
-  function createAuditCheckpoint(lastEvent: {
-    chain_index: number;
-    event_hash: string;
-  }): void {
-    if (lastEvent.chain_index % auditCheckpointInterval !== 0) return;
-    const checkpoint = {
-      checkpoint_id: `audit-checkpoint:${lastEvent.chain_index}`,
-      created_at: new Date().toISOString(),
-      last_chain_index: lastEvent.chain_index,
-      last_event_hash: lastEvent.event_hash,
-      key_id: "",
-      signature: "",
-    };
-    checkpoint.signature = signAuditCheckpoint({
-      checkpoint_id: checkpoint.checkpoint_id,
-      created_at: checkpoint.created_at,
-      last_chain_index: checkpoint.last_chain_index,
-      last_event_hash: checkpoint.last_event_hash,
-    });
-    checkpoint.key_id = getSignatureKeyId(checkpoint.signature) ?? "unknown";
-    auditCheckpoints.push(checkpoint);
-    if (auditCheckpoints.length > auditMaxEvents) {
-      auditCheckpoints.splice(0, auditCheckpoints.length - auditMaxEvents);
-    }
-  }
-
-  function recordAuditEvent(event: {
-    timestamp: string;
-    request_id: string;
-    code: string;
-    message: string;
-    method: string;
-    route: string;
-    tenant_id?: string;
-    target_agent?: string;
-    subject?: string;
-  }): void {
-    const last = auditEvents[auditEvents.length - 1];
-    const chainIndex = last ? last.chain_index + 1 : 1;
-    const prevEventHash = last ? last.event_hash : "GENESIS";
-    const eventHash = hashAuditEventBase({
-      ...event,
-      chain_index: chainIndex,
-      prev_event_hash: prevEventHash,
-    });
-    const chainedEvent = {
-      ...event,
-      chain_index: chainIndex,
-      prev_event_hash: prevEventHash,
-      event_hash: eventHash,
-    };
-    auditEvents.push(chainedEvent);
-    if (auditEvents.length > auditMaxEvents) {
-      auditEvents.splice(0, auditEvents.length - auditMaxEvents);
-    }
-    createAuditCheckpoint(chainedEvent);
-    persistAuditEvents(options.auditStorePath, auditEvents, auditCheckpoints);
-  }
-
-  function verifyAuditIntegrity(): {
-    ok: boolean;
-    errors: string[];
-    summary: {
-      events_checked: number;
-      checkpoints_checked: number;
-      latest_chain_index: number;
-    };
-  } {
-    const errors: string[] = [];
-    for (let index = 0; index < auditEvents.length; index += 1) {
-      const current = auditEvents[index];
-      const expectedIndex = index + 1;
-      if (current.chain_index !== expectedIndex) {
-        errors.push(
-          `event_chain_index_mismatch_at_${index}: expected ${expectedIndex}, got ${current.chain_index}`,
-        );
-      }
-      const expectedPrev =
-        index === 0 ? "GENESIS" : auditEvents[index - 1].event_hash;
-      if (current.prev_event_hash !== expectedPrev) {
-        errors.push(`event_prev_hash_mismatch_at_${index}`);
-      }
-      const expectedHash = hashAuditEventBase({
-        timestamp: current.timestamp,
-        request_id: current.request_id,
-        code: current.code,
-        message: current.message,
-        method: current.method,
-        route: current.route,
-        tenant_id: current.tenant_id,
-        target_agent: current.target_agent,
-        chain_index: current.chain_index,
-        prev_event_hash: current.prev_event_hash,
-      });
-      if (current.event_hash !== expectedHash) {
-        errors.push(`event_hash_mismatch_at_${index}`);
-      }
-    }
-    for (let index = 0; index < auditCheckpoints.length; index += 1) {
-      const checkpoint = auditCheckpoints[index];
-      const checkpointKid = getSignatureKeyId(checkpoint.signature);
-      if (checkpointKid !== checkpoint.key_id) {
-        errors.push(`checkpoint_key_id_mismatch_at_${index}`);
-      }
-      const signatureOk = verifyAuditCheckpointSignature(
-        {
-          checkpoint_id: checkpoint.checkpoint_id,
-          created_at: checkpoint.created_at,
-          last_chain_index: checkpoint.last_chain_index,
-          last_event_hash: checkpoint.last_event_hash,
-        },
-        checkpoint.signature,
-      );
-      if (!signatureOk) {
-        errors.push(`checkpoint_signature_invalid_at_${index}`);
-      }
-      const targetEvent = auditEvents.find(
-        (event) => event.chain_index === checkpoint.last_chain_index,
-      );
-      if (!targetEvent) {
-        errors.push(`checkpoint_missing_chain_index_at_${index}`);
-      } else if (targetEvent.event_hash !== checkpoint.last_event_hash) {
-        errors.push(`checkpoint_event_hash_mismatch_at_${index}`);
-      }
-    }
-    return {
-      ok: errors.length === 0,
-      errors,
-      summary: {
-        events_checked: auditEvents.length,
-        checkpoints_checked: auditCheckpoints.length,
-        latest_chain_index:
-          auditEvents[auditEvents.length - 1]?.chain_index ?? 0,
-      },
-    };
+  function verifyAuditIntegrity() {
+    return auditManager.verifyAuditIntegrity();
   }
 
   // ── Signing key usage & anomaly detection ──────────────────────────────
   function collectSigningKeyUsage() {
-    return collectSigningKeyUsageForData({
+    return signingAnomalyDetector.collectSigningKeyUsage({
       descriptors: app.registry.list(),
       receipts: app.receiptStore.list(),
-      checkpoints: auditCheckpoints,
+      checkpoints: auditManager.getCheckpoints(),
     });
   }
 
-  function collectSigningKeyUsageForData(input: {
-    descriptors: ReturnType<(typeof app.registry)["list"]>;
-    receipts: ReturnType<(typeof app.receiptStore)["list"]>;
-    checkpoints: typeof auditCheckpoints;
-  }) {
-    const descriptorCounts = input.descriptors.reduce<Record<string, number>>(
-      (acc, descriptor) => {
-        const keyId =
-          typeof descriptor.descriptor_key_id === "string" &&
-          descriptor.descriptor_key_id.length > 0
-            ? descriptor.descriptor_key_id
-            : "unknown";
-        acc[keyId] = (acc[keyId] ?? 0) + 1;
-        return acc;
-      },
-      {},
-    );
-    const receiptCounts = input.receipts.reduce<Record<string, number>>(
-      (acc, receipt) => {
-        const keyId = getSignatureKeyId(receipt.signature ?? "") ?? "unknown";
-        acc[keyId] = (acc[keyId] ?? 0) + 1;
-        return acc;
-      },
-      {},
-    );
-    const checkpointCounts = input.checkpoints.reduce<Record<string, number>>(
-      (acc, checkpoint) => {
-        const keyId = checkpoint.key_id || "unknown";
-        acc[keyId] = (acc[keyId] ?? 0) + 1;
-        return acc;
-      },
-      {},
-    );
-    return {
-      agent_descriptors_by_key_id: descriptorCounts,
-      receipts_by_key_id: receiptCounts,
-      audit_checkpoints_by_key_id: checkpointCounts,
-    };
+  function collectSigningKeyUsageForData(input: Parameters<SigningAnomalyDetector["collectSigningKeyUsage"]>[0]) {
+    return signingAnomalyDetector.collectSigningKeyUsage(input);
   }
 
-  function collectSigningAnomalies(signingUsage: {
-    agent_descriptors_by_key_id: Record<string, number>;
-    receipts_by_key_id: Record<string, number>;
-    audit_checkpoints_by_key_id: Record<string, number>;
-  }) {
-    const verificationKeys = getEffectiveVerificationKeys();
-    const retiringKeyIds = new Set(
-      verificationKeys
-        .filter((key) => key.status === "retiring")
-        .map((key) => key.kid),
+  function collectSigningAnomalies(signingUsage: Parameters<SigningAnomalyDetector["collectSigningAnomalies"]>[0]) {
+    return signingAnomalyDetector.collectSigningAnomalies(
+      signingUsage,
+      getEffectiveRevokedKeyIds(),
     );
-    const allUsageEntries = [
-      ...Object.entries(signingUsage.agent_descriptors_by_key_id),
-      ...Object.entries(signingUsage.receipts_by_key_id),
-      ...Object.entries(signingUsage.audit_checkpoints_by_key_id),
-    ];
-
-    const unknownKeyUsageDetected = allUsageEntries.some(
-      ([keyId, count]) => keyId === "unknown" && Number(count) > 0,
-    );
-    const retiringKeyUsageDetected = allUsageEntries.some(
-      ([keyId, count]) => retiringKeyIds.has(keyId) && Number(count) > 0,
-    );
-    const totalSignaturesAnalyzed = allUsageEntries.reduce(
-      (acc, [, count]) => acc + Number(count),
-      0,
-    );
-    const unknownKeyUsageCount = allUsageEntries.reduce(
-      (acc, [keyId, count]) => acc + (keyId === "unknown" ? Number(count) : 0),
-      0,
-    );
-    const retiringKeyUsageCount = allUsageEntries.reduce(
-      (acc, [keyId, count]) =>
-        acc + (retiringKeyIds.has(keyId) ? Number(count) : 0),
-      0,
-    );
-    const unknownKeyUsageRatio =
-      totalSignaturesAnalyzed > 0
-        ? unknownKeyUsageCount / totalSignaturesAnalyzed
-        : 0;
-    const retiringKeyUsageRatio =
-      totalSignaturesAnalyzed > 0
-        ? retiringKeyUsageCount / totalSignaturesAnalyzed
-        : 0;
-    const unknownKeyRatioExceeded =
-      unknownKeyUsageDetected &&
-      unknownKeyUsageRatio > signingUnknownKeyCriticalRatio;
-    const retiringKeyRatioExceeded =
-      retiringKeyUsageDetected &&
-      retiringKeyUsageRatio > signingRetiringKeyCriticalRatio;
-
-    const severity: "ok" | "warning" | "critical" =
-      unknownKeyRatioExceeded || retiringKeyRatioExceeded
-        ? "critical"
-        : retiringKeyUsageDetected
-          ? "warning"
-          : "ok";
-
-    const recommendedAction =
-      severity === "critical"
-        ? "Investigate unknown signing key usage immediately and rotate active keys if compromise is suspected."
-        : severity === "warning"
-          ? "Monitor retiring key usage and complete signing key migration to active keys."
-          : "No action required.";
-
-    return {
-      unknown_key_usage_detected: unknownKeyUsageDetected,
-      retiring_key_usage_detected: retiringKeyUsageDetected,
-      unknown_key_usage_ratio: unknownKeyUsageRatio,
-      retiring_key_usage_ratio: retiringKeyUsageRatio,
-      total_signatures_analyzed: totalSignaturesAnalyzed,
-      thresholds: {
-        unknown_key_critical_ratio: signingUnknownKeyCriticalRatio,
-        retiring_key_critical_ratio: signingRetiringKeyCriticalRatio,
-      },
-      threshold_breaches: {
-        unknown_key_ratio_exceeded: unknownKeyRatioExceeded,
-        retiring_key_ratio_exceeded: retiringKeyRatioExceeded,
-      },
-      severity,
-      recommended_action: recommendedAction,
-    };
   }
 
   // ── Rate limiting ──────────────────────────────────────────────────────
-  function consumeRateLimitSlot(
-    events: number[],
-    limit: number | undefined,
-  ): { allowed: boolean; retryAfterMs: number } {
-    if (typeof limit !== "number") return { allowed: true, retryAfterMs: 0 };
-
-    const now = Date.now();
-    let mutated = false;
-    while (events.length > 0 && now - events[0] > rateLimitWindowMs) {
-      events.shift();
-      mutated = true;
-    }
-
-    if (events.length >= limit) {
-      const oldest = events[0] ?? now;
-      const retryAfterMs = Math.max(1, rateLimitWindowMs - (now - oldest));
-      if (mutated) {
-        persistRateLimitState(
-          options.rateLimitStatePath,
-          rateLimitWindowMs,
-          globalRateLimitEvents,
-          tenantRateLimitEvents,
-        );
-      }
-      return { allowed: false, retryAfterMs };
-    }
-
-    events.push(now);
-    mutated = true;
-    if (mutated) {
-      persistRateLimitState(
-        options.rateLimitStatePath,
-        rateLimitWindowMs,
-        globalRateLimitEvents,
-        tenantRateLimitEvents,
-      );
-    }
-    return { allowed: true, retryAfterMs: 0 };
-  }
-
-  function checkMutationRateLimit(tenantId?: string): {
-    allowed: boolean;
-    scope?: "global" | "tenant";
-    retryAfterMs?: number;
-  } {
-    const globalLimit = consumeRateLimitSlot(
-      globalRateLimitEvents,
-      options.rateLimitMaxRequests,
-    );
-    if (!globalLimit.allowed) {
-      return {
-        allowed: false,
-        scope: "global",
-        retryAfterMs: globalLimit.retryAfterMs,
-      };
-    }
-
-    if (tenantId && typeof options.rateLimitMaxRequestsPerTenant === "number") {
-      const events = tenantRateLimitEvents.get(tenantId) ?? [];
-      const tenantLimit = consumeRateLimitSlot(
-        events,
-        options.rateLimitMaxRequestsPerTenant,
-      );
-      tenantRateLimitEvents.set(tenantId, events);
-      if (!tenantLimit.allowed) {
-        return {
-          allowed: false,
-          scope: "tenant",
-          retryAfterMs: tenantLimit.retryAfterMs,
-        };
-      }
-    }
-
-    return { allowed: true };
+  function checkMutationRateLimit(tenantId?: string) {
+    return rateLimiter.checkMutationRateLimit(tenantId);
   }
 
   // ── HTTP JSON helpers (wrapping http.ts with metrics recording) ────────
