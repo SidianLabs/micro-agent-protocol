@@ -22,6 +22,7 @@ export default function Home(): JSX.Element {
           padding: '5rem 1.5rem',
         }}
       >
+        <img src="/img/map-logo.svg" alt="MAP Protocol Logo" width="120" style={{ marginBottom: '2rem' }} />
         <h1>MAP Protocol</h1>
         <p>
           MAP is a protocol and reference implementation for policy-aware
