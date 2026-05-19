@@ -59,6 +59,15 @@ jobs:
       - name: Run lint
         run: npm run lint
 
+      - name: Upload TypeScript build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: map-typescript-latest
+          path: |
+            packages/typescript/dist
+            packages/typescript/package.json
+            packages/typescript/README.md
+
   # ===========================================================================
   # Reference Implementation (TypeScript)
   # ===========================================================================
@@ -95,6 +104,15 @@ jobs:
 
       - name: Run lint
         run: npm run lint
+
+      - name: Upload Reference Server build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: map-reference-latest
+          path: |
+            dist
+            package.json
+            README.md
 
   # ===========================================================================
   # Python SDK (PAUSED)
