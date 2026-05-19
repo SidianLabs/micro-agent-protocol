@@ -426,4 +426,4 @@ Report vulnerabilities via GitHub Security Advisory. See [SECURITY.md](./SECURIT
 
 ---
 
-*MAP is built by [Sidian Labs](https://sidian.dev). Maintained by [@BHAWESHBHASKAR](https://github.com/BHAWESHBHASKAR).*
+*MAP is built by Sidian Labs. Maintained by [@BHAWESHBHASKAR](https://github.com/BHAWESHBHASKAR).*
